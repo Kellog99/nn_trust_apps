@@ -1,0 +1,93 @@
+evaluation:
+  statistics: [ "local_accuracy", "local_precision", "local_f1score" ]
+  statistic_average_method: "macro"
+
+options:
+  load_results: false                 # loading any existing results.
+  overwrite: true                     # overwriting the results if a benchmarking is performed
+  num_images_to_save: -1
+  save_perturbation: false
+  gpu: true
+  output_path: "./benchmark_out" # Path to the output folder
+  output_format: "test" # report or test
+
+datasets:
+  - name: "imagenet" # Name of the dataset
+    num_classes: 1000
+    subset: 22
+    batch: 32
+    type_dataset: 1
+    num_workers: 4
+    source_path: "../imagenet-1k/val_images/" # "../data/military/dataset/test/" # Path to the dataset
+    transform_config:
+      size: 256
+      crop: 224
+      transform_id: "imagenet_like_crop"
+      mean: [0.5074, 0.5308, 0.5306]
+      std: [0.2639, 0.2518, 0.2521]
+
+models:
+  - name: "resnet101.a1_in1k"
+    type: "timm"
+    pretrained: true
+    num_classes: 1000
+    input_size: 224
+  - name: 'mobilenetv4_conv_blur_medium.e500_r224_in1k'
+    type: 'timm'
+    num_classes: 1000
+  - name: 'mobilenetv4_conv_medium.e500_r224_in1k'
+    type: 'timm'
+    num_classes: 1000
+  - name: 'mobilenetv4_hybrid_medium.e500_r224_in1k'
+    type: 'timm'
+    num_classes: 1000
+  - name: 'resnetv2_18.ra4_e3600_r224_in1k'
+    type: 'timm'
+    num_classes: 1000
+  - name: 'resnetv2_18d.ra4_e3600_r224_in1k'
+    type: 'timm'
+    num_classes: 1000
+  - name: 'resnetv2_34.ra4_e3600_r224_in1k'
+    type: 'timm'
+    num_classes: 1000
+  - name: 'resnetv2_34d.ra4_e3600_r224_in1k'
+    type: 'timm'
+    num_classes: 1000
+  - name: 'resnetv2_50.a1h_in1k'
+    type: 'timm'
+    num_classes: 1000
+  - name: 'resnetv2_50d_evos.ah_in1k'
+    type: 'timm'
+    num_classes: 1000
+  - name: 'resnetv2_50d_gn.ah_in1k'
+    type: 'timm'
+    num_classes: 1000
+  - name: 'resnetv2_50x1_bit.goog_distilled_in1k'
+    type: 'timm'
+    num_classes: 1000
+  - name: 'resnetv2_101.a1h_in1k'
+    type: 'timm'
+    num_classes: 1000
+
+attacks:
+  attack_list: [ 'fgsm', 'priorgd' , 'dag', 'du' ]
+  configurations:
+    fgsm:
+      max_iters: 100
+      losses: [ "misclassification",
+                "totalvariation",
+                "similarity",
+                "bound" ]
+
+    priorgd:
+      max_iters: 100
+      losses: [ "misclassification",
+                "totalvariation",
+                "similarity",
+                "bound" ]
+    dag: 
+      max_iters: 100  
+    du: 
+      max_iters: 100
+
+

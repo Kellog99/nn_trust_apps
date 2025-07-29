@@ -1,0 +1,59 @@
+evaluation:
+  statistics: [ "local_accuracy", "local_precision", "local_f1score" ]
+  statistic_average_method: "macro"
+
+options:
+  load_results: false                 # loading any existing results.
+  overwrite: true                     # overwriting the results if a benchmarking is performed
+  num_images_to_save: -1
+  save_perturbation: false
+  gpu: true
+  output_path: "./benchmark_out" # Path to the output folder
+  output_format: "test" # report or test
+
+datasets:
+  - name: "imagenet" # Name of the dataset
+    num_classes: 1000
+    subset: 4
+    batch: 2
+    type_dataset: 1
+    num_workers: 4
+    source_path: "../../data/imagenet-1k/val_images/" # "../data/military/dataset/test/" # Path to the dataset
+    transform_config:
+      size: 256
+      crop: 224
+      transform_id: "imagenet_like_crop"
+      mean: [0.5074, 0.5308, 0.5306]
+      std: [0.2639, 0.2518, 0.2521]
+
+models:
+  - name: 'resnetv2_50d_evos.ah_in1k'
+    type: 'timm'
+    pretrained: True
+    num_classes: 1000
+    task: "classification"
+
+attacks:
+  attack_list: "all"
+  configurations:
+    commons:
+      max_iters: 10
+    fgsm:
+      max_iters: 100
+      losses: [ "misclassification",
+                "totalvariation",
+                "similarity",
+                "bound" ]
+
+    priorgd:
+      max_iters: 100
+      losses: [ "misclassification",
+                "totalvariation",
+                "similarity",
+                "bound" ]
+    dag: 
+      max_iters: 100  
+    du: 
+      max_iters: 100
+
+
