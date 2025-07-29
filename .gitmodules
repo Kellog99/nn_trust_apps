@@ -2,3 +2,7 @@
 	path = image-attack/submodules/nn_trust
 	url = git@github.com:LeoPhilosophers/nn_trust.git
 	branch = demo160725
+[submodule "benchmarking/submodules/nn_trust"]
+	path = benchmarking/submodules/nn_trust
+	url = git@github.com:LeoPhilosophers/nn_trust.git
+	branch = develop
