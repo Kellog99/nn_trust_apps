@@ -1,0 +1,29 @@
+.column-input {
+    background-color: #343A40 !important;
+    border-radius: 8px;
+    padding: 10px;
+}
+
+.cls-label input, .cls-label textarea {
+    display: inline-flex !important;
+    font-size: 32px !important;
+    text-align: center !important;
+    align-items: center !important;
+    justify-content: center !important;
+    border: none !important;
+    border-radius: 10px !important;
+    --input-border-width: 0px !important;
+    --input-shadow: none !important;
+    --input-shadow-focus: none !important;
+}
+
+.atk-success input, .atk-success textarea {
+    background: #27c469;
+    background: linear-gradient(153deg,rgba(39, 196, 105, 1) 13%, rgba(191, 180, 96, 1) 91%) !important;
+    foreground-color: black !important;
+}
+.atk-fail input, .atk-fail textarea {
+    background: #f25050;
+    background: linear-gradient(143deg,rgba(242, 80, 80, 1) 50%, rgba(173, 114, 31, 1) 100%) !important;
+    foreground-color: black !important;
+}

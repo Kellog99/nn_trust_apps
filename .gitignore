@@ -1,1 +1,5 @@
 *.pth
+*.tar
+*.jpg
+*.webp
+__pycache__
