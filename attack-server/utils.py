@@ -11,11 +11,13 @@ def run_attack(
         img: torch.Tensor,
         attack_name:str,
         epsilon:float,
-        p:float
+        p:float,
+        max_iters:int
         
     ):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    logging.INFO(f"Running attack on {device}")
+    img = img.unsqueeze(0).to(device)
+    logging.info(f"Running attack on {device}")
     model = resnet50(weights=ResNet50_Weights.IMAGENET1K_V1)
     model.eval()
     model.to(device)
@@ -28,14 +30,16 @@ def run_attack(
         device=device,
         verbose=True,
         epsilon=epsilon,
-        p=p
+        p=p,
+        max_iters=max_iters
     )
 
     atk = EvasionAttackFactory.create_attack(attack_type=attack_name, config=cnf)
+    labels = model_ad(img).argmax(1)
+    labels_ohe = torch.nn.functional.one_hot(labels, num_classes=1000)
+    print("****************")
+    print(labels_ohe.shape)
 
-    images = torch.rand((10,3, 224, 224)) # BxCxHxW
-    labels_ohe = torch.zeros(10) # example with K=10 classes
-    labels_ohe[3] = 1 # example belong to class 4
-
-    x_adv = atk.generate(x=images, y=labels_ohe)
-    return x_adv
+    x_adv = atk.generate(x=img, y=labels_ohe)
+    labels_adv = model_ad(x_adv).argmax(1)
+    return x_adv[0], labels.item(), labels_adv.item()

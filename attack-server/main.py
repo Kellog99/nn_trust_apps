@@ -12,6 +12,7 @@ class Item(BaseModel):
     image: str
     p: float = 2.0
     epsilon: float = 50.0
+    max_iters: int = 30
 
 app = FastAPI()
 
@@ -25,11 +26,12 @@ async def attack(item: Item):
 
     img = Image.open(io.BytesIO(base64.b64decode(item.image)))
     img_tensor = torchvision.transforms.ToTensor()(img)
-    x_adv = run_attack(
+    x_adv, y, y_adv = run_attack(
         img=img_tensor,
         attack_name=item.attack_name,
         epsilon=item.epsilon,
-        p=item.p
+        p=item.p,
+        max_iters=item.max_iters
     )
     x_adv_img = torchvision.transforms.ToPILImage()(x_adv)
 
@@ -39,5 +41,7 @@ async def attack(item: Item):
 
     return {
         "attack_success": True,
-        "x_adv": img_str
+        "x_adv": img_str,
+        "y": y,
+        "y_adv": y_adv
     }
