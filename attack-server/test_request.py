@@ -11,7 +11,13 @@ with open(imagefile, "rb") as f:
 img = Image.open(io.BytesIO(base64.b64decode(encoded_img)))
 
 url = 'http://127.0.0.1:8000/attack'
-attack_config = {'image': encoded_img, "p":2.0, "epsilon": 30.5, "attack_name":"fgsm","max_iters":10}
+attack_config = {
+    'image': encoded_img, 
+    "p":2.0, 
+    "epsilon": 30.5, 
+    "attack_name":"fgsm",
+    "max_iters":10
+    }
 
 response = requests.post(url, json = attack_config)
 response = json.loads(response.content)

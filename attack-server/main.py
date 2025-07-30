@@ -4,6 +4,8 @@ from pydantic import BaseModel
 from PIL import Image
 import torchvision
 import base64
+from celery_worker import sum_celery_task
+from datetime import datetime
 
 from utils import run_attack
 
@@ -14,12 +16,21 @@ class Item(BaseModel):
     epsilon: float = 50.0
     max_iters: int = 30
 
+class SumItem(BaseModel):
+    x: int
+    y: int
+
 app = FastAPI()
 
 @app.get("/")
 async def root():
     return {"message": "This is the nn_trust attack server"}
 
+@app.post("/sum")
+async def add(item: SumItem):
+    d = datetime.now().isoformat()
+    sum_celery_task.delay(item.x, item.y, d)
+    return {"message": "Results will be written to file."}
 
 @app.post("/attack")
 async def attack(item: Item):
