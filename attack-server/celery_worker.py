@@ -19,6 +19,3 @@ def sum_celery_task(x,y,d):
     logging.info("*"*30)
     logging.info(f"JOb completed, results written to file")
     return "Test return task"
-
-
-@celery.s
