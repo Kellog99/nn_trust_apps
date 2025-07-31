@@ -9,4 +9,4 @@
 [submodule "attack-server/submodules/nn_trust"]
 	path = attack-server/submodules/nn_trust
 	url = git@github.com:LeoPhilosophers/nn_trust.git
-	branch = main
+	branch = develop
