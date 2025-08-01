@@ -10,3 +10,7 @@
 	path = attack-server/submodules/nn_trust
 	url = git@github.com:LeoPhilosophers/nn_trust.git
 	branch = develop
+[submodule "attack-server/submodules/data-quality_gui"]
+	path = attack-server/submodules/data-quality_gui
+	url = https://github.com/LeoPhilosophers/data-quality_gui.git
+	branch = dev/embplot
