@@ -1,17 +1,17 @@
 from fastapi import APIRouter, UploadFile
 from typing import Union, Optional
-from app.models import Datasets, Error
+from lib.models import Models, Error
 
-router = APIRouter(prefix="/dataset", tags=["datasets and models"])
+router = APIRouter(prefix="/model", tags=["datasets and models"])
 
-@router.get("/getDatasets", response_model=Datasets, responses={
+@router.get("/getModels", response_model=Models, responses={
     '400': {'model': Error},
     '404': {'model': Error},
     '500': {'model': Error},
 })
-def get_datasets() -> Union[Datasets, Error]:
+def get_models() -> Union[Models, Error]:
     """
-    Get all datasets of the TITANN backend.
+    Get all models of the TITANN backend.
     """
     pass
 
@@ -20,8 +20,8 @@ def get_datasets() -> Union[Datasets, Error]:
     '409': {'model': Error},
     '500': {'model': Error},
 })
-def upload_dataset(file: UploadFile) -> Optional[Error]:
+def upload_model(file: UploadFile) -> Optional[Error]:
     """
-    Upload a dataset to the TITANN backend.
+    Upload a model to the TITANN backend.
     """
     pass

@@ -467,7 +467,8 @@ components:
       type: object
       properties:
         code:
-          type: string
+          type: integer
+          format: int64
         message:
           type: string
       required:

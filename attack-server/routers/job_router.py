@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 from typing import List, Union, Optional
-from app.models import Job, Error, Progress, Result, JobConfig
+from lib.models import Job, Error, Progress, Result, JobConfig
 
 router = APIRouter(prefix="/job", tags=["jobs management", "jobs utils"])
 
