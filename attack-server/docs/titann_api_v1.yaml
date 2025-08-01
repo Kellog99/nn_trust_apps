@@ -1,0 +1,475 @@
+openapi: 3.0.4
+info:
+  title: Swagger TITANN backend
+  description: |-
+    This is the OpenAPI of the TITANN backend.
+  termsOfService: https://swagger.io/terms/
+  contact:
+    email: apiteam@swagger.io
+  license:
+    name: Apache 2.0
+    url: https://www.apache.org/licenses/LICENSE-2.0.html
+  version: 1.0.12
+externalDocs:
+  description: Find out more about Swagger
+  url: https://swagger.io
+servers:
+  - url: https://titann.swagger.io/api/v3
+tags:
+  - name: jobs management
+    description: Services to manage jobs
+  - name: jobs utils
+    description: Utility services for jobs management
+  - name: datasets and models
+    description: Services to manage datasets and models
+   
+paths:
+  /job/start:
+    post:
+      tags:
+        - jobs management
+      summary: Start a new TITANN benchmark job.
+      description: Start a new TITANN benchmark job.
+      operationId: startJob
+      requestBody:
+        description: Start a new TITANN benchmark job.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JobConfig'
+          application/xml:
+            schema:
+              $ref: '#/components/schemas/JobConfig'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/JobConfig'
+        required: true
+      responses:
+        '200':
+          description: Successful operation
+        '400':
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        '500':
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        
+  /job/restart:
+    get:
+      tags:
+        - jobs management
+      summary: Restart a new TITANN benchmark job from last checkpoint (last performed attack).
+      description: Restart a new TITANN benchmark job from last checkpoint (last performed attack).
+      operationId: restartJob
+      parameters:
+        - name: id
+          in: query
+          description: The job ID
+          required: true
+          explode: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: successful operation
+        '400':
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        '409':
+          description: Job is already running
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        '500':
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  
+  /job/stop:
+    get:
+      tags:
+        - jobs management
+      summary: Stop a TITANN benchmark job.
+      description: Stop a TITANN benchmark job.
+      operationId: stopJob
+      parameters:
+        - name: id
+          in: query
+          description: The job ID
+          required: true
+          explode: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: successful operation
+        '400':
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        '409':
+          description: Job is already stopped
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        '500':
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+                
+  /job/getProgress:
+    get:
+      tags:
+        - jobs management
+      summary: Get a TITANN benchmark job progress.
+      description: Get a TITANN benchmark job progress.
+      operationId: getJobProgress
+      parameters:
+        - name: id
+          in: query
+          description: The job ID
+          required: true
+          explode: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Progress"
+        '400':
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        '500':
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    
+  /job/getResult:
+    get:
+      tags:
+        - jobs management
+      summary: Get a TITANN benchmark job result.
+      description: Get a TITANN benchmark job result.
+      operationId: getJobResult
+      parameters:
+        - name: id
+          in: query
+          description: The job ID
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Result"
+        '400':
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        '404':
+          description: Result doesn't exist
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        '500':
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+                
+  /dataset/upload:
+    post:
+      tags:
+        - datasets and models
+      summary: Upload a dataset to the TITANN backend.
+      description: Upload a dataset to the TITANN backend.
+      operationId: uploadDataset
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - file
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        '200':
+          description: successful operation
+        '400':
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        '409':
+          description: Dataset already present
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        '500':
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+                
+  /dataset/getDatasets:
+    get:
+      tags:
+        - datasets and models
+      summary: Get all datasets of the TITANN backend.
+      description: Get all datasets of the TITANN backend.
+      operationId: getDatasets
+      responses:
+        '200':
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Datasets"
+        '400':
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        '404':
+          description: No datasets found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        '500':
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+                
+  /model/upload:
+    post:
+      tags:
+        - datasets and models
+      summary: Upload a model to the TITANN backend.
+      description: Upload a model to the TITANN backend.
+      operationId: uploadModel
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - file
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        '200':
+          description: successful operation
+        '400':
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        '409':
+          description: Model already present
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        '500':
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+                
+  /model/getModels:
+    get:
+      tags:
+        - datasets and models
+      summary: Get all models of the TITANN backend.
+      description: Get all models of the TITANN backend.
+      operationId: getModels
+      responses:
+        '200':
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Models"
+        '400':
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        '404':
+          description: No models found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        '500':
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+                
+  /job/getJobsId:
+    get:
+      tags:
+        - jobs utils
+      summary: Get all running jobs in the TITANN backend.
+      description: Get all running jobs in the TITANN backend.
+      operationId: getJobsId
+      responses:
+        '200':
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Job'
+        '400':
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        '404':
+          description: No active jobs found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        '500':
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+      
+  
+components:
+  schemas:
+    
+    Result:
+      type: object
+      properties:
+        metrics:
+          type: array
+          items: 
+            $ref: '#/components/schemas/Metric'
+            
+    Datasets:
+      type: object
+      properties:
+        names:
+          type: array
+          items: 
+            type: string
+            example: "cifar"
+            
+    Models:
+      type: object
+      properties:
+        names:
+          type: array
+          items: 
+            type: string
+            example: "resnet50"
+            
+    Job:
+      type: object
+      properties:
+        id:
+          type: number
+          format: int64
+          example: 1
+          
+            
+    Metric:
+      type: object
+      properties:
+        values:
+          type: number
+          example: 0.8
+            
+    Progress:
+      type: object
+      properties:
+        progress:
+          type: number
+          format: float64
+          example: 0.82
+      
+    JobConfig:
+      required:
+        - dataset
+        - model
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+          example: 10
+        dataset:
+          type: string
+          example: 'cifar'
+        model:
+          type: string
+          example: 'resnet50'
+          
+    Error:
+      type: object
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+      required:
+        - code
+        - message
