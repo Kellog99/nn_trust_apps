@@ -1,0 +1,60 @@
+{
+	"info": {
+		"_postman_id": "2efe80e0-a6b3-4078-abde-a7886216a57b",
+		"name": "TITANN",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "28671168"
+	},
+	"item": [
+		{
+			"name": "upload dataset",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "formdata",
+					"formdata": [
+						{
+							"key": "file",
+							"type": "file",
+							"src": "c:\\Users\\Cristiano Lavoro\\Desktop\\DS\\animals.zip"
+						}
+					]
+				},
+				"url": {
+					"raw": "http://localhost:8000/dataset/upload",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "8000",
+					"path": [
+						"dataset",
+						"upload"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "get datasets",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "http://localhost:8000/dataset/getDatasets",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "8000",
+					"path": [
+						"dataset",
+						"getDatasets"
+					]
+				}
+			},
+			"response": []
+		}
+	]
+}

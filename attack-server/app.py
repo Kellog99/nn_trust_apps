@@ -46,7 +46,7 @@ def parse_arguments():
     parser.add_argument(
         "--ds_storage", "-ds", 
         type=str, 
-        default="submodules/data-quality_gui/public/titann/datasets",
+        default=os.path.join("attack-server","submodules","data-quality_gui","public","titann","datasets"),
         help="Path to internal storage directory (datasets)"
     )
     parser.add_argument(

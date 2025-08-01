@@ -34,19 +34,8 @@ class JobConfig(BaseModel):
     dataset: str = Field(..., example='cifar')
     model: str = Field(..., example='resnet50')
 
-
 class Error(BaseModel):
-    code: str
+    code: int
     message: str
-
-
-class DatasetUploadPostRequest(BaseModel):
-    file: bytes
-
-
-class ModelUploadPostRequest(BaseModel):
-    file: bytes
-
-
 class Result(BaseModel):
     metrics: Optional[List[Metric]] = None
