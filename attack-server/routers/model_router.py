@@ -44,8 +44,6 @@ def get_models() -> Union[Models, Error]:
                 models.append(Path(item).stem)
         if len(models)==0:
             logging.info("No uploaded models found.")
-        else:
-            router.state.uploaded_models = models
 
         models.extend(MODELS)
         if len(models)==0:
