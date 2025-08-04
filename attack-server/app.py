@@ -52,7 +52,7 @@ def parse_arguments():
     parser.add_argument(
         "--model_storage", "-ms", 
         type=str, 
-        default="submodules/data-quality_gui/public/titann/models",
+        default=os.path.join("attack-server","submodules","data-quality_gui","public","titann","models"),
         help="Path to internal storage directory (models)"
     )
     parser.add_argument(

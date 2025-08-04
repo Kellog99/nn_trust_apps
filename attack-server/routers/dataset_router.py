@@ -24,7 +24,7 @@ def get_datasets() -> Union[Datasets, Error]:
             item_path = os.path.join(dataset_root_dir, item)
             if os.path.isdir(item_path):
                 logging.info(f"Found a dataset: {item_path}")
-                datasets.append(item_path)
+                datasets.append(item)
         if len(datasets)==0:
             logging.error("No datasets found.")
             return Response(status_code=404, 
