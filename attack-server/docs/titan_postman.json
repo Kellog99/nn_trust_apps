@@ -37,6 +37,36 @@
 			"response": []
 		},
 		{
+			"name": "upload model",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "formdata",
+					"formdata": [
+						{
+							"key": "file",
+							"type": "file",
+							"src": "c:\\Users\\Cristiano Lavoro\\Desktop\\nn_trust_apps\\prova.pth"
+						}
+					]
+				},
+				"url": {
+					"raw": "http://localhost:8000/model/upload",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "8000",
+					"path": [
+						"model",
+						"upload"
+					]
+				}
+			},
+			"response": []
+		},
+		{
 			"name": "get datasets",
 			"request": {
 				"method": "GET",
@@ -51,6 +81,26 @@
 					"path": [
 						"dataset",
 						"getDatasets"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "get models",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "http://localhost:8000/model/getModels",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "8000",
+					"path": [
+						"model",
+						"getModels"
 					]
 				}
 			},

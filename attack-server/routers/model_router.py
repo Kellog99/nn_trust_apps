@@ -11,10 +11,7 @@ import torch
 import pickle
 from fastapi import UploadFile, HTTPException
 import logging
-
-MODELS = [
-    "resnet50"
-]
+import json
 
 router = APIRouter(prefix="/model", tags=["datasets and models"])
 
@@ -27,7 +24,43 @@ def get_models() -> Union[Models, Error]:
     """
     Get all models of the TITANN backend.
     """
-    pass
+    try:
+        with open(os.path.join("attack-server","resources","config.json")) as f:
+                config = json.load(f)
+                MODELS = config["timm_models"]
+    except Exception as e:
+        # Handle unexpected errors
+        logging.error(f"Unexpected error during config import: {str(e)}")
+        return Response(
+                    status_code=500,
+                    content=Error(code=500, message=f"Internal server error during config import.").model_dump_json())
+    try:
+        models = []
+        models_root_dir = os.environ.get("INTERNAL_MODEL_STORAGE")
+        for item in os.listdir(models_root_dir):
+            item_path = os.path.join(models_root_dir, item)
+            if os.path.isfile(item_path):
+                logging.info(f"Found a model: {item_path}")
+                models.append(Path(item).stem)
+        if len(models)==0:
+            logging.info("No uploaded models found.")
+        else:
+            router.state.uploaded_models = models
+
+        models.extend(MODELS)
+        if len(models)==0:
+            logging.info("No models found.")
+            return Response(status_code=404, 
+                            content=Error(code=404, message="No models found.").model_dump_json())
+
+        models = Models(names=models)
+        return Response(status_code=200, 
+                        content=models.model_dump_json())
+
+    except Exception as e:
+        logging.error(f"An error occurred during models reading from disk: {e}")
+        return Response(status_code=500, 
+                        content=Error(code=500, message=f"An error occurred durign models reading from disk.").model_dump_json())
 
 @router.post("/upload", response_model=None, responses={
     '400': {'model': Error},
@@ -36,148 +69,123 @@ def get_models() -> Union[Models, Error]:
 })
 def upload_model(file: UploadFile) -> Optional[Error]:
     """
-    Upload a model to the TITANN backend.
+    Upload a model directly to the TITANN backend.
+    Accepts PyTorch model files (.pt, .pth, .pkl, .pickle).
     """
+    # Settings
+    try:
+        with open(os.path.join("attack-server","resources","config.json")) as f:
+                config = json.load(f)
+                MODELS = config["timm_models"]
+                MAX_FILE_SIZE = config["max_model_size"]
+    except Exception as e:
+        # Handle unexpected errors
+        logging.error(f"Unexpected error during config import: {str(e)}")
+        return Response(
+                    status_code=500,
+                    content=Error(code=500, message=f"Internal server error during config import.").model_dump_json())
+    
     # Validate file type
-    if not file.filename.endswith('.zip'):
-        logging.error("Invalid file type. File must be a .zip")
+    expected_extensions = ['.pt', '.pth', '.pkl', '.pickle']
+    if not any(file.filename.endswith(ext) for ext in expected_extensions):
+        logging.error(f"Invalid file type. File must be one of: {', '.join(expected_extensions)}")
         return Response(
             status_code=400,
-            content=Error(code=400,message="Invalid file type. File must be a .zip")
+            content=Error(code=400, message=f"Invalid file type. File must be one of: {', '.join(expected_extensions)}").model_dump_json()
         )
     
     # Check file size (adjust limit as needed, e.g., 500MB)
     MAX_FILE_SIZE = 500 * 1024 * 1024  # 500MB
     if file.size and file.size > MAX_FILE_SIZE:
         logging.error(f"File size exceeds {MAX_FILE_SIZE // (1024*1024)}MB limit")
-        raise Response(
+        return Response(
             status_code=400,
-            content=Error(code=400,message=f"File size exceeds {MAX_FILE_SIZE // (1024*1024)}MB limit")
+            content=Error(code=400, message=f"File size exceeds {MAX_FILE_SIZE // (1024*1024)}MB limit").model_dump_json()
         )
     
-    #temp_dir = None
-    #extract_dir = None
-    #
-    #try:
-    #    # Create temporary directory for processing
-    #    temp_dir = tempfile.mkdtemp(prefix="titann_upload_")
-    #    zip_path = os.path.join(temp_dir, file.filename)
-    #    
-    #    # Save uploaded file
-    #    with open(zip_path, "wb") as buffer:
-    #        shutil.copyfileobj(file.file, buffer)
-    #    
-    #    # Validate ZIP file
-    #    if not zipfile.is_zipfile(zip_path):
-    #        raise HTTPException(
-    #            status_code=400,
-    #            detail={"message": "Invalid ZIP file format", "code": "INVALID_ZIP"}
-    #        )
-    #    
-    #    # Extract ZIP file
-    #    extract_dir = os.path.join(temp_dir, "extracted")
-    #    with zipfile.ZipFile(zip_path, 'r') as zip_ref:
-    #        # Security check: prevent zip bombs, path traversal, and nested directories
-    #        for member in zip_ref.namelist():
-    #            if member.startswith('/') or '..' in member or '/' in member:
-    #                raise HTTPException(
-    #                    status_code=400,
-    #                    detail={"message": "ZIP must contain only files in root directory (no subdirectories allowed)", "code": "INVALID_ZIP_STRUCTURE"}
-    #                )
-    #        
-    #        zip_ref.extractall(extract_dir)
-    #    
-    #    # Find and validate model files (directly in the ZIP root)
-    #    model_files = []
-    #    expected_extensions = ['.pt', '.pth', '.pkl', '.pickle']
-    #    
-    #    # List files directly in the extracted directory (no subdirectory traversal)
-    #    extracted_files = os.listdir(extract_dir)
-    #    
-    #    for file_name in extracted_files:
-    #        file_path = os.path.join(extract_dir, file_name)
-    #        if os.path.isfile(file_path) and any(file_name.endswith(ext) for ext in expected_extensions):
-    #            model_files.append(file_path)
-    #    
-    #    if not model_files:
-    #        raise HTTPException(
-    #            status_code=400,
-    #            detail={"message": "No PyTorch model files found in ZIP root", "code": "NO_MODEL_FILES"}
-    #        )
-    #    
-    #    # Validate each model file
-    #    valid_models = []
-    #    for model_path in model_files:
-    #        try:
-    #            # Try to load the model
-    #            if model_path.endswith(('.pt', '.pth')):
-    #                model = torch.load(model_path, map_location='cpu')
-    #            elif model_path.endswith(('.pkl', '.pickle')):
-    #                with open(model_path, 'rb') as f:
-    #                    model = pickle.load(f)
-    #            else:
-    #                continue
-    #            
-    #            # Validate it's a PyTorch model
-    #            if isinstance(model, torch.nn.Module):
-    #                valid_models.append(model_path)
-    #            elif isinstance(model, dict) and 'state_dict' in model:
-    #                # It's a checkpoint with state_dict
-    #                valid_models.append(model_path)
-    #            elif isinstance(model, dict) and any(isinstance(v, torch.Tensor) for v in model.values()):
-    #                # It's a state_dict directly
-    #                valid_models.append(model_path)
-    #            
-    #        except Exception as e:
-    #            # Log the error but continue checking other files
-    #            print(f"Failed to load model from {model_path}: {str(e)}")
-    #            continue
-    #    
-    #    if not valid_models:
-    #        raise HTTPException(
-    #            status_code=400,
-    #            detail={"message": "No valid PyTorch models found", "code": "INVALID_MODEL_FORMAT"}
-    #        )
-    #    
-    #    # Check for existing model (if you have a naming convention)
-    #    model_name = Path(file.filename).stem
-    #    model_storage_path = f"models/{model_name}"  # Adjust path as needed
-    #    
-    #    if os.path.exists(model_storage_path):
-    #        raise HTTPException(
-    #            status_code=409,
-    #            detail={"message": f"Model '{model_name}' already exists", "code": "MODEL_EXISTS"}
-    #        )
-    #    
-    #    # Move validated model files to permanent storage
-    #    os.makedirs(model_storage_path, exist_ok=True)
-    #    
-    #    # Copy all files from the ZIP root (model files and any supporting files)
-    #    for file_name in os.listdir(extract_dir):
-    #        src_path = os.path.join(extract_dir, file_name)
-    #        if os.path.isfile(src_path):
-    #            dest_path = os.path.join(model_storage_path, file_name)
-    #            shutil.copy2(src_path, dest_path)
-    #    
-    #    print(f"Successfully uploaded model '{model_name}' with {len(valid_models)} model file(s)")
-    #    return None  # Success case
-    #    
-    #except HTTPException:
-    #    # Re-raise HTTP exceptions
-    #    raise
-    #except Exception as e:
-    #    # Handle unexpected errors
-    #    print(f"Unexpected error during model upload: {str(e)}")
-    #    raise HTTPException(
-    #        status_code=500,
-    #        detail={"message": "Internal server error during model upload", "code": "UPLOAD_ERROR"}
-    #    )
-    #
-    #finally:
-    #    # Cleanup temporary files
-    #    if temp_dir and os.path.exists(temp_dir):
-    #        try:
-    #            shutil.rmtree(temp_dir)
-    #        except Exception as e:
-    #            print(f"Failed to cleanup temporary directory: {str(e)}")
-    pass
+    temp_dir = None
+    
+    try:
+        # Create temporary directory for processing
+        temp_dir = tempfile.mkdtemp(prefix="titann_upload_")
+        model_path = os.path.join(temp_dir, file.filename)
+        
+        # Save uploaded file
+        with open(model_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+        
+        # Validate filename doesn't contain path traversal
+        safe_filename = os.path.basename(file.filename)
+        if safe_filename != file.filename or '..' in file.filename or file.filename.startswith('/'):
+            return Response(
+                status_code=400,
+                content=Error(code=400, message="Invalid filename - path traversal detected").model_dump_json()
+            )
+        
+        # Validate and load the model file
+        model = None
+        try:
+            if model_path.endswith(('.pt', '.pth')):
+                # Load PyTorch model file
+                model = torch.load(model_path, weights_only=False)
+            elif model_path.endswith(('.pkl', '.pickle')):
+                with open(model_path, 'rb') as f:
+                    model = pickle.load(f)
+            else:
+                return Response(
+                    status_code=400,
+                    content=Error(code=400, message="Unsupported file format").model_dump_json()
+                )
+            
+        except Exception as e:
+            logging.error(f"Failed to load model from {model_path}: {str(e)}")
+            return Response(
+                    status_code=400,
+                    content=Error(code=400, message=f"Invalid or corrupted model file: {str(e)}").model_dump_json()
+                )
+        
+        # Validate it's a valid PyTorch model
+        is_valid_model = False
+        if isinstance(model, torch.nn.Module):
+            is_valid_model = True
+        if not is_valid_model:
+            return Response(
+                    status_code=400,
+                    content=Error(code=400, message="File does not contain a valid PyTorch model").model_dump_json()
+                )
+        
+        # Check for existing model
+        model_name = Path(file.filename).stem
+        model_storage_path = os.environ.get('INTERNAL_MODEL_STORAGE')
+        
+        if os.path.exists(os.path.join(model_storage_path,safe_filename)) or model_name in MODELS:
+            return Response(
+                    status_code=409,
+                    content=Error(code=409, message=f"Model '{model_name}' already exists").model_dump_json()
+                )
+        
+        # Copy the model file to permanent storage
+        dest_path = os.path.join(model_storage_path, safe_filename)
+        shutil.copy2(model_path, dest_path)
+        
+        # Additional security: Set restrictive permissions on the stored file
+        os.chmod(dest_path, 0o600)  # Read/write for owner only
+        
+        logging.info(f"Successfully uploaded model '{model_name}' from file '{safe_filename}'")
+        return Response(status_code=200)
+        
+    except Exception as e:
+        # Handle unexpected errors
+        logging.error(f"Unexpected error during model upload: {str(e)}")
+        return Response(
+                    status_code=500,
+                    content=Error(code=500, message=f"Internal server error during model upload.")
+                )
+    
+    finally:
+        # Cleanup temporary files
+        if temp_dir and os.path.exists(temp_dir):
+            try:
+                shutil.rmtree(temp_dir)
+            except Exception as e:
+                logging.error(f"Failed to cleanup temporary directory: {str(e)}")

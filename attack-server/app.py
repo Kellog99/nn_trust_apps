@@ -32,6 +32,7 @@ app.add_middleware(
 from routers import api_router
 # Include routers
 app.include_router(api_router)
+app.state.uploaded_models = []
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)

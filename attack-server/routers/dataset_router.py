@@ -35,9 +35,9 @@ def get_datasets() -> Union[Datasets, Error]:
                         content=datasets.model_dump_json())
 
     except Exception as e:
-        logging.error(f"An error occurred datasets reading from disk: {e}")
+        logging.error(f"An error occurred during datasets reading from disk: {e}")
         return Response(status_code=500, 
-                        content=Error(code=500, message=f"An error occurred datasets reading from disk: {e}").model_dump_json())
+                        content=Error(code=500, message=f"An error occurred during datasets reading from disk.").model_dump_json())
 
 @router.post("/upload", response_model=None, responses={
     '400': {'model': Error},
@@ -101,7 +101,7 @@ def upload_dataset(file: UploadFile) -> Optional[Error]:
     except Exception as e:
         logging.error(f"Failed to process file: {str(e)}")
         return Response(status_code=500, 
-                        content=Error(code=500, message=f"Failed to process file: {str(e)}").model_dump_json())
+                        content=Error(code=500, message=f"Failed to process file.").model_dump_json())
     finally:
         try:
             if os.path.exists(file_path):
