@@ -39,7 +39,7 @@ def get_jobs_id(session : SessionDep) -> Union[List[Job], Error]:
     Get all running jobs in the TITANN backend.
     """
     try:
-        jobs = session.exec(select(Job).where(Job.is_over == False).limit(100)).all()
+        jobs = session.exec(select(Job).limit(100)).all()
         if len(jobs)>0:
             return jobs
         else:
