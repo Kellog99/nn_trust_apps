@@ -1,19 +1,22 @@
 from fastapi import APIRouter
+from pathlib import Path
 from typing import List, Union, Optional
 from lib.models import Error, Metric, Progress, Result, JobConfig
+from lib import models
 from typing import Annotated
 from fastapi import Depends, FastAPI, HTTPException, Query, Response
 from sqlmodel import Field, Session, SQLModel, create_engine, select
-from database.models import Job
+from database.models import BenchmarkJob, AttackJob
 import os,json
 import logging
 from sqlalchemy.exc import NoResultFound, MultipleResultsFound
 
 router = APIRouter(prefix="/job", tags=["jobs management", "jobs utils"])
+DB_CONFIG_FILE = Path(__file__).parent.parent / "resources" / "config.json"
 
-####### DB #######
-    
-with open(os.path.join("attack-server","resources","config.json")) as f:
+# --------------- DB --------------------
+
+with open(DB_CONFIG_FILE) as f:
     config = json.load(f)
     sqlite_file_name = config["db_name"]
     sqlite_url = config["db_url"]
@@ -28,18 +31,40 @@ def get_session():
 SessionDep = Annotated[Session, Depends(get_session)]
 
 
-####### SERVICES #######
-@router.get("/getJobsId", response_model=List[Job], responses={
+# ----------------- SERVICES --------------------------
+
+@router.get("/getJobsId", response_model=List[BenchmarkJob], responses={
     '400': {'model': Error},
     '404': {'model': Error},
     '500': {'model': Error},
 }, tags=["jobs utils"])
-def get_jobs_id(session : SessionDep) -> Union[List[Job], Error]:
+def get_jobs_id(session : SessionDep) -> Union[List[BenchmarkJob], Error]:
     """
     Get all running jobs in the TITANN backend.
     """
     try:
-        jobs = session.exec(select(Job).limit(100)).all()
+        jobs = session.exec(select(BenchmarkJob).limit(100)).all()
+        if len(jobs)>0:
+            return jobs
+        else:
+            return Response(status_code=404, content=Error(code=404, message="No jobs running!").model_dump_json())
+    except Exception as e:
+        logging.error(f"Unexpected error during get jobs: {str(e)}")
+        return Response(
+                status_code=500,
+                content=Error(code=500, message=f"Unexpected error during get jobs").model_dump_json())
+
+@router.get("/getAttackJobsId", response_model=List[AttackJob], responses={
+    '400': {'model': Error},
+    '404': {'model': Error},
+    '500': {'model': Error},
+}, tags=["jobs utils"])
+def get_attack_jobs_id(session : SessionDep) -> Union[List[AttackJob], Error]:
+    """
+    Get all running jobs in the TITANN backend.
+    """
+    try:
+        jobs = session.exec(select(AttackJob).limit(100)).all()
         if len(jobs)>0:
             return jobs
         else:
@@ -60,7 +85,7 @@ def get_job_progress(id: str, session : SessionDep) -> Union[Progress, Error]:
     """
     try:
         try:
-            job = session.exec(select(Job).where(Job.id == id).limit(100)).one()
+            job = session.exec(select(BenchmarkJob).where(BenchmarkJob.id == id).limit(100)).one()
         except NoResultFound:
             return Response(status_code=404, 
                             content=Error(code=404, message=f"No job found with id {id}").model_dump_json())
@@ -91,7 +116,7 @@ def get_job_result(id: str, session : SessionDep) -> Union[Result, Error]:
     """
     try:
         try:
-            job = session.exec(select(Job).where(Job.id == id).where(Job.is_over==True).limit(100)).one()
+            job = session.exec(select(BenchmarkJob).where(BenchmarkJob.id == id).where(BenchmarkJob.is_over==True).limit(100)).one()
         except NoResultFound:
             return Response(status_code=404, 
                             content=Error(code=404, message=f"No terminated job found with id {id}").model_dump_json())
@@ -138,7 +163,7 @@ def start_job(body: JobConfig, session : SessionDep) -> Optional[Error]:
             #       - If anything fails, raise an exception
             #         to roll back the transaction.
             # ================================================
-            new_job = Job(progress=0.43, 
+            new_job = BenchmarkJob(progress=0.43, 
                           dataset=body.dataset, 
                           model=body.model,
                           is_over=False)
@@ -154,7 +179,6 @@ def start_job(body: JobConfig, session : SessionDep) -> Optional[Error]:
                 status_code=500,
                 content=Error(code=500, message=f"Unexpected error during job start").model_dump_json())
 
-
 @router.get("/stop", response_model=None, responses={
     '400': {'model': Error},
     '409': {'model': Error},
@@ -165,3 +189,34 @@ def stop_job(id: str) -> Optional[Error]:
     Stop a TITANN benchmark job.
     """
     pass
+
+
+@router.post("/single_attack", response_model=None, responses={
+    '400': {'model': Error},
+    '500': {'model': Error},
+}, tags=["jobs management"])
+def start_singleattack_job(body: models.AttackConfig, session : SessionDep) -> Optional[Error]:
+    """
+    Start a new TITANN benchmark job.
+    """
+    print("Hiiiisingle")
+    try:
+        with session.begin():
+            # ================================================
+            # TODO: Put “start job” logic here!
+            #       - Perform any setup or validations.
+            #       - If anything fails, raise an exception
+            #         to roll back the transaction.
+            # ================================================
+            new_job = AttackJob(progress=0.1, is_over=False)
+            session.add(new_job)
+            session.flush()  
+            
+        session.refresh(new_job)
+        return Response(status_code=200)
+
+    except Exception as e:
+        logging.error(f"Unexpected error during job start: {str(e)}")
+        return Response(
+                status_code=500,
+                content=Error(code=500, message=f"Unexpected error during job start").model_dump_json())

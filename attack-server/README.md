@@ -1,24 +1,43 @@
-To run the celery:
-`celery -A celery_worker.celery worker` starts celery worker (consumer) process
+# Getting started
 
-To run celery with flower:
-`celery -A celery_worker.celery flower` starts flower for celery monitoring
-Then execute a request to the required route that implements a celery task.
+## Install dependencies
+Positioned at project top level directory `attack-server`
 
-In the data-quality_gui public folder two default folders must exist:
-`public/titann/datasets`
-`public/titann/models`
+### Python
 
-If 'database.db' doesn't exist in the root directory of the project(current directory must be nn_trust_apps), run the following command to create the db (SQLite)
-`python attack-server/database/create_sql_lite_db.py`
+Run `uv pip sync`
 
-To run the backend (current directory must be nn_trust_apps):
-`python attack-server/app.py`
+### Javascript & Co
 
-TO run the front-end (current directory must be attack-server/submodules/data-quality_gui), run the following command in another
-terminal:
-`npm install #only for the first time` 
-`npm run dev` 
+RUN `cd submodules && npm install`
 
+## Start required services and setup folders
+Positioned at project top level directory `attack-server`
 
+1. Start redis for example with docker `docker run -p 6379:6379 redis`
+2. Start FastAPI application server `python app.py`
+3. Start Celery Worker `celery -A celery_worker.celery --workdir ./celery worker`
+4. Start Celery with flower for job monitoring dashboard `celery -A celery_worker.celery --workdir ./celery flower`
+5. Create `data-quality-gui` required dataset and model folders (if they dont already exists) `mkdir -p submodules/data-quality_gui/public/titann/datasets` and `mkdir -p submodules/data-quality_gui/public/titann/models`
+6. Start frontend `cd submodules/data-quality_gui && npm run dev`
 
+# How it Works
+
+## Titann Backend Server
+
+This framework has the goal of  
+1. Accepting requests from a FrontEnd application, at present focus is on `Benchmark` or `Attack`
+2. Validate, Schedule, Run and Monitor jobs stemming from the incoming requests.
+3. Save and persist completed jobs
+4. Provide an API to query job status, and job results for the FrontEnd application.
+
+![Titann-backend vs DQ Frontend](docs/titann_backend_integration.jpg)
+
+## Server App Ecosystem
+
+The Titann Backend Fastapi Server act as a single endpoint to manage incoming requests.
+Each request may need specific functionalities depending from `nn_trust` (core attack library) or any of the of the other `titann apps` namely `benchmarking` and `image-attack`.
+
+The Titann server can be isolated from the logic of the apps, and just import them as submodules providing app-specific functionalities.
+
+![Titann-backend app dependency](docs/titann-server-apps-dependency.jpg)

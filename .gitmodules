@@ -12,5 +12,5 @@
 	branch = develop
 [submodule "attack-server/submodules/data-quality_gui"]
 	path = attack-server/submodules/data-quality_gui
-	url = https://github.com/LeoPhilosophers/data-quality_gui.git
+	url = git@github.com:LeoPhilosophers/data-quality_gui.git
 	branch = dev/embplot
