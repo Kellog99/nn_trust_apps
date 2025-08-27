@@ -1,5 +1,6 @@
 from fastapi import APIRouter
 from pathlib import Path
+import importlib
 from typing import List, Union, Optional
 from lib.models import Error, Metric, Progress, Result, JobConfig
 from lib import models
@@ -10,6 +11,14 @@ from database.models import BenchmarkJob, AttackJob
 import os,json
 import logging
 from sqlalchemy.exc import NoResultFound, MultipleResultsFound
+
+
+import sys
+import base64
+import io
+from PIL import Image
+print(sys.path)
+celery_utils = importlib.import_module("attack-server.celery.utils")
 
 router = APIRouter(prefix="/job", tags=["jobs management", "jobs utils"])
 DB_CONFIG_FILE = Path(__file__).parent.parent / "resources" / "config.json"
@@ -29,6 +38,14 @@ def get_session():
         yield session
 
 SessionDep = Annotated[Session, Depends(get_session)]
+
+
+def update_attack_job(session, job_id, progress):
+    statement = select(AttackJob).where(AttackJob.id == job_id)
+    res = session.exec(statement).one()
+    res.progress = progress
+    session.add(res)
+    session.commit()
 
 
 # ----------------- SERVICES --------------------------
@@ -199,7 +216,6 @@ def start_singleattack_job(body: models.AttackConfig, session : SessionDep) -> O
     """
     Start a new TITANN benchmark job.
     """
-    print("Hiiiisingle")
     try:
         with session.begin():
             # ================================================
@@ -210,10 +226,36 @@ def start_singleattack_job(body: models.AttackConfig, session : SessionDep) -> O
             # ================================================
             new_job = AttackJob(progress=0.1, is_over=False)
             session.add(new_job)
-            session.flush()  
-            
+            session.flush() 
+            # Decode base64 image string and convert to torch tensor
+            image_bytes = base64.b64decode(body.image)
+            image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+            adv_img, y, y_adv = celery_utils.run_attack(
+                img=image,
+                attack_name=body.attack_name,
+                p=body.p,
+                epsilon=body.epsilon,
+                max_iters=body.max_iters
+            )
+            print(f"Completed")
+            update_attack_job(session, new_job.id, progress=1.0)
+
         session.refresh(new_job)
-        return Response(status_code=200)
+        # Prepare image data to return
+        buffered = io.BytesIO()
+        adv_img.save(buffered, format="PNG")
+        adv_img_base64 = base64.b64encode(buffered.getvalue()).decode("utf-8")
+        result_data = {
+            "status": "success",
+            "adv_img": adv_img_base64,
+            "y": y,
+            "y_adv": y_adv
+        }
+        return Response(
+            status_code=200, 
+            content=json.dumps(result_data), 
+            media_type="application/json"
+        )
 
     except Exception as e:
         logging.error(f"Unexpected error during job start: {str(e)}")

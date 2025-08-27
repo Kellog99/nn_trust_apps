@@ -1,24 +1,28 @@
 import sys
 import os
-sys.path.insert(0, os.path.abspath("."))
+from pathlib import Path
+import logging
+import argparse
+# Importing other nn_trust apps scope
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from routers import api_router
-import logging
-import argparse
-import os
 import uvicorn
 
+
+
 app = FastAPI(
-    title='Swagger TITANN backend',
+    title='TITANN backend',
     description='This is the TITANN backend.',
-    termsOfService='https://swagger.io/terms/',
-    contact={'email': 'apiteam@swagger.io'},
-    license={
-        'name': 'Apache 2.0',
-        'url': 'https://www.apache.org/licenses/LICENSE-2.0.html',
-    },
-    version='1.0.12',
+#    termsOfService='https://swagger.io/terms/',
+#    contact={'email': 'apiteam@swagger.io'},
+#    license={
+#        'name': 'Apache 2.0',
+#        'url': 'https://www.apache.org/licenses/LICENSE-2.0.html',
+#    },
+#    version='1.0.12',
     servers=[{'url': 'https://titann.swagger.io/api/v3'}],
 )
 
