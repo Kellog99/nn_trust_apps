@@ -17,8 +17,9 @@ import sys
 import base64
 import io
 from PIL import Image
-print(sys.path)
+
 celery_utils = importlib.import_module("attack-server.celery.utils")
+benchmarking = importlib.import_module("benchmarking")
 
 router = APIRouter(prefix="/job", tags=["jobs management", "jobs utils"])
 DB_CONFIG_FILE = Path(__file__).parent.parent / "resources" / "config.json"
@@ -174,17 +175,12 @@ def start_job(body: JobConfig, session : SessionDep) -> Optional[Error]:
     """
     try:
         with session.begin():
-            # ================================================
-            # TODO: Put “start job” logic here!
-            #       - Perform any setup or validations.
-            #       - If anything fails, raise an exception
-            #         to roll back the transaction.
-            # ================================================
-            new_job = BenchmarkJob(progress=0.43, 
+            new_job = BenchmarkJob(progress=0.0, 
                           dataset=body.dataset, 
                           model=body.model,
                           is_over=False)
             session.add(new_job)
+            benchmarking.benchmark_(config)
             session.flush()  
             
         session.refresh(new_job)
@@ -251,6 +247,7 @@ def start_singleattack_job(body: models.AttackConfig, session : SessionDep) -> O
             "y": y,
             "y_adv": y_adv
         }
+
         return Response(
             status_code=200, 
             content=json.dumps(result_data), 

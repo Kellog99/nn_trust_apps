@@ -4,23 +4,20 @@ import os
 import logging
 import traceback
 
-from utils.config import get_config, get_data_transformation_config, read_config_file
-from pydantic import ValidationError
-from utils.evaluator import Evaluator, EvaluatorConfig
+from pydantic import ValidationError, BaseModel, Field, field_validator, ValidationInfo
+from annotated_types import Gt, Ge
+from utils.config import get_data_transformation_config, read_config_file
+from utils.evaluator import Evaluator, EvaluatorConfig, BenchmarkConfig
 from utils.utils import get_model, get_dataloader, get_structure, config_file_path_selector
+from typing import Union, Annotated, Literal, List
 
-if __name__ == "__main__":
-    handler = logging.StreamHandler()
-    handler.addFilter(lambda record: record.name == "root")
-    logging.basicConfig(level=logging.WARNING, handlers=[handler])
-    # get the parser
-    selected_config_path = config_file_path_selector(Path(__file__).parent / "config")
-    config = read_config_file(config_filename=str(selected_config_path))
-    # benchmark_data = compose_benchmarking_data(config)
 
-    for dataset in config["datasets"]:
+def benchmark_(config):
+
+    for dataset_id, dataset in enumerate(config["datasets"]):
         # for i, model_id in enumerate(config["model"]["list_models"]):
-        for model_config in config["models"]:
+        for model_id, model_config in enumerate(config["models"]):
+
             # transformations should depend on dataset and model
             try:
                 transform, inverse_transform = get_data_transformation_config(
@@ -64,8 +61,7 @@ if __name__ == "__main__":
                         statistics=config["evaluation"]["statistics"],
                         statistic_average_method=config["evaluation"]["statistic_average_method"],
                         inverse_transformation=inverse_transform,
-                        attacks=config["attacks"]["attack_list"],
-                        attack_configurations=config["attacks"]["configurations"],
+                        attacks=config["attacks"],
                         num_images_to_save=config["options"]["num_images_to_save"],
                         save_perturbation=config["options"]["save_perturbation"],
                         overwrite=config["options"]["overwrite"],
@@ -80,8 +76,19 @@ if __name__ == "__main__":
             except Exception as e:
                 logging.warning(f"\n\U0001F975 Evaluation of Model {model_config['name']} on Dataset {dataset['name']} failed with exception '{e}' +++\n")
                 traceback.print_exc()
-
-        # Saving the structure for the report
+                    # Saving the structure for the report
         structure = get_structure(output_path)
         with open(output_path / "structure.json", "w") as f:
             json.dump(structure, f)
+
+if __name__ == "__main__":
+    handler = logging.StreamHandler()
+    handler.addFilter(lambda record: record.name == "root")
+    logging.basicConfig(level=logging.WARNING, handlers=[handler])
+    # get the parser
+    selected_config_path = config_file_path_selector(Path(__file__).parent / "config")
+    config = read_config_file(config_filename=str(selected_config_path))
+    config = BenchmarkConfig(**config)
+    print(config.dict()["attacks"])
+    benchmark_(config.dict())
+

@@ -1,6 +1,6 @@
 import json
 from pathlib import Path
-from typing import Union, Annotated, Literal
+from typing import Union, Annotated, Literal, List, Optional
 import logging
 
 import torch
@@ -24,6 +24,60 @@ from nn_trust.core import Task, ModelAdapter
 from .imagesaver import ImageSaver
 
 
+class BenchmarkEvaluationConfig(BaseModel):
+    statistics: list[str] = Field(default_factory=list)
+    statistic_average_method: str
+
+
+class BenchmarkOptionConfig(BaseModel):
+    load_results: bool
+    overwrite: bool
+    num_images_to_save: int
+    save_perturbation: bool
+    gpu: bool
+    output_path: str
+    output_format: str
+
+class BenchmarkDatasetTransformConfig(BaseModel):
+    size: int
+    crop: int
+    transform_id: str
+    mean: List[float]
+    std: List[float]
+
+class BenchmarkDatasetConfig(BaseModel):
+    name: str
+    num_classes: int
+    subset: int
+    batch: int
+    type_dataset: int
+    num_workers: int
+    source_path: str
+    transform_config: BenchmarkDatasetTransformConfig
+
+
+class BenchmarkModelsConfig(BaseModel):
+    name: str
+    type: str
+    pretrained: bool
+    num_classes: int
+    task: str
+
+
+class BenchmarkAttackConfig(BaseModel):
+    name: str
+    max_iters: Optional[int] = None
+    losses: Optional[List[str]] = None
+
+
+class BenchmarkConfig(BaseModel):
+
+    evaluation: BenchmarkEvaluationConfig
+    options: BenchmarkOptionConfig
+    datasets: List[BenchmarkDatasetConfig]
+    models: List[BenchmarkModelsConfig]
+    attacks: List[BenchmarkAttackConfig]
+
 class EvaluatorConfig(BaseModel):
     """
     Configuration file for the Evaluator class
@@ -36,15 +90,12 @@ class EvaluatorConfig(BaseModel):
     dataloader: DataLoader = Field(default=...,
                                    description="Dataset to use for the benchmarking.")
 
-    attacks: Union[list[str] | str] = Field(default_factory=list,
+    attacks: List[BenchmarkAttackConfig] = Field(default_factory=list,
                                             description="List of attacks to perform. If None, all the attacks are performed.")
     losses: list = Field(default_factory=list,
                          description="List of losses to use in the test.")
     statistics: list = Field(default_factroy=list,
                              description="List of statistics names to use in the evaluation process.")
-
-    attack_configurations: dict = Field(default_factory=dict,
-                                         description="Dictionary of attacks configurations. The key is the attack name and the value is a dictionary with the parameters for the attack, radable by attack config class.")
     ##########################################
 
     ################# OPTIONS #################
@@ -117,7 +168,14 @@ class EvaluatorConfig(BaseModel):
             out = min(v, len(dataloader.dataset))
         return out
 
-    @field_validator('attacks', 'losses', 'statistics')
+    @field_validator('attacks')
+    @classmethod
+    def validate_attacks(cls, v, info:ValidationInfo):
+        field_name = info.field_name
+        complete_list = EvasionAttackFactory.list_attacks()
+        return [atk for atk in v if atk.name in complete_list]
+
+    @field_validator('losses', 'statistics')
     @classmethod
     def valid_list(cls, v, info: ValidationInfo):
 
@@ -264,17 +322,13 @@ class Evaluator:
                                                 dataloader=self.config.dataloader)
 
         ############################ TESTING VULNERABILITIES ############################
-        for atk_name in self.config.attacks:
+        for attack_config in self.config.attacks:
+            attack_config_dict = {k:v for k,v in attack_config.dict().items() if v is not None}
+            atk_name = attack_config_dict.pop("name")
+
             try:
                 self.image_saver.new_attack(atk_name=atk_name)
                 self.atk_name = atk_name
-
-                # Create attack
-                attack_config_dict = self.config.attack_configurations.get(atk_name, {})
-                common_attack_config = self.config.attack_configurations.get("commons", {})
-                if not common_attack_config:
-                    logging.warning(f"Common attack configuration block is not set in evaluator configuration.")
-                attack_config_dict =  common_attack_config | attack_config_dict
 
                 if "losses" in attack_config_dict:
                     # If losses are specified, convert them to Loss objects
