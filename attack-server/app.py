@@ -39,7 +39,7 @@ app.add_middleware(
 app.include_router(api_router)
 
 # Configure logging
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.WARNING)
 logger = logging.getLogger(__name__)
 
 @app.get("/")

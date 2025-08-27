@@ -1,2 +1,2 @@
-from main import benchmark_
-from utils.config import read_config_file
+from .main import benchmark_
+from .utils.evaluator import BenchmarkConfig as BenchmarkConfigModel

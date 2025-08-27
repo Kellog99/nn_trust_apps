@@ -4,11 +4,9 @@ import os
 import logging
 import traceback
 
-from pydantic import ValidationError, BaseModel, Field, field_validator, ValidationInfo
-from annotated_types import Gt, Ge
-from utils.config import get_data_transformation_config, read_config_file
-from utils.evaluator import Evaluator, EvaluatorConfig, BenchmarkConfig
-from utils.utils import get_model, get_dataloader, get_structure, config_file_path_selector
+from .utils.config import get_data_transformation_config, read_config_file
+from .utils.evaluator import Evaluator, EvaluatorConfig, BenchmarkConfig
+from .utils.utils import get_model, get_dataloader, get_structure, config_file_path_selector
 from typing import Union, Annotated, Literal, List
 
 

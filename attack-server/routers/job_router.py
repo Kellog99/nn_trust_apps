@@ -18,8 +18,11 @@ import base64
 import io
 from PIL import Image
 
-celery_utils = importlib.import_module("attack-server.celery.utils")
+print(sys.path)
+celery_utils = importlib.import_module("attack-server.celery_src.utils")
+celery_tasks = importlib.import_module("attack-server.celery_src.celery_worker")
 benchmarking = importlib.import_module("benchmarking")
+
 
 router = APIRouter(prefix="/job", tags=["jobs management", "jobs utils"])
 DB_CONFIG_FILE = Path(__file__).parent.parent / "resources" / "config.json"
@@ -165,26 +168,30 @@ def restart_job(id: str) -> Optional[Error]:
     pass
 
 
-@router.post("/start", response_model=None, responses={
+@router.post("/benchmark", response_model=None, responses={
     '400': {'model': Error},
     '500': {'model': Error},
 }, tags=["jobs management"])
-def start_job(body: JobConfig, session : SessionDep) -> Optional[Error]:
+def start_job(body: benchmarking.BenchmarkConfigModel, session : SessionDep) -> Optional[Error]:
     """
     Start a new TITANN benchmark job.
     """
     try:
         with session.begin():
             new_job = BenchmarkJob(progress=0.0, 
-                          dataset=body.dataset, 
-                          model=body.model,
+                          dataset=body.datasets[0].name, 
+                          model=body.models[0].name,
                           is_over=False)
             session.add(new_job)
-            benchmarking.benchmark_(config)
-            session.flush()  
+            session.flush()
+            benchmark_task = celery_tasks.benchmarking_task.delay(body.dict())
+            #print(f"Completed")
+            #update_attack_job(session, new_job.id, progress=1.0)
             
-        session.refresh(new_job)
-        return Response(status_code=200)
+        #session.refresh(new_job)
+        return Response(status_code=200,content=json.dumps({"task_id":benchmark_task.id}), 
+            media_type="application/json"
+        )
 
     except Exception as e:
         logging.error(f"Unexpected error during job start: {str(e)}")
@@ -208,7 +215,7 @@ def stop_job(id: str) -> Optional[Error]:
     '400': {'model': Error},
     '500': {'model': Error},
 }, tags=["jobs management"])
-def start_singleattack_job(body: models.AttackConfig, session : SessionDep) -> Optional[Error]:
+async def start_singleattack_job(body: models.AttackConfig, session : SessionDep) -> Optional[Error]:
     """
     Start a new TITANN benchmark job.
     """
