@@ -2,6 +2,7 @@ from sqlmodel import SQLModel, create_engine
 import os, json
 from models import BenchmarkJob, AttackJob
 from pathlib import Path
+import logging
 
 project_root =  Path(__file__).parent.parent
 database_config_path = project_root / "resources" / "config.json"
