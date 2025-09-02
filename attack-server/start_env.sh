@@ -14,7 +14,9 @@ trap 'echo "Stopping all services..."; kill ${PIDS[@]}; docker rm -f redis_app; 
 
 nohup bash -c 'docker run -p 6379:6379 --name redis_app redis' > logs/redis_app.log 2>&1 &
 PIDS+=("$!")
-nohup bash -c 'source .venv/bin/activate && celery -A celery_worker.celery --workdir ./celery_src worker --pool=solo' > logs/celery_worker.log 2>&1 &
+nohup bash -c 'source .venv/bin/activate && celery -A celery_worker.celery --workdir ./celery_src worker --pool=solo -n=worker1' > logs/celery_worker-1.log 2>&1 &
+PIDS+=("$!")
+nohup bash -c 'source .venv/bin/activate && celery -A celery_worker.celery --workdir ./celery_src worker --pool=solo -n=worker2' > logs/celery_worker-2.log 2>&1 &
 PIDS+=("$!")
 nohup bash -c 'source .venv/bin/activate && celery -A celery_worker.celery --workdir ./celery_src flower --port=5555' > logs/flower.log 2>&1 &
 PIDS+=("$!")
