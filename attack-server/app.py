@@ -1,23 +1,28 @@
 import sys
 import os
-sys.path.insert(0, os.path.abspath("."))
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
+from pathlib import Path
 import logging
 import argparse
-import os
+# Importing other nn_trust apps scope
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from routers import api_router
 import uvicorn
 
+
+
 app = FastAPI(
-    title='Swagger TITANN backend',
+    title='TITANN backend',
     description='This is the TITANN backend.',
-    termsOfService='https://swagger.io/terms/',
-    contact={'email': 'apiteam@swagger.io'},
-    license={
-        'name': 'Apache 2.0',
-        'url': 'https://www.apache.org/licenses/LICENSE-2.0.html',
-    },
-    version='1.0.12',
+#    termsOfService='https://swagger.io/terms/',
+#    contact={'email': 'apiteam@swagger.io'},
+#    license={
+#        'name': 'Apache 2.0',
+#        'url': 'https://www.apache.org/licenses/LICENSE-2.0.html',
+#    },
+#    version='1.0.12',
     servers=[{'url': 'https://titann.swagger.io/api/v3'}],
 )
 
@@ -29,12 +34,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-from routers import api_router
+
 # Include routers
 app.include_router(api_router)
 
 # Configure logging
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.WARNING)
 logger = logging.getLogger(__name__)
 
 @app.get("/")
@@ -56,7 +61,7 @@ def parse_arguments():
         help="Path to internal storage directory (models)"
     )
     parser.add_argument(
-        "--host", type=str, default="localhost", help="Host to bind the server to (default: localhost)"
+        "--host", type=str, default="0.0.0.0", help="Host to bind the server to (default: localhost)"
     )
     parser.add_argument(
         "--port", type=int, default=8000, help="Port to bind the server to (default: 8000)"

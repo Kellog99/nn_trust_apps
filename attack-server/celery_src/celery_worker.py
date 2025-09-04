@@ -1,6 +1,16 @@
 from celery import Celery
 import time
 import logging
+import importlib
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).parent.parent))
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+
+from celery_src.utils import run_attack
+
+benchmarking = importlib.import_module("benchmarking")
 
 # Configure Celery to use Redis as the message broker
 celery = Celery(
@@ -19,3 +29,6 @@ def sum_celery_task(x,y,d):
     logging.info("*"*30)
     logging.info(f"JOb completed, results written to file")
     return "Test return task"
+
+benchmarking_task = celery.task(benchmarking.benchmark_, name="benchmarking-task")
+run_attack_task = celery.task(run_attack, name="single-image-attack-task")

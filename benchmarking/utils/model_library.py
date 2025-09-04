@@ -19,3 +19,7 @@ class ResNet50Dirichlet(nn.Module):
 
     def forward(self, x):
         return F.softplus(self.backbone(x)) + self.prior
+    
+models_library = {
+    "resnet50dirichlet": ResNet50Dirichlet
+}

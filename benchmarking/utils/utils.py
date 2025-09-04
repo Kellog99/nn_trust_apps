@@ -15,7 +15,7 @@ from torchvision.models import resnet50
 
 from nn_trust.core import ModelAdapter
 from .imagenet2012_loader import ImageNetTrainDataset
-from utils import model_library
+from .model_library import models_library
 
 
 class ImageDatasetFolder(ImageFolder):
@@ -134,7 +134,7 @@ def get_model(
         model = ModelAdapter(model=torch.load(model_weights_path, weights_only=False), name=model_name, transform=tt, task=model_task)
     elif model_name and model_type == "saved_weights":
         # model = ResNet50Dirichlet()
-        model = getattr(model_library, model_name)()
+        model = models_library[model_name]()
         state_dict = torch.load(model_weights_path, map_location="cpu")
         model.load_state_dict(state_dict)
         model = ModelAdapter(model=model, name=model_name, transform=tt, task=model_task)

@@ -4,7 +4,7 @@ from PIL import Image
 import io
 import json
 
-imagefile = "./assets/data/ILSVRC2012_val_00000003_n02105855.JPEG"
+imagefile = "../assets/data/ILSVRC2012_val_00000003_n02105855.JPEG"
 with open(imagefile, "rb") as f:
     encoded_img = base64.b64encode(f.read()).decode("utf8")
 
@@ -18,7 +18,7 @@ attack_config = {
     "attack_name":"fgsm",
     "max_iters":10
     }
-
+print(attack_config)
 response = requests.post(url, json = attack_config)
 response = json.loads(response.content)
 

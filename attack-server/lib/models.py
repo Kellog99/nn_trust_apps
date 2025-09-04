@@ -30,8 +30,16 @@ class JobConfig(BaseModel):
     dataset: str = Field(..., example='cifar')
     model: str = Field(..., example='resnet50')
 
+class AttackConfig(BaseModel):
+    attack_name: str
+    image: str
+    p: float = 2.0
+    epsilon: float = 50.0
+    max_iters: int = 30
+
 class Error(BaseModel):
     code: int
     message: str
+
 class Result(BaseModel):
     metrics: Optional[List[Metric]] = None

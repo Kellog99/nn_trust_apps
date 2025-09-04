@@ -34,26 +34,14 @@ models:
     task: "classification"
 
 attacks:
-  attack_list: [ 'fgsm', 'priorgd' , 'dag', 'du' ]
-  configurations:
-    commons:
-      max_iters: 10
-    fgsm:
-      max_iters: 100
-      losses: [ "misclassification",
-                "totalvariation",
-                "similarity",
-                "bound" ]
-
-    priorgd:
-      max_iters: 100
-      losses: [ "misclassification",
-                "totalvariation",
-                "similarity",
-                "bound" ]
-    dag: 
-      max_iters: 100  
-    du: 
-      max_iters: 100
-
+  - name: 'fgsm'
+  - name: 'priorgd'
+  - name: 'dag'
+  - name: 'du'
+  - name: 'fgsm'
+    max_iters: 100
+    losses: [ "misclassification",
+          "totalvariation",
+          "similarity",
+          "bound" ]
 

@@ -5,10 +5,11 @@ from torchvision.models import resnet50, ResNet50_Weights
 from nn_trust.attack import EvasionAttackFactory, EvasionAttackConfig
 from nn_trust.core import ModelAdapter, Task, Knowledge
 import logging
-
+from torchvision import transforms
+import PIL
 
 def run_attack(
-        img: torch.Tensor,
+        img: PIL.Image,
         attack_name:str,
         epsilon:float,
         p:float,
@@ -16,7 +17,7 @@ def run_attack(
         
     ):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    img = img.unsqueeze(0).to(device)
+    img = transforms.ToTensor()(img).unsqueeze(0).to(device)
     logging.info(f"Running attack on {device}")
     model = resnet50(weights=ResNet50_Weights.IMAGENET1K_V1)
     model.eval()
@@ -42,4 +43,4 @@ def run_attack(
 
     x_adv = atk.generate(x=img, y=labels_ohe)
     labels_adv = model_ad(x_adv).argmax(1)
-    return x_adv[0], labels.item(), labels_adv.item()
+    return transforms.ToPILImage()(x_adv[0]), labels.item(), labels_adv.item()
