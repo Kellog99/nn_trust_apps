@@ -427,8 +427,27 @@ components:
       properties:
         id:
           type: number
-          format: int64
+          format: float
           example: 1
+          nullable: true
+        progress:
+          type: number
+          format: float
+          description: "Current progress of the job."
+        last_attack_performed:
+          type: string
+          nullable: true
+          description: "Last attack performed on this job, if any."
+        is_over:
+          type: boolean
+          default: false
+          description: "Whether the job is completed."
+        dataset:
+          type: string
+          description: "Dataset used for the job."
+        model:
+          type: string
+          description: "Model used for the job."
           
             
     Metric:
@@ -445,6 +464,9 @@ components:
           type: number
           format: float64
           example: 0.82
+        is_over:
+          type: boolean
+          example: false
       
     JobConfig:
       required:
@@ -452,10 +474,6 @@ components:
         - model
       type: object
       properties:
-        id:
-          type: integer
-          format: int64
-          example: 10
         dataset:
           type: string
           example: 'cifar'
@@ -467,7 +485,8 @@ components:
       type: object
       properties:
         code:
-          type: string
+          type: integer
+          format: int64
         message:
           type: string
       required:

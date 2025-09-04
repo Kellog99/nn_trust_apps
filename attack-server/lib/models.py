@@ -17,36 +17,21 @@ class Models(BaseModel):
     names: Optional[List[str]] = None
 
 
-class Job(BaseModel):
-    id: Optional[float] = Field(None, example=1)
-
-
 class Metric(BaseModel):
     values: Optional[float] = Field(None, example=0.8)
 
 
 class Progress(BaseModel):
     progress: Optional[float] = Field(None, example=0.82)
+    is_over : bool = Field(None, example=False)
 
 
 class JobConfig(BaseModel):
-    id: Optional[int] = Field(None, example=10)
     dataset: str = Field(..., example='cifar')
     model: str = Field(..., example='resnet50')
 
-
 class Error(BaseModel):
-    code: str
+    code: int
     message: str
-
-
-class DatasetUploadPostRequest(BaseModel):
-    file: bytes
-
-
-class ModelUploadPostRequest(BaseModel):
-    file: bytes
-
-
 class Result(BaseModel):
     metrics: Optional[List[Metric]] = None

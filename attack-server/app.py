@@ -1,8 +1,7 @@
-from __future__ import annotations
+import sys
+import os
+sys.path.insert(0, os.path.abspath("."))
 from fastapi import FastAPI
-from .routers.dataset_router import router as dataset_router
-from .routers.model_router import router as model_router
-from .routers.job_router import router as job_router
 from fastapi.middleware.cors import CORSMiddleware
 import logging
 import argparse
@@ -30,10 +29,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+from routers import api_router
 # Include routers
-app.include_router(dataset_router)
-app.include_router(model_router)
-app.include_router(job_router)
+app.include_router(api_router)
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -46,15 +44,15 @@ def root():
 def parse_arguments():
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--ds_storage", "-s", 
+        "--ds_storage", "-ds", 
         type=str, 
-        default="submodules/data-quality_gui/public/titann/datasets",
+        default=os.path.join("attack-server","submodules","data-quality_gui","public","titann","datasets"),
         help="Path to internal storage directory (datasets)"
     )
     parser.add_argument(
-        "--model_storage", "-s", 
+        "--model_storage", "-ms", 
         type=str, 
-        default="submodules/data-quality_gui/public/titann/models",
+        default=os.path.join("attack-server","submodules","data-quality_gui","public","titann","models"),
         help="Path to internal storage directory (models)"
     )
     parser.add_argument(
@@ -73,14 +71,13 @@ if __name__ == "__main__":
     args = parse_arguments()
     os.environ['INTERNAL_DS_STORAGE'] = args.ds_storage
     os.environ['INTERNAL_MODEL_STORAGE'] = args.model_storage
-    os.environ['PORT'] = str(args.inference_port)
-    os.environ['HOST'] = args.inference_host
-    logging.info(f"Starting FastAPI app with internal storage: {args.storage}")
+    os.environ['PORT'] = str(args.port)
+    os.environ['HOST'] = args.host
+    logging.info(f"Starting FastAPI app with internal storage: {args.ds_storage} , {args.model_storage}")
     logging.info(f"Server will run on {args.host}:{args.port} with {args.workers} worker(s)")
     uvicorn.run(
-        "backendserver.app:app",
+        "app:app",
         host=args.host,
         port=args.port,
-        reload=True,
         workers=args.workers
     )
