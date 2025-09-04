@@ -16,7 +16,7 @@ benchmarking = importlib.import_module("benchmarking")
 celery = Celery(
     "worker",  # This is the name of your Celery application
     broker="redis://localhost:6379",  # This is the Redis connection string
-    #backend="redis://localhost:6379/0",  # Optional, for storing task results
+    backend="redis://localhost:6379/0",  # Optional, for storing task results
 )
 celery.conf.broker_connection_retry_on_startup = True
 
@@ -30,5 +30,5 @@ def sum_celery_task(x,y,d):
     logging.info(f"JOb completed, results written to file")
     return "Test return task"
 
-benchmarking_task = celery.task(benchmarking.benchmark_, name="benchmarking-task")
+benchmarking_task = celery.task(benchmarking.benchmark_, name="benchmarking-task", bind=True)
 run_attack_task = celery.task(run_attack, name="single-image-attack-task")

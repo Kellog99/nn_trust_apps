@@ -51,13 +51,13 @@ def parse_arguments():
     parser.add_argument(
         "--ds_storage", "-ds", 
         type=str, 
-        default=os.path.join("attack-server","submodules","data-quality_gui","public","titann","datasets"),
+        default=os.path.join("submodules","data-quality_gui","public","titann","datasets"),
         help="Path to internal storage directory (datasets)"
     )
     parser.add_argument(
         "--model_storage", "-ms", 
         type=str, 
-        default=os.path.join("attack-server","submodules","data-quality_gui","public","titann","models"),
+        default=os.path.join("submodules","data-quality_gui","public","titann","models"),
         help="Path to internal storage directory (models)"
     )
     parser.add_argument(
@@ -67,7 +67,7 @@ def parse_arguments():
         "--port", type=int, default=8000, help="Port to bind the server to (default: 8000)"
     )
     parser.add_argument(
-        "--workers", type=int, default=1, help="Number of Uvicorn worker processes"
+        "--workers", type=int, default=2, help="Number of Uvicorn worker processes"
     )
     return parser.parse_args()
 

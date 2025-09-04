@@ -10,7 +10,7 @@ from annotated_types import Gt, Ge
 from pydantic import BaseModel, Field, field_validator, ValidationInfo
 from torch.utils.data import DataLoader
 from tqdm.auto import tqdm
-
+import time
 from nn_trust.attack import EvasionAttackFactory
 from nn_trust.attack._evasion import EvasionAttack
 from nn_trust.attack.evaluation._statistics import StatisticsFactory
@@ -300,7 +300,7 @@ class Evaluator:
 
         return self.statistics_composer.compute()
 
-    def evaluate(self):
+    def evaluate(self, task):
         """
         Evaluate the model against all specified attacks and compute metrics.
         """
@@ -322,41 +322,52 @@ class Evaluator:
                                                 dataloader=self.config.dataloader)
 
         ############################ TESTING VULNERABILITIES ############################
-        for attack_config in self.config.attacks:
+        for i,attack_config in enumerate(self.config.attacks):
+            current_progress = int((i + 1) / len(self.config.attacks) * 100)
+            task.update_state(
+                state='PROGRESS',
+                meta={
+                    'current': i + 1,
+                    'total': len(self.config.attacks),
+                    'progress': current_progress,
+                    'status': f'Processing item {i + 1}: {attack_config}'
+                }
+            )
             attack_config_dict = {k:v for k,v in attack_config.dict().items() if v is not None}
             atk_name = attack_config_dict.pop("name")
+            time.sleep(10)
+            print("OK!")
+            #try:
+            #    self.image_saver.new_attack(atk_name=atk_name)
+            #    self.atk_name = atk_name
+#
+            #    if "losses" in attack_config_dict:
+            #        # If losses are specified, convert them to Loss objects
+            #        attack_config_dict['loss'] = LossComposer(ConfigLossComposer(
+            #            loss=attack_config_dict['losses'],
+            #            p = attack_config_dict.get('p', 2.0),
+            #            loss_weights=attack_config_dict.get('loss_weights', [1.0] * len(attack_config_dict['losses'])),
+            #        ))
+#
+            #    atk = EvasionAttackFactory.create_attack(atk_name,
+            #                                            model=self.config.model,
+            #                                            device=self.config.device,
+            #                                            task=Task.Classification,
+            #                                            targeted=False,
+            #                                            **attack_config_dict
+            #                                            )
+            #    if self.config.model.task not in atk.TASKS:
+            #        logging.warning(f"\U0001F928 Attack {atk_name} does not support Model {self.config.model.name} task {self.config.model.task}. Skipped Execution.")
+            #        continue
+#
+            #    self.results['atk'][atk_name] = self.evaluate_atk(atk=atk)
+            #except Exception as e:
+            #    print(f"\U0001F975 Execution of attack '{atk_name}' on model '{self.config.model.name}' has failed: '{e}'")
+            #torch.cuda.empty_cache()
 
-            try:
-                self.image_saver.new_attack(atk_name=atk_name)
-                self.atk_name = atk_name
+        #print("################### FINISH the attacks ####################")
 
-                if "losses" in attack_config_dict:
-                    # If losses are specified, convert them to Loss objects
-                    attack_config_dict['loss'] = LossComposer(ConfigLossComposer(
-                        loss=attack_config_dict['losses'],
-                        p = attack_config_dict.get('p', 2.0),
-                        loss_weights=attack_config_dict.get('loss_weights', [1.0] * len(attack_config_dict['losses'])),
-                    ))
-
-                atk = EvasionAttackFactory.create_attack(atk_name,
-                                                        model=self.config.model,
-                                                        device=self.config.device,
-                                                        task=Task.Classification,
-                                                        targeted=False,
-                                                        **attack_config_dict
-                                                        )
-                if self.config.model.task not in atk.TASKS:
-                    logging.warning(f"\U0001F928 Attack {atk_name} does not support Model {self.config.model.name} task {self.config.model.task}. Skipped Execution.")
-                    continue
-
-                self.results['atk'][atk_name] = self.evaluate_atk(atk=atk)
-            except Exception as e:
-                print(f"\U0001F975 Execution of attack '{atk_name}' on model '{self.config.model.name}' has failed: '{e}'")
-            torch.cuda.empty_cache()
-
-        print("################### FINISH the attacks ####################")
-
-        self.results['metrics'] = self.statistics_composer.compute_global_state()
+        #self.results['metrics'] = self.statistics_composer.compute_global_state()
 
     def save_results(self):
         """

@@ -11,8 +11,8 @@ from database.models import BenchmarkJob, AttackJob
 import os,json
 import logging
 from sqlalchemy.exc import NoResultFound, MultipleResultsFound
-
-
+from celery_src.celery_worker import celery
+from celery.result import AsyncResult
 import sys
 import base64
 import io
@@ -96,35 +96,75 @@ def get_attack_jobs_id(session : SessionDep) -> Union[List[AttackJob], Error]:
                 status_code=500,
                 content=Error(code=500, message=f"Unexpected error during get jobs").model_dump_json())
 
-@router.get("/getProgress", response_model=Progress, responses={
+@router.get("/getProgress", responses={
     '400': {'model': Error},
     '500': {'model': Error},
 }, tags=["jobs management"])
-def get_job_progress(id: str, session : SessionDep) -> Union[Progress, Error]:
+def get_job_progress(id: str, session : SessionDep):
     """
     Get a TITANN benchmark job progress.
     """
-    try:
-        try:
-            job = session.exec(select(BenchmarkJob).where(BenchmarkJob.id == id).limit(100)).one()
-        except NoResultFound:
-            return Response(status_code=404, 
-                            content=Error(code=404, message=f"No job found with id {id}").model_dump_json())
-        except MultipleResultsFound:
-            return Response(status_code=500, 
-                            content=Error(code=500, message=f"Multiple jobs found with id {id}. Check database!").model_dump_json())
-        return Response(
-            status_code=200,
-            content=Progress(
-                progress=job.progress,
-                is_over=job.is_over
-            ).model_dump_json()
-        )
-    except Exception as e:
-        logging.error(f"Unexpected error during get progress: {str(e)}")
-        return Response(
-                status_code=500,
-                content=Error(code=500, message=f"Unexpected error during get progress").model_dump_json())
+    #try:
+    #    try:
+    #        job = session.exec(select(BenchmarkJob).where(BenchmarkJob.id == id).limit(100)).one()
+    #    except NoResultFound:
+    #        return Response(status_code=404, 
+    #                        content=Error(code=404, message=f"No job found with id {id}").model_dump_json())
+    #    except MultipleResultsFound:
+    #        return Response(status_code=500, 
+    #                        content=Error(code=500, message=f"Multiple jobs found with id {id}. Check database!").model_dump_json())
+    #    return Response(
+    #        status_code=200,
+    #        content=Progress(
+    #            progress=job.progress,
+    #            is_over=job.is_over
+    #        ).model_dump_json()
+    #    )
+    #except Exception as e:
+    #    logging.error(f"Unexpected error during get progress: {str(e)}")
+    #    return Response(
+    #            status_code=500,
+    #            content=Error(code=500, message=f"Unexpected error during get progress").model_dump_json())
+    """
+    Track the progress of a Celery task by its ID.
+    
+    Args:
+        task_id (str): The task ID to track
+    """
+    result = AsyncResult(id, app=celery)
+    
+    print(f"Tracking task: {id}")
+    print("-" * 50)
+    
+    while not result.ready():
+        print(result)
+        if result.state == 'PROGRESS':
+            meta = result.info
+            progress = meta.get('progress', 0)
+            status = meta.get('status', 'Processing...')
+            current = meta.get('current', 0)
+            total = meta.get('total', 0)
+            
+            # Create progress bar
+            bar_length = 30
+            filled_length = int(bar_length * progress // 100)
+            bar = '█' * filled_length + '-' * (bar_length - filled_length)
+            
+            print(f"\r[{bar}] {progress}% - {current}/{total} - {status}", end='')
+        else:
+            print(f"\rTask state: {result.state}", end='')
+        return progress
+        
+    print("\n" + "-" * 50)
+    
+    if result.successful():
+        print("Task completed successfully!")
+        result_data = result.get()
+        print(f"Final result: {type(result)}")
+    else:
+        print(f"Task failed: {result.info}")
+    
+    return result
 
 @router.get("/getResult", response_model=Result, responses={
     '400': {'model': Error},

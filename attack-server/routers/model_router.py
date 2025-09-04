@@ -25,7 +25,7 @@ def get_models() -> Union[Models, Error]:
     Get all models of the TITANN backend.
     """
     try:
-        with open(os.path.join("attack-server","resources","config.json")) as f:
+        with open(os.path.join("resources","config.json")) as f:
                 config = json.load(f)
                 MODELS = config["timm_models"]
     except Exception as e:
@@ -72,7 +72,7 @@ def upload_model(file: UploadFile) -> Optional[Error]:
     """
     # Settings
     try:
-        with open(os.path.join("attack-server","resources","config.json")) as f:
+        with open(os.path.join("resources","config.json")) as f:
                 config = json.load(f)
                 MODELS = config["timm_models"]
                 MAX_FILE_SIZE = config["max_model_size"]
