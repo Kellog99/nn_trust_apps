@@ -17,6 +17,9 @@ celery = Celery(
     "worker",  # This is the name of your Celery application
     broker="redis://localhost:6379",  # This is the Redis connection string
     backend="redis://localhost:6379/0",  # Optional, for storing task results
+    task_track_started = True,
+    task_send_sent_event = True,
+    worker_send_task_events = True,
 )
 celery.conf.broker_connection_retry_on_startup = True
 

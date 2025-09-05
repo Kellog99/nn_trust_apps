@@ -69,7 +69,7 @@ def benchmark_(self,config):
                     )
                 )
 
-                model_report = evaluator.evaluate(self)
+                model_report = evaluator.evaluate(self,dataset["name"],model_config.get("name"))
                 evaluator.save_results()
             except Exception as e:
                 logging.warning(f"\n\U0001F975 Evaluation of Model {model_config['name']} on Dataset {dataset['name']} failed with exception '{e}' +++\n")

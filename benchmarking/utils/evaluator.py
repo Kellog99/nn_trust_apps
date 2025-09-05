@@ -300,7 +300,7 @@ class Evaluator:
 
         return self.statistics_composer.compute()
 
-    def evaluate(self, task):
+    def evaluate(self, task,dataset_name, model_name):
         """
         Evaluate the model against all specified attacks and compute metrics.
         """
@@ -323,19 +323,21 @@ class Evaluator:
 
         ############################ TESTING VULNERABILITIES ############################
         for i,attack_config in enumerate(self.config.attacks):
-            current_progress = int((i + 1) / len(self.config.attacks) * 100)
-            task.update_state(
-                state='PROGRESS',
-                meta={
-                    'current': i + 1,
-                    'total': len(self.config.attacks),
-                    'progress': current_progress,
-                    'status': f'Processing item {i + 1}: {attack_config}'
-                }
-            )
+            current_progress = float((i + 1) / len(self.config.attacks))
+            if task:
+                task.update_state(
+                    state='PROGRESS',
+                    meta={
+                        'progress': current_progress,
+                        'last_attack_performed':attack_config.name,
+                        'is_over':False,
+                        'dataset': dataset_name,
+                        'model': model_name
+                    }
+                )
             attack_config_dict = {k:v for k,v in attack_config.dict().items() if v is not None}
             atk_name = attack_config_dict.pop("name")
-            time.sleep(10)
+            time.sleep(100)
             print("OK!")
             #try:
             #    self.image_saver.new_attack(atk_name=atk_name)

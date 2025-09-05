@@ -43,3 +43,16 @@ class Error(BaseModel):
 
 class Result(BaseModel):
     metrics: Optional[List[Metric]] = None
+
+class BenchmarkJob(BaseModel):
+    id: str 
+    progress : float
+    last_attack_performed : str | None
+    is_over : bool = Field(default=False)
+    dataset : str
+    model : str
+
+class AttackJob(BaseModel):
+    id: str 
+    progress : float
+    is_over : bool = Field(default=False)
