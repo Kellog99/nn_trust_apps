@@ -1,9 +1,9 @@
 {
 	"info": {
-		"_postman_id": "d6dbc983-9c97-4442-87ce-e707c53d8cfc",
+		"_postman_id": "19093c28-e258-4c29-9020-0daaa430f778",
 		"name": "TITANN",
 		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
-		"_exporter_id": "12458044"
+		"_exporter_id": "28671168"
 	},
 	"item": [
 		{
@@ -107,12 +107,12 @@
 			"response": []
 		},
 		{
-			"name": "get job ids",
+			"name": "get jobs",
 			"request": {
 				"method": "GET",
 				"header": [],
 				"url": {
-					"raw": "http://localhost:8000/job/getJobsId",
+					"raw": "http://localhost:8000/job/benchmark/getJobs",
 					"protocol": "http",
 					"host": [
 						"localhost"
@@ -120,19 +120,20 @@
 					"port": "8000",
 					"path": [
 						"job",
-						"getJobsId"
+						"benchmark",
+						"getJobs"
 					]
 				}
 			},
 			"response": []
 		},
 		{
-			"name": "get attack job ids",
+			"name": "get benchmark job by id",
 			"request": {
 				"method": "GET",
 				"header": [],
 				"url": {
-					"raw": "http://localhost:8000/job/getAttackjobsId",
+					"raw": "http://localhost:8000/job/benchmark/getJobProgress",
 					"protocol": "http",
 					"host": [
 						"localhost"
@@ -140,40 +141,15 @@
 					"port": "8000",
 					"path": [
 						"job",
-						"getAttackjobsId"
+						"benchmark",
+						"getJobProgress"
 					]
 				}
 			},
 			"response": []
 		},
 		{
-			"name": "get job progress",
-			"request": {
-				"method": "GET",
-				"header": [],
-				"url": {
-					"raw": "http://localhost:8000/job/getProgress?id=3",
-					"protocol": "http",
-					"host": [
-						"localhost"
-					],
-					"port": "8000",
-					"path": [
-						"job",
-						"getProgress"
-					],
-					"query": [
-						{
-							"key": "id",
-							"value": "3"
-						}
-					]
-				}
-			},
-			"response": []
-		},
-		{
-			"name": "get job result",
+			"name": "get attack job by id",
 			"request": {
 				"method": "GET",
 				"header": [],
@@ -193,35 +169,6 @@
 							"key": "id",
 							"value": "2"
 						}
-					]
-				}
-			},
-			"response": []
-		},
-		{
-			"name": "start job",
-			"request": {
-				"method": "POST",
-				"header": [],
-				"body": {
-					"mode": "raw",
-					"raw": "{\r\n    \"dataset\":\"topolino\",\r\n    \"model\":\"resnet50\"\r\n}",
-					"options": {
-						"raw": {
-							"language": "json"
-						}
-					}
-				},
-				"url": {
-					"raw": "http://localhost:8000/job/start",
-					"protocol": "http",
-					"host": [
-						"localhost"
-					],
-					"port": "8000",
-					"path": [
-						"job",
-						"start"
 					]
 				}
 			},
@@ -263,7 +210,7 @@
 				"header": [],
 				"body": {
 					"mode": "raw",
-					"raw": "{\n    \"evaluation\": {\n        \"statistics\": [\n            \"local_accuracy\",\n            \"local_precision\",\n            \"local_f1score\"\n        ],\n        \"statistic_average_method\": \"macro\"\n    },\n    \"options\": {\n        \"load_results\": false,\n        \"overwrite\": true,\n        \"num_images_to_save\": -1,\n        \"save_perturbation\": false,\n        \"gpu\": true,\n        \"output_path\": \"/home/bruno/Documents/codes/nn_trust_apps/attack-server/benchmark_out_test\",\n        \"output_format\": \"test\"\n    },\n    \"datasets\": [\n        {\n            \"name\": \"imagenet\",\n            \"num_classes\": 1000,\n            \"subset\": 10,\n            \"batch\": 2,\n            \"type_dataset\": 2,\n            \"num_workers\": 2,\n            \"source_path\": \"/home/bruno/Documents/codes/imagenet_validation\",\n            \"transform_config\": {\n                \"size\": 256,\n                \"crop\": 224,\n                \"transform_id\": \"imagenet_like_crop\",\n                \"mean\": [\n                    0.5074,\n                    0.5308,\n                    0.5306\n                ],\n                \"std\": [\n                    0.2639,\n                    0.2518,\n                    0.2521\n                ]\n            }\n        }\n    ],\n    \"models\": [\n        {\n            \"name\": \"resnetv2_50d_evos.ah_in1k\",\n            \"type\": \"timm\",\n            \"pretrained\": true,\n            \"num_classes\": 1000,\n            \"task\": \"classification\"\n        }\n    ],\n    \"attacks\": [\n        {\n            \"name\": \"fgsm\",\n            \"max_iters\":5\n        },\n        {\n            \"name\": \"priorgd\",\n            \"max_iters\":5\n        }\n    ]\n}",
+					"raw": "{\n    \"evaluation\": {\n        \"statistics\": [\n            \"local_accuracy\",\n            \"local_precision\",\n            \"local_f1score\"\n        ],\n        \"statistic_average_method\": \"macro\"\n    },\n    \"options\": {\n        \"load_results\": false,\n        \"overwrite\": true,\n        \"num_images_to_save\": -1,\n        \"save_perturbation\": false,\n        \"gpu\": true,\n        \"output_path\": \"resources\",\n        \"output_format\": \"test\"\n    },\n    \"datasets\": [\n        {\n            \"name\": \"imagenet\",\n            \"num_classes\": 90,\n            \"subset\": 10,\n            \"batch\": 2,\n            \"type_dataset\": 2,\n            \"num_workers\": 0,\n            \"source_path\": \"C:/Users/Cristiano Lavoro/Downloads/animals/data\",\n            \"transform_config\": {\n                \"size\": 256,\n                \"crop\": 224,\n                \"transform_id\": \"imagenet_like_crop\",\n                \"mean\": [\n                    0.5074,\n                    0.5308,\n                    0.5306\n                ],\n                \"std\": [\n                    0.2639,\n                    0.2518,\n                    0.2521\n                ]\n            }\n        }\n    ],\n    \"models\": [\n        {\n            \"name\": \"resnet50\",\n            \"type\": \"timm\",\n            \"pretrained\": true,\n            \"num_classes\": 90,\n            \"task\": \"classification\"\n        }\n    ],\n    \"attacks\": [\n        {\n            \"name\": \"fgsm\",\n            \"max_iters\":5\n        },\n        {\n            \"name\": \"priorgd\",\n            \"max_iters\":5\n        }\n    ]\n}",
 					"options": {
 						"raw": {
 							"language": "json"
