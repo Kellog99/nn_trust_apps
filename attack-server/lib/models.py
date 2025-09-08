@@ -49,6 +49,7 @@ class BenchmarkJob(BaseModel):
     progress : float
     last_attack_performed : str | None
     is_over : bool = Field(default=False)
+    attack_progress : float | None
     dataset : str
     model : str
 

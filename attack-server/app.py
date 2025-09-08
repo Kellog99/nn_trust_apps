@@ -67,7 +67,7 @@ def parse_arguments():
         "--port", type=int, default=8000, help="Port to bind the server to (default: 8000)"
     )
     parser.add_argument(
-        "--workers", type=int, default=2, help="Number of Uvicorn worker processes"
+        "--workers", type=int, default=1, help="Number of Uvicorn worker processes"
     )
     return parser.parse_args()
 

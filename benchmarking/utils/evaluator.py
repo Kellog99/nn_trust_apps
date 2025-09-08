@@ -254,7 +254,13 @@ class Evaluator:
             'atk': {}
         }
 
-    def evaluate_atk(self, atk: EvasionAttack) -> dict:
+    def evaluate_atk(self, 
+                     task = None, 
+                     dataset_name = None, 
+                     model_name = None, 
+                     attack_config = None, 
+                     benchmark_progress = None,
+                     atk: EvasionAttack = None) -> dict:
         """
         Evaluate the model on the attack that is passed.
 
@@ -263,42 +269,56 @@ class Evaluator:
         """
 
         # Process each batch
-        for batch, label, element_info in tqdm(self.config.dataloader, desc=f"Attack {self.atk_name} for model {self.config.model.name}"):
-            batch = batch.to(self.config.device)
-            label = label.to(self.config.device)
-
-            # Generate adversarial examples
-            y_one_hot = torch.nn.functional.one_hot(label,
-                                                    num_classes=self.config.num_classes)
-            x_adv = atk.generate(
-                x=batch,
-                y=y_one_hot
-            ).detach()
-
-            ########### UPDATE STATISTICS ###########
-            with torch.no_grad():
-                out = self.config.model(batch)
-                out_adv = self.config.model(x_adv)
-
-            self.image_saver.save_images(img=batch,
-                                         img_adv=x_adv,
-                                         y=label,
-                                         y_pred=out,
-                                         y_pred_adv=out_adv,
-                                         element_info=element_info
-                                         )
-            input_stat = {
-                'x_adv': x_adv.detach(),
-                'x': batch.detach(),
-                'y': label,
-                'out': out,
-                'out_adv': out_adv,
-                'y_pred': out.argmax(-1),
-                'y_pred_adv': out_adv.argmax(-1),
-            }
-            self.statistics_composer.update(**input_stat)
-
-        return self.statistics_composer.compute()
+        for idx, _ in enumerate(tqdm(range(100))):
+            current_progress = float((idx + 1) / 100)
+            if task:
+                task.update_state(
+                    state='PROGRESS',
+                    meta={
+                        'progress': benchmark_progress,
+                        'last_attack_performed':attack_config.name,
+                        'is_over':False,
+                        'dataset': dataset_name,
+                        'model': model_name,
+                        'attack_progress': current_progress
+                    }
+                )
+            time.sleep(1)
+#            batch = batch.to(self.config.device)
+#            label = label.to(self.config.device)
+#
+#            # Generate adversarial examples
+#            y_one_hot = torch.nn.functional.one_hot(label,
+#                                                    num_classes=self.config.num_classes)
+#            x_adv = atk.generate(
+#                x=batch,
+#                y=y_one_hot
+#            ).detach()
+#
+#            ########### UPDATE STATISTICS ###########
+#            with torch.no_grad():
+#                out = self.config.model(batch)
+#                out_adv = self.config.model(x_adv)
+#
+#            self.image_saver.save_images(img=batch,
+#                                         img_adv=x_adv,
+#                                         y=label,
+#                                         y_pred=out,
+#                                         y_pred_adv=out_adv,
+#                                         element_info=element_info
+#                                         )
+#            input_stat = {
+#                'x_adv': x_adv.detach(),
+#                'x': batch.detach(),
+#                'y': label,
+#                'out': out,
+#                'out_adv': out_adv,
+#                'y_pred': out.argmax(-1),
+#                'y_pred_adv': out_adv.argmax(-1),
+#            }
+#            self.statistics_composer.update(**input_stat)
+#
+#        return self.statistics_composer.compute()
 
     def evaluate(self, task,dataset_name, model_name):
         """
@@ -332,13 +352,18 @@ class Evaluator:
                         'last_attack_performed':attack_config.name,
                         'is_over':False,
                         'dataset': dataset_name,
-                        'model': model_name
+                        'model': model_name,
+                        'attack_progress': 0.0
                     }
                 )
             attack_config_dict = {k:v for k,v in attack_config.dict().items() if v is not None}
             atk_name = attack_config_dict.pop("name")
-            time.sleep(100)
-            print("OK!")
+            time.sleep(20)
+            self.evaluate_atk(task=task, 
+                              dataset_name=dataset_name, 
+                              model_name=model_name, 
+                              attack_config=attack_config,
+                              benchmark_progress=current_progress)
             #try:
             #    self.image_saver.new_attack(atk_name=atk_name)
             #    self.atk_name = atk_name
