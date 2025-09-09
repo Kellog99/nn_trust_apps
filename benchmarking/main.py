@@ -10,7 +10,7 @@ from .utils.utils import get_model, get_dataloader, get_structure, config_file_p
 from typing import Union, Annotated, Literal, List
 
 
-def benchmark_(self,config):
+def benchmark_(config, task_ref = None):
     
     for dataset_id, dataset in enumerate(config["datasets"]):
         # for i, model_id in enumerate(config["model"]["list_models"]):
@@ -69,7 +69,7 @@ def benchmark_(self,config):
                     )
                 )
 
-                model_report = evaluator.evaluate(self,dataset["name"],model_config.get("name"))
+                model_report = evaluator.evaluate(task_ref,dataset["name"],model_config.get("name"))
                 evaluator.save_results()
             except Exception as e:
                 logging.warning(f"\n\U0001F975 Evaluation of Model {model_config['name']} on Dataset {dataset['name']} failed with exception '{e}' +++\n")

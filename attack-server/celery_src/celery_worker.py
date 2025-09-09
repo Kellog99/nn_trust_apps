@@ -33,5 +33,10 @@ def sum_celery_task(x,y,d):
     logging.info(f"JOb completed, results written to file")
     return "Test return task"
 
-benchmarking_task = celery.task(benchmarking.benchmark_, name="benchmarking-task", bind=True)
+@celery.task(bind=True, name="benchmarking-task")
+def benchmark_task_wrapper(self,benchmark_input):
+    return benchmarking.benchmark_(benchmark_input, 
+                                   task_ref=self)
+
+benchmarking_task = benchmark_task_wrapper
 run_attack_task = celery.task(run_attack, name="single-image-attack-task")

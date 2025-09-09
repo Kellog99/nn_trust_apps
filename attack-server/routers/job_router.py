@@ -197,38 +197,51 @@ async def start_singleattack_job(body: models.AttackConfig) -> Optional[Error]:
     """
     Start a new TITANN benchmark job.
     """
-    try:
-        
-        # Decode base64 image string and convert to torch tensor
-        image_bytes = base64.b64decode(body.image)
-        image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
-        adv_img, y, y_adv = celery_utils.run_attack(
-            img=image,
-            attack_name=body.attack_name,
-            p=body.p,
-            epsilon=body.epsilon,
-            max_iters=body.max_iters
-        )
-        
-        # Prepare image data to return
-        buffered = io.BytesIO()
-        adv_img.save(buffered, format="PNG")
-        adv_img_base64 = base64.b64encode(buffered.getvalue()).decode("utf-8")
-        result_data = {
-            "status": "success",
-            "adv_img": adv_img_base64,
-            "y": y,
-            "y_adv": y_adv
-        }
+#    try:
+#        
+#        # Decode base64 image string and convert to torch tensor
+#        image_bytes = base64.b64decode(body.image)
+#        image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+#        adv_img, y, y_adv = celery_utils.run_attack(
+#            img=image,
+#            attack_name=body.attack_name,
+#            p=body.p,
+#            epsilon=body.epsilon,
+#            max_iters=body.max_iters
+#        )
+#        
+#        # Prepare image data to return
+#        buffered = io.BytesIO()
+#        adv_img.save(buffered, format="PNG")
+#        adv_img_base64 = base64.b64encode(buffered.getvalue()).decode("utf-8")
+#        result_data = {
+#            "status": "success",
+#            "adv_img": adv_img_base64,
+#            "y": y,
+#            "y_adv": y_adv
+#        }
+#
+#        return Response(
+#            status_code=200, 
+#            content=json.dumps(result_data), 
+#            media_type="application/json"
+#        )
+#
+#    except Exception as e:
+#        logging.error(f"Unexpected error during job start: {str(e)}")
+#        return Response(
+#                status_code=500,
+#                content=Error(code=500, message=f"Unexpected error during job start").model_dump_json())
+    pass
 
-        return Response(
-            status_code=200, 
-            content=json.dumps(result_data), 
-            media_type="application/json"
-        )
-
-    except Exception as e:
-        logging.error(f"Unexpected error during job start: {str(e)}")
-        return Response(
-                status_code=500,
-                content=Error(code=500, message=f"Unexpected error during job start").model_dump_json())
+@router.get("/stop", responses={
+    '400': {'model': Error},
+    '409': {'model': Error},
+    '500': {'model': Error},
+}, tags=["jobs management"])
+def stop_job(id: str) -> Optional[Error]:
+    """
+    Stop a TITANN benchmark job.
+    """
+    celery.control.revoke(id, terminate=True, signal='SIGKILL')
+    return Response()
