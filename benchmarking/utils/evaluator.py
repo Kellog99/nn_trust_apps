@@ -281,9 +281,11 @@ class Evaluator:
                         'dataset': dataset_name,
                         'model': model_name,
                         'attack_progress': current_progress
-                    }
-                )
-            time.sleep(1)
+                    })
+                if task.is_cancelled():
+                    raise Exception("The task has been killed.")
+                
+            time.sleep(5)
 #            batch = batch.to(self.config.device)
 #            label = label.to(self.config.device)
 #

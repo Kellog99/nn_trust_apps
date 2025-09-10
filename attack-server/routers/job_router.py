@@ -12,6 +12,8 @@ from celery_src.celery_worker import celery
 from celery.result import AsyncResult
 import base64
 import io
+import redis
+import os
 from PIL import Image
 from tqdm.auto import tqdm
 
@@ -35,7 +37,7 @@ def get_job_metadata_from_id(id:str):
         if result.state == 'PROGRESS':
             meta = result.info
         else:
-            meta = result.info
+            meta = None
             logging.info(f"\rTask state: {result.state}", end='')
         return meta
     elif result.ready():
@@ -134,10 +136,10 @@ def get_benchmark_job_progress(id: str):
             logging.error(f"No job found with id {id}")
             return Response(status_code=404, content=Error(code=404, message=f"No job found with id {id}").model_dump_json())
     except Exception as e:
-        logging.error(f"Unexpected error during get jobs: {str(e)}")
+        logging.error(f"Unexpected error during get job progress: {str(e)}")
         return Response(
                 status_code=500,
-                content=Error(code=500, message=f"Unexpected error during get jobs").model_dump_json())
+                content=Error(code=500, message=f"Unexpected error during get job progress").model_dump_json())
 
 @router.get("/getResult", response_model=Result, responses={
     '400': {'model': Error},
@@ -236,6 +238,7 @@ async def start_singleattack_job(body: models.AttackConfig) -> Optional[Error]:
 
 @router.get("/stop", responses={
     '400': {'model': Error},
+    '404': {'model': Error},
     '409': {'model': Error},
     '500': {'model': Error},
 }, tags=["jobs management"])
@@ -243,5 +246,29 @@ def stop_job(id: str) -> Optional[Error]:
     """
     Stop a TITANN benchmark job.
     """
-    celery.control.revoke(id, terminate=True, signal='SIGKILL')
-    return Response()
+    try:
+        redis_client = redis.StrictRedis(host=os.environ.get('REDIS_HOST','localhost'), 
+                                        port=os.environ.get('REDIS_PORT',6379), 
+                                        db=0, 
+                                        decode_responses=True)
+        redis_client.set(f"cancel_flag:{id}", "1")
+        key = f'celery-task-meta-{id}'
+        current_task = redis_client.get(key)
+        if current_task is None:
+            logging.error(f"Task with id {id} not found")
+            return Response(
+                status_code=404,
+                content=Error(code=404, message=f"Task with id {id} not found").model_dump_json())
+        else:
+            data = json.loads(current_task)
+            data['status'] = 'KILLED'  
+            new_value = json.dumps(data)
+            redis_client.set(key, new_value)
+            logging.info(f"Status updated in key {key}")
+            return Response(status_code=200, content=f"Task {id} stopped correctly")
+        
+    except Exception as e:
+        logging.error(f"Unexpected error during stop job: {str(e)}")
+        return Response(
+                status_code=500,
+                content=Error(code=500, message=f"Unexpected error during stop job").model_dump_json())
