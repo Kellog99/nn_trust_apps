@@ -4,7 +4,7 @@
 
 from __future__ import annotations
 
-from typing import List, Optional
+from typing import List, Optional, Dict
 
 from pydantic import BaseModel, Field
 
@@ -14,7 +14,7 @@ class Datasets(BaseModel):
 
 
 class Models(BaseModel):
-    names: Optional[List[str]] = None
+    models: Optional[List[Dict]] = None
 
 
 class Metric(BaseModel):
@@ -47,11 +47,12 @@ class Result(BaseModel):
 class BenchmarkJob(BaseModel):
     id: str 
     progress : float
-    last_attack_performed : str | None
+    current_attack : str | None
     is_over : bool = Field(default=False)
     attack_progress : float | None
     dataset : str
     model : str
+    all_attacks : List[str]
 
 class AttackJob(BaseModel):
     id: str 

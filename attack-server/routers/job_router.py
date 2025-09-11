@@ -4,7 +4,7 @@ from typing import List, Union, Optional
 from lib.models import AttackJob, BenchmarkJob, Error, Metric, Result
 from lib.extractors import CeleryRedisExtractor
 from lib import models
-from fastapi import Response
+from fastapi import Response, Query, Body
 import json
 import logging
 from sqlalchemy.exc import NoResultFound, MultipleResultsFound
@@ -16,6 +16,8 @@ import redis
 import os
 from PIL import Image
 from tqdm.auto import tqdm
+from routers.dataset_router import get_datasets
+from routers.model_router import get_models
 
 celery_utils = importlib.import_module("attack-server.celery_src.utils")
 celery_tasks = importlib.import_module("attack-server.celery_src.celery_worker")
@@ -45,6 +47,18 @@ def get_job_metadata_from_id(id:str):
     else:
         raise Exception("An error occurred during job metadata extraction from id")
     
+def check_model_and_dataset_in_running_jobs(job, d, m):
+    """
+    Checks if the specified dataset and model to perform a benchmark on are already running.
+    """
+    return job.get('dataset') == d and job.get('model') == m
+
+def check_attack_already_launched(attacks, req_attacks):
+    """
+    Checks if one or more specified attacks is already running in the backend.
+    """
+    return any(item in attacks for item in req_attacks), set(attacks) & set(req_attacks)
+    
 # ----------------- SERVICES --------------------------
 
 @router.get("/benchmark/getJobs", response_model=List[BenchmarkJob], responses={
@@ -69,14 +83,15 @@ def get_jobs() -> Union[List[Union[BenchmarkJob,AttackJob]], Error]:
                 jobs.append(BenchmarkJob(
                             id=id,
                             progress= meta.get('progress', 0),
-                            last_attack_performed = meta.get('last_attack_performed', None),
+                            current_attack = meta.get('current_attack', None),
                             is_over = meta.get('is_over', False),
                             dataset = meta.get('dataset', '-'),
                             model = meta.get('model','-'),
-                            attack_progress = meta.get('attack_progress',0.0)
+                            attack_progress = meta.get('attack_progress',0.0),
+                            all_attacks = meta.get('all_attacks',[])
                 ))
         if len(jobs)>0:
-            return jobs
+            return Response(status_code=200, content=json.dumps([j.dict() for j in jobs]), media_type="application/json")
         else:
             return Response(status_code=404, content=Error(code=404, message="No jobs running!").model_dump_json())
     except Exception as e:
@@ -124,11 +139,12 @@ def get_benchmark_job_progress(id: str):
             logging.info(f"Metadata for job {id} found succesfully")
             job = BenchmarkJob(id=id,
                 progress= meta.get('progress', 0),
-                last_attack_performed = meta.get('last_attack_performed', None),
+                current_attack = meta.get('current_attack', None),
                 is_over = meta.get('is_over', False),
                 dataset = meta.get('dataset', '-'),
                 model = meta.get('model','-'),
-                attack_progress = meta.get('attack_progress',0.0)
+                attack_progress = meta.get('attack_progress',0.0),
+                all_attacks = meta.get('all_attacks',[])
                 )
             return job
             
@@ -175,13 +191,96 @@ def get_job_result(id: str) -> Union[Result, Error]:
 @router.post("/benchmark", response_model=None, responses={
     '400': {'model': Error},
     '500': {'model': Error},
+    '409': {'model': Error},
 }, tags=["jobs management"])
-def start_bechmark_job(body: benchmarking.BenchmarkConfigModel) -> Optional[Error]:
+def start_bechmark_job(dataset_name : str = Query(...), 
+                       model_name : str = Query(...), 
+                       body: benchmarking.BenchmarkConfigModel = Body(...)) -> Optional[Error]:
     """
     Start a new TITANN benchmark job.
     """
     try:
-        benchmark_task = celery_tasks.benchmarking_task.delay(body.dict())
+        job_response = get_jobs()
+        
+        active_jobs = json.loads(job_response.body.decode('utf-8'))
+        active_attacks = []
+
+        if job_response.status_code==200:
+            for j in active_jobs:
+                active_attacks = (j['all_attacks'])
+                requested_attacks = [atk['name'] for atk in body.dict()['attacks']]
+                already_launched = check_attack_already_launched(active_attacks,requested_attacks)
+                if (check_model_and_dataset_in_running_jobs(j,dataset_name,model_name)
+                    and already_launched[0]):
+                    logging.error(f"The requested attacks {already_launched[1]} is already running on this combination of dataset and model: {dataset_name} - {model_name}")
+                    return Response(
+                        status_code=409,
+                        content=Error(code=409, 
+                                    message=f"One of the requested attacks {requested_attacks} is already running on this combination of dataset and model: {dataset_name} - {model_name}").model_dump_json())
+        
+        m_response = get_models()
+        d_response = get_datasets()
+        model_response = json.loads(m_response.body.decode('utf-8'))["models"]
+
+        if m_response.status_code!=200 or d_response.status_code!=200:
+            logging.error("Model or Dataset repository is empty. Check repository.")
+            return Response(
+                status_code=404,
+                content=Error(code=404, 
+                            message="Model or Dataset repository is empty. Check repository.").model_dump_json())
+
+        model = [m["name"] for m in model_response if m["name"]==model_name]
+        model_type = [m["mode"] for m in model_response if m["name"]==model_name]
+        dataset = [d for d in json.loads(d_response.body.decode('utf-8'))["names"] if d==dataset_name]
+
+        if len(model)>1 or len(model_type)>1:
+            logging.error(f"The provided model string {model_name} has had more than one match. Check model repository")
+            return Response(
+                status_code=409,
+                content=Error(code=409, 
+                              message=f"The provided model string {model_name} has had more than one match. Check model repository").model_dump_json())
+        
+        if len(model)==0 or len(model_type)==0:
+            logging.error(f"No model found: {model_name}")
+            return Response(
+                status_code=404,
+                content=Error(code=404, 
+                              message=f"No model found: {model_name}").model_dump_json())
+        
+        if len(dataset)>1:
+            logging.error(f"The provided dataset string {dataset_name} has had more than one match. Check dataset repository")
+            return Response(
+                status_code=409,
+                content=Error(code=409, 
+                              message=f"The provided dataset string {dataset_name} has had more than one match. Check dataset repository").model_dump_json())
+        
+        if len(dataset)==0:
+            logging.error(f"No dataset found: {dataset_name}")
+            return Response(
+                status_code=404,
+                content=Error(code=404, 
+                              message=f"No dataset found: {dataset_name}").model_dump_json())
+        
+        #TODO: dataset and benchmark metadata should not be in the post, but in the repository!
+        benchmark_config = body.dict()
+        config_dataset = benchmark_config['datasets']
+        config_models = benchmark_config['models']
+
+        if len(config_dataset)>1 or len(config_models)>1:
+            logging.error(f"Benchmark can be launched only on one dataset and model at a time.")
+            return Response(
+                status_code=400,
+                content=Error(code=400, 
+                              message=f"Benchmark can be launched only on one dataset and model at a time.").model_dump_json())
+
+        config_dataset[0]["name"] = dataset_name
+        config_models[0]["name"] = model[0]
+        config_models[0]["type"] = model_type[0]
+
+        if model_type[0]=="saved_model":
+            config_models[0]["weights_path"] = os.path.join(os.environ.get('INTERNAL_MODEL_STORAGE'),f"{model_name}.pth")
+        
+        benchmark_task = celery_tasks.benchmarking_task.delay(benchmark_config)
         return Response(status_code=200,content=json.dumps({"task_id":benchmark_task.id}), 
             media_type="application/json"
         )

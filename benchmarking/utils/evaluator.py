@@ -260,6 +260,7 @@ class Evaluator:
                      model_name = None, 
                      attack_config = None, 
                      benchmark_progress = None,
+                     all_attacks = None,
                      atk: EvasionAttack = None) -> dict:
         """
         Evaluate the model on the attack that is passed.
@@ -269,58 +270,59 @@ class Evaluator:
         """
 
         # Process each batch
-        for idx, _ in enumerate(tqdm(range(100))):
-            current_progress = float((idx + 1) / 100)
+        for idx, (batch, label, element_info) in enumerate(tqdm(self.config.dataloader, desc=f"Attack {self.atk_name} for model {self.config.model.name}")):
+            current_progress = float((idx + 1) / len(self.config.dataloader))
             if task:
                 task.update_state(
                     state='PROGRESS',
                     meta={
                         'progress': benchmark_progress,
-                        'last_attack_performed':attack_config.name,
+                        'current_attack':attack_config.name,
                         'is_over':False,
                         'dataset': dataset_name,
                         'model': model_name,
-                        'attack_progress': current_progress
+                        'attack_progress': current_progress,
+                        'all_attacks' : all_attacks
                     })
                 if task.is_cancelled():
                     raise Exception("The task has been killed.")
                 
-            time.sleep(5)
-#            batch = batch.to(self.config.device)
-#            label = label.to(self.config.device)
-#
-#            # Generate adversarial examples
-#            y_one_hot = torch.nn.functional.one_hot(label,
-#                                                    num_classes=self.config.num_classes)
-#            x_adv = atk.generate(
-#                x=batch,
-#                y=y_one_hot
-#            ).detach()
-#
-#            ########### UPDATE STATISTICS ###########
-#            with torch.no_grad():
-#                out = self.config.model(batch)
-#                out_adv = self.config.model(x_adv)
-#
-#            self.image_saver.save_images(img=batch,
-#                                         img_adv=x_adv,
-#                                         y=label,
-#                                         y_pred=out,
-#                                         y_pred_adv=out_adv,
-#                                         element_info=element_info
-#                                         )
-#            input_stat = {
-#                'x_adv': x_adv.detach(),
-#                'x': batch.detach(),
-#                'y': label,
-#                'out': out,
-#                'out_adv': out_adv,
-#                'y_pred': out.argmax(-1),
-#                'y_pred_adv': out_adv.argmax(-1),
-#            }
-#            self.statistics_composer.update(**input_stat)
-#
-#        return self.statistics_composer.compute()
+            
+            batch = batch.to(self.config.device)
+            label = label.to(self.config.device)
+
+            # Generate adversarial examples
+            y_one_hot = torch.nn.functional.one_hot(label,
+                                                    num_classes=self.config.num_classes)
+            x_adv = atk.generate(
+                x=batch,
+                y=y_one_hot
+            ).detach()
+
+            ########### UPDATE STATISTICS ###########
+            with torch.no_grad():
+                out = self.config.model(batch)
+                out_adv = self.config.model(x_adv)
+
+            self.image_saver.save_images(img=batch,
+                                         img_adv=x_adv,
+                                         y=label,
+                                         y_pred=out,
+                                         y_pred_adv=out_adv,
+                                         element_info=element_info
+                                         )
+            input_stat = {
+                'x_adv': x_adv.detach(),
+                'x': batch.detach(),
+                'y': label,
+                'out': out,
+                'out_adv': out_adv,
+                'y_pred': out.argmax(-1),
+                'y_pred_adv': out_adv.argmax(-1),
+            }
+            self.statistics_composer.update(**input_stat)
+
+        return self.statistics_composer.compute()
 
     def evaluate(self, task,dataset_name, model_name):
         """
@@ -344,6 +346,7 @@ class Evaluator:
                                                 dataloader=self.config.dataloader)
 
         ############################ TESTING VULNERABILITIES ############################
+        attacks = [a.name for a in self.config.attacks]
         for i,attack_config in enumerate(self.config.attacks):
             current_progress = float((i + 1) / len(self.config.attacks))
             if task:
@@ -351,52 +354,54 @@ class Evaluator:
                     state='PROGRESS',
                     meta={
                         'progress': current_progress,
-                        'last_attack_performed':attack_config.name,
+                        'current_attack':attack_config.name,
                         'is_over':False,
                         'dataset': dataset_name,
                         'model': model_name,
-                        'attack_progress': 0.0
+                        'attack_progress': 0.0,
+                        'all_attacks' : attacks
                     }
                 )
             attack_config_dict = {k:v for k,v in attack_config.dict().items() if v is not None}
             atk_name = attack_config_dict.pop("name")
-            time.sleep(20)
-            self.evaluate_atk(task=task, 
-                              dataset_name=dataset_name, 
-                              model_name=model_name, 
-                              attack_config=attack_config,
-                              benchmark_progress=current_progress)
-            #try:
-            #    self.image_saver.new_attack(atk_name=atk_name)
-            #    self.atk_name = atk_name
-#
-            #    if "losses" in attack_config_dict:
-            #        # If losses are specified, convert them to Loss objects
-            #        attack_config_dict['loss'] = LossComposer(ConfigLossComposer(
-            #            loss=attack_config_dict['losses'],
-            #            p = attack_config_dict.get('p', 2.0),
-            #            loss_weights=attack_config_dict.get('loss_weights', [1.0] * len(attack_config_dict['losses'])),
-            #        ))
-#
-            #    atk = EvasionAttackFactory.create_attack(atk_name,
-            #                                            model=self.config.model,
-            #                                            device=self.config.device,
-            #                                            task=Task.Classification,
-            #                                            targeted=False,
-            #                                            **attack_config_dict
-            #                                            )
-            #    if self.config.model.task not in atk.TASKS:
-            #        logging.warning(f"\U0001F928 Attack {atk_name} does not support Model {self.config.model.name} task {self.config.model.task}. Skipped Execution.")
-            #        continue
-#
-            #    self.results['atk'][atk_name] = self.evaluate_atk(atk=atk)
-            #except Exception as e:
-            #    print(f"\U0001F975 Execution of attack '{atk_name}' on model '{self.config.model.name}' has failed: '{e}'")
-            #torch.cuda.empty_cache()
+            try:
+                self.image_saver.new_attack(atk_name=atk_name)
+                self.atk_name = atk_name
 
-        #print("################### FINISH the attacks ####################")
+                if "losses" in attack_config_dict:
+                    # If losses are specified, convert them to Loss objects
+                    attack_config_dict['loss'] = LossComposer(ConfigLossComposer(
+                        loss=attack_config_dict['losses'],
+                        p = attack_config_dict.get('p', 2.0),
+                        loss_weights=attack_config_dict.get('loss_weights', [1.0] * len(attack_config_dict['losses'])),
+                    ))
 
-        #self.results['metrics'] = self.statistics_composer.compute_global_state()
+                atk = EvasionAttackFactory.create_attack(atk_name,
+                                                        model=self.config.model,
+                                                        device=self.config.device,
+                                                        task=Task.Classification,
+                                                        targeted=False,
+                                                        **attack_config_dict
+                                                        )
+                if self.config.model.task not in atk.TASKS:
+                    logging.warning(f"\U0001F928 Attack {atk_name} does not support Model {self.config.model.name} task {self.config.model.task}. Skipped Execution.")
+                    continue
+
+                self.results['atk'][atk_name] = self.evaluate_atk(  task=task, 
+                                                                    dataset_name=dataset_name, 
+                                                                    model_name=model_name, 
+                                                                    attack_config=attack_config,
+                                                                    benchmark_progress=current_progress,
+                                                                    all_attacks=attacks,
+                                                                    atk=atk)
+                
+            except Exception as e:
+                print(f"\U0001F975 Execution of attack '{atk_name}' on model '{self.config.model.name}' has failed: '{e}'")
+            torch.cuda.empty_cache()
+
+        print("################### FINISH the attacks ####################")
+
+        self.results['metrics'] = self.statistics_composer.compute_global_state()
 
     def save_results(self):
         """
