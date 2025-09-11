@@ -371,3 +371,59 @@ def stop_job(id: str) -> Optional[Error]:
         return Response(
                 status_code=500,
                 content=Error(code=500, message=f"Unexpected error during stop job").model_dump_json())
+
+#@router.post("/single_attack", response_model=None, responses={
+#    '400': {'model': Error},
+#    '500': {'model': Error},
+#}, tags=["jobs management"])
+#async def start_singleattack_job(body: models.AttackConfig, session : SessionDep) -> Optional[Error]:
+#    """
+#    Start a new TITANN benchmark job.
+#    """
+#    try:
+#        with session.begin():
+#            # ================================================
+#            # TODO: Put “start job” logic here!
+#            #       - Perform any setup or validations.
+#            #       - If anything fails, raise an exception
+#            #         to roll back the transaction.
+#            # ================================================
+#            new_job = AttackJob(progress=0.1, is_over=False)
+#            session.add(new_job)
+#            session.flush() 
+#            # Decode base64 image string and convert to torch tensor
+#            image_bytes = base64.b64decode(body.image)
+#            image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+#            adv_img, y, y_adv = celery_utils.run_attack(
+#                img=image,
+#                attack_name=body.attack_name,
+#                p=body.p,
+#                epsilon=body.epsilon,
+#                max_iters=body.max_iters
+#            )
+#            print(f"Completed")
+#            update_attack_job(session, new_job.id, progress=1.0)
+#
+#        session.refresh(new_job)
+#        # Prepare image data to return
+#        buffered = io.BytesIO()
+#        adv_img.save(buffered, format="PNG")
+#        adv_img_base64 = base64.b64encode(buffered.getvalue()).decode("utf-8")
+#        result_data = {
+#            "status": "success",
+#            "adv_img": adv_img_base64,
+#            "y": y,
+#            "y_adv": y_adv
+#        }
+#
+#        return Response(
+#            status_code=200, 
+#            content=json.dumps(result_data), 
+#            media_type="application/json"
+#        )
+#
+#    except Exception as e:
+#        logging.error(f"Unexpected error during job start: {str(e)}")
+#        return Response(
+#                status_code=500,
+#                content=Error(code=500, message=f"Unexpected error during job start").model_dump_json())

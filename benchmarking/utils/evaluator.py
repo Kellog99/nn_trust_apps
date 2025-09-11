@@ -324,7 +324,10 @@ class Evaluator:
 
         return self.statistics_composer.compute()
 
-    def evaluate(self, task,dataset_name, model_name):
+    def evaluate(self, 
+                 task = None,
+                 dataset_name = None, 
+                 model_name = None):
         """
         Evaluate the model against all specified attacks and compute metrics.
         """
