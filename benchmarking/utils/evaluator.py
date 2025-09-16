@@ -278,7 +278,7 @@ class Evaluator:
                     meta={
                         'progress': benchmark_progress,
                         'current_attack':attack_config.name,
-                        'is_over':False,
+                        'computing_global':False,
                         'dataset': dataset_name,
                         'model': model_name,
                         'attack_progress': current_progress,
@@ -344,6 +344,20 @@ class Evaluator:
         self.config.model.eval()
         # TODO manage this expection iw we want less overhead and dont need statistics
         # TODO manage evaluation of base model within evaluator class, not in statistics compose
+        if task:
+            logging.info("------------------ job started --------------------")
+            task.update_state(
+                state='PROGRESS',
+                meta={
+                    'progress': 0.0,
+                    'current_attack':"-",
+                    'computing_global':True,
+                    'dataset': dataset_name,
+                    'model': model_name,
+                    'attack_progress': 0.0,
+                    'all_attacks' : ["-"]
+                }
+            )
         if not self.config.output_format == "test":
             self.statistics_composer.update_global(model=self.config.model,
                                                 dataloader=self.config.dataloader)
@@ -358,7 +372,7 @@ class Evaluator:
                     meta={
                         'progress': current_progress,
                         'current_attack':attack_config.name,
-                        'is_over':False,
+                        'computing_global':False,
                         'dataset': dataset_name,
                         'model': model_name,
                         'attack_progress': 0.0,

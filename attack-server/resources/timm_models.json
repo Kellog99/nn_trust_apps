@@ -1,0 +1,5 @@
+{
+    "timm_models":["resnet50"],
+    "max_model_size": 5000
+}
+ 

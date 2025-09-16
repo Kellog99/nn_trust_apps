@@ -73,8 +73,11 @@ def get_jobs() -> Union[List[Union[BenchmarkJob,AttackJob]], Error]:
 
     """
     try:
-        #TODO: Redis host and port should become ENV VARIABLES!
-        extractor = CeleryRedisExtractor()
+        extractor = CeleryRedisExtractor(
+            host=os.environ.get("REDIS_HOST"),
+            port=os.environ.get("REDIS_PORT"),
+            db_number=os.environ.get("DB_NUMBER")
+        )
         task_ids = extractor.extract()
         jobs = []
         for id in tqdm(task_ids,desc="Fetching jobs..."):
@@ -84,7 +87,7 @@ def get_jobs() -> Union[List[Union[BenchmarkJob,AttackJob]], Error]:
                             id=id,
                             progress= meta.get('progress', 0),
                             current_attack = meta.get('current_attack', None),
-                            is_over = meta.get('is_over', False),
+                            computing_global = meta.get('computing_global', False),
                             dataset = meta.get('dataset', '-'),
                             model = meta.get('model','-'),
                             attack_progress = meta.get('attack_progress',0.0),
@@ -140,7 +143,7 @@ def get_benchmark_job_progress(id: str):
             job = BenchmarkJob(id=id,
                 progress= meta.get('progress', 0),
                 current_attack = meta.get('current_attack', None),
-                is_over = meta.get('is_over', False),
+                computing_global = meta.get('computing_global', False),
                 dataset = meta.get('dataset', '-'),
                 model = meta.get('model','-'),
                 attack_progress = meta.get('attack_progress',0.0),
@@ -205,18 +208,18 @@ def start_bechmark_job(dataset_name : str = Query(...),
         active_jobs = json.loads(job_response.body.decode('utf-8'))
         active_attacks = []
 
-        if job_response.status_code==200:
-            for j in active_jobs:
-                active_attacks = (j['all_attacks'])
-                requested_attacks = [atk['name'] for atk in body.dict()['attacks']]
-                already_launched = check_attack_already_launched(active_attacks,requested_attacks)
-                if (check_model_and_dataset_in_running_jobs(j,dataset_name,model_name)
-                    and already_launched[0]):
-                    logging.error(f"The requested attacks {already_launched[1]} is already running on this combination of dataset and model: {dataset_name} - {model_name}")
-                    return Response(
-                        status_code=409,
-                        content=Error(code=409, 
-                                    message=f"One of the requested attacks {requested_attacks} is already running on this combination of dataset and model: {dataset_name} - {model_name}").model_dump_json())
+        #if job_response.status_code==200:
+        #    for j in active_jobs:
+        #        active_attacks = (j['all_attacks'])
+        #        requested_attacks = [atk['name'] for atk in body.dict()['attacks']]
+        #        already_launched = check_attack_already_launched(active_attacks,requested_attacks)
+        #        if (check_model_and_dataset_in_running_jobs(j,dataset_name,model_name)
+        #            and already_launched[0]):
+        #            logging.error(f"The requested attacks {already_launched[1]} is already running on this combination of dataset and model: {dataset_name} - {model_name}")
+        #            return Response(
+        #                status_code=409,
+        #                content=Error(code=409, 
+        #                            message=f"One of the requested attacks {requested_attacks} is already running on this combination of dataset and model: {dataset_name} - {model_name}").model_dump_json())
         
         m_response = get_models()
         d_response = get_datasets()
@@ -290,50 +293,49 @@ def start_bechmark_job(dataset_name : str = Query(...),
                 status_code=500,
                 content=Error(code=500, message=f"Unexpected error during job start").model_dump_json())
 
-@router.post("/single_attack", response_model=None, responses={
+@router.post("/single_attack",responses={
     '400': {'model': Error},
     '500': {'model': Error},
 }, tags=["jobs management"])
 async def start_singleattack_job(body: models.AttackConfig) -> Optional[Error]:
     """
-    Start a new TITANN benchmark job.
+    Start a new TITANN attack on single image job.
     """
-#    try:
-#        
-#        # Decode base64 image string and convert to torch tensor
-#        image_bytes = base64.b64decode(body.image)
-#        image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
-#        adv_img, y, y_adv = celery_utils.run_attack(
-#            img=image,
-#            attack_name=body.attack_name,
-#            p=body.p,
-#            epsilon=body.epsilon,
-#            max_iters=body.max_iters
-#        )
-#        
-#        # Prepare image data to return
-#        buffered = io.BytesIO()
-#        adv_img.save(buffered, format="PNG")
-#        adv_img_base64 = base64.b64encode(buffered.getvalue()).decode("utf-8")
-#        result_data = {
-#            "status": "success",
-#            "adv_img": adv_img_base64,
-#            "y": y,
-#            "y_adv": y_adv
-#        }
-#
-#        return Response(
-#            status_code=200, 
-#            content=json.dumps(result_data), 
-#            media_type="application/json"
-#        )
-#
-#    except Exception as e:
-#        logging.error(f"Unexpected error during job start: {str(e)}")
-#        return Response(
-#                status_code=500,
-#                content=Error(code=500, message=f"Unexpected error during job start").model_dump_json())
-    pass
+    try:
+        
+        # Decode base64 image string and convert to torch tensor
+        image_bytes = base64.b64decode(body.image)
+        image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+        adv_img, y, y_adv = celery_utils.run_attack(
+            img=image,
+            attack_name=body.attack_name,
+            p=body.p,
+            epsilon=body.epsilon,
+            max_iters=body.max_iters
+        )
+        
+        # Prepare image data to return
+        buffered = io.BytesIO()
+        adv_img.save(buffered, format="PNG")
+        adv_img_base64 = base64.b64encode(buffered.getvalue()).decode("utf-8")
+        result_data = {
+            "status": "success",
+            "adv_img": adv_img_base64,
+            "y": y,
+            "y_adv": y_adv
+        }
+
+        return Response(
+            status_code=200, 
+            content=json.dumps(result_data), 
+            media_type="application/json"
+        )
+
+    except Exception as e:
+        logging.error(f"Unexpected error during job start: {str(e)}")
+        return Response(
+                status_code=500,
+                content=Error(code=500, message=f"Unexpected error during job start").model_dump_json())
 
 @router.get("/stop", responses={
     '400': {'model': Error},
@@ -348,7 +350,7 @@ def stop_job(id: str) -> Optional[Error]:
     try:
         redis_client = redis.StrictRedis(host=os.environ.get('REDIS_HOST','localhost'), 
                                         port=os.environ.get('REDIS_PORT',6379), 
-                                        db=0, 
+                                        db=os.environ.get('DB_NUMBER',0), 
                                         decode_responses=True)
         redis_client.set(f"cancel_flag:{id}", "1")
         key = f'celery-task-meta-{id}'

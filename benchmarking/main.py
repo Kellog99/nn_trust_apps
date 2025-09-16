@@ -3,12 +3,30 @@ from pathlib import Path
 import os
 import logging
 import traceback
-
+from datetime import datetime
 from .utils.config import get_data_transformation_config, read_config_file
 from .utils.evaluator import Evaluator, EvaluatorConfig, BenchmarkConfig
 from .utils.utils import get_model, get_dataloader, get_structure, config_file_path_selector
 from typing import Union, Annotated, Literal, List
 
+
+def create_versioned_path(base_path: Path, task_id : str) -> Path:
+    """
+    Args:
+        base_path (Path): The base directory where versioned folders will be created.
+        
+    Returns:
+        Path: The path to the newly created, versioned directory.
+    """
+    #timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S")
+    #run_number = 0
+    while True:
+        versioned_path = base_path / task_id
+        if not versioned_path.exists():
+            break
+        
+    versioned_path.mkdir(parents=True, exist_ok=True)
+    return versioned_path
 
 def benchmark_(config, task_ref = None):
     
@@ -45,6 +63,8 @@ def benchmark_(config, task_ref = None):
                 )
 
                 output_path = Path(config["options"]["output_path"]) / dataset["name"]
+                if task_ref:
+                    output_path = create_versioned_path(output_path,task_ref.request.id)
 
                 num_classes = (
                     model_config["num_classes"]

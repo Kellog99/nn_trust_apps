@@ -25,7 +25,7 @@ def get_models() -> Union[Models, Error]:
     Get all models of the TITANN backend.
     """
     try:
-        with open(os.path.join("resources","config.json")) as f:
+        with open(os.environ.get("TIMM_MODELS_JSON_PATH")) as f:
                 config = json.load(f)
                 MODELS = config["timm_models"]
                 MODELS = [{"name":n,"mode":"timm"} for n in MODELS]
@@ -73,10 +73,10 @@ def upload_model(file: UploadFile) -> Optional[Error]:
     """
     # Settings
     try:
-        with open(os.path.join("resources","config.json")) as f:
+        with open(os.environ.get("TIMM_MODELS_JSON_PATH")) as f:
                 config = json.load(f)
                 MODELS = config["timm_models"]
-                MAX_FILE_SIZE = config["max_model_size"]
+                MAX_FILE_SIZE = os.environ.get("MAX_MODEL_SIZE_UPLOAD")
     except Exception as e:
         # Handle unexpected errors
         logging.error(f"Unexpected error during config import: {str(e)}")
