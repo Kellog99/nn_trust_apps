@@ -1,6 +1,7 @@
 from fastapi import APIRouter, UploadFile, Response
 from typing import Union, Optional
 from lib.models import Models, Error
+from lib.validator import json_safety_check
 import os
 import shutil
 import tempfile
@@ -28,7 +29,8 @@ def get_models() -> Union[Models, Error]:
         with open(os.environ.get("TIMM_MODELS_JSON_PATH")) as f:
                 config = json.load(f)
                 MODELS = config["timm_models"]
-                MODELS = [{"name":n,"mode":"timm"} for n in MODELS]
+                for n in MODELS:
+                    n["mode"]="timm"
     except Exception as e:
         # Handle unexpected errors
         logging.error(f"Unexpected error during config import: {str(e)}")
@@ -40,7 +42,7 @@ def get_models() -> Union[Models, Error]:
         models_root_dir = os.environ.get("INTERNAL_MODEL_STORAGE")
         for item in os.listdir(models_root_dir):
             item_path = os.path.join(models_root_dir, item)
-            if os.path.isfile(item_path):
+            if os.path.isfile(item_path) and item_path.endswith(".pth"):
                 logging.info(f"Found a model: {item_path}")
                 models.append({"name":Path(item).stem,"mode":"saved_model"})
         if len(models)==0:
@@ -66,7 +68,8 @@ def get_models() -> Union[Models, Error]:
     '409': {'model': Error},
     '500': {'model': Error},
 })
-def upload_model(file: UploadFile) -> Optional[Error]:
+async def upload_model(file: UploadFile,
+                 metadata: UploadFile) -> Optional[Error]:
     """
     Upload a model directly to the TITANN backend.
     Accepts PyTorch model files (.pt, .pth, .pkl, .pickle).
@@ -171,6 +174,20 @@ def upload_model(file: UploadFile) -> Optional[Error]:
         os.chmod(dest_path, 0o600)  # Read/write for owner only
         
         logging.info(f"Successfully uploaded model '{model_name}' from file '{safe_filename}'")
+
+        #JSON parsing and check
+        logging.info("Starting JSON metadata check and storage...")
+        json_metadata = await json_safety_check(metadata)
+
+        # Save the uploaded json file
+        UPLOAD_DIRECTORY = os.path.join(os.environ.get('INTERNAL_MODEL_STORAGE'),f"{model_name}.json")
+        output_path = Path(UPLOAD_DIRECTORY)
+
+        with output_path.open("w", encoding="utf-8") as f:
+            json.dump(json_metadata, f, ensure_ascii=False, indent=2)  
+        
+        logging.info(f"JSON {metadata.filename} saved.")
+
         return Response(status_code=200)
         
     except Exception as e:

@@ -203,10 +203,10 @@ def start_bechmark_job(dataset_name : str = Query(...),
     Start a new TITANN benchmark job.
     """
     try:
-        job_response = get_jobs()
+        #job_response = get_jobs()
         
-        active_jobs = json.loads(job_response.body.decode('utf-8'))
-        active_attacks = []
+        #active_jobs = json.loads(job_response.body.decode('utf-8'))
+        #active_attacks = []
 
         #if job_response.status_code==200:
         #    for j in active_jobs:
@@ -267,21 +267,49 @@ def start_bechmark_job(dataset_name : str = Query(...),
         #TODO: dataset and benchmark metadata should not be in the post, but in the repository!
         benchmark_config = body.dict()
         config_dataset = benchmark_config['datasets']
-        config_models = benchmark_config['models']
 
-        if len(config_dataset)>1 or len(config_models)>1:
-            logging.error(f"Benchmark can be launched only on one dataset and model at a time.")
+        file_path = os.path.join(os.environ.get('INTERNAL_MODEL_STORAGE'),f"{model_name}.json")
+        if model_type[0]=="saved_model":
+            if os.path.exists(file_path) and os.path.isfile(file_path):
+                with open(file_path, "r", encoding="utf-8") as f:
+                    config_models = json.load(f)  # load into dict
+                logging.info("Loaded JSON metadata")
+            else:
+                logging.error(f"Can't find model metadata in the repository for model:{model_name}")
+                return Response(
+                    status_code=404,
+                    content=Error(code=404, 
+                                message=f"Can't find model metadata in the repository for model:{model_name}").model_dump_json())
+        elif model_type[0]=="timm":
+            model_metadata = None
+            for m in model_response:
+                if m["name"]==model_name:
+                    model_metadata = m
+            if model_metadata:
+                model_metadata.pop("mode")
+                config_models = model_metadata
+            else:
+                logging.error("An error has occurred for timm model metadata retrieval")
+                return Response(
+                    status_code=404,
+                    content=Error(code=404, 
+                                message="An error has occurred for timm model metadata retrieval").model_dump_json())
+        
+
+        if len(config_dataset)>1:
+            logging.error(f"Benchmark can be launched only on one dataset at a time.")
             return Response(
                 status_code=400,
                 content=Error(code=400, 
-                              message=f"Benchmark can be launched only on one dataset and model at a time.").model_dump_json())
+                              message=f"Benchmark can be launched only on one dataset at a time.").model_dump_json())
 
         config_dataset[0]["name"] = dataset_name
-        config_models[0]["name"] = model[0]
-        config_models[0]["type"] = model_type[0]
+        benchmark_config['models'] = [config_models]
+        #config_models[0]["name"] = model[0]
+        #config_models["type"] = model_type[0]
 
         if model_type[0]=="saved_model":
-            config_models[0]["weights_path"] = os.path.join(os.environ.get('INTERNAL_MODEL_STORAGE'),f"{model_name}.pth")
+            config_models["weights_path"] = os.path.join(os.environ.get('INTERNAL_MODEL_STORAGE'),f"{model_name}.pth")
         
         benchmark_task = celery_tasks.benchmarking_task.delay(benchmark_config)
         return Response(status_code=200,content=json.dumps({"task_id":benchmark_task.id}), 

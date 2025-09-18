@@ -8,6 +8,7 @@ from typing import List, Optional, Dict
 
 from pydantic import BaseModel, Field
 
+from typing import Literal
 
 class Datasets(BaseModel):
     names: Optional[List[str]] = None
@@ -58,3 +59,10 @@ class AttackJob(BaseModel):
     id: str 
     progress : float
     is_over : bool = Field(default=False)
+
+class ModelConfig(BaseModel):
+    name: str
+    type: str
+    pretrained: bool
+    num_classes: int
+    task: Literal["classification"] 
