@@ -6,6 +6,8 @@ import argparse
 # Importing other nn_trust apps scope
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+
+from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from routers import api_router
@@ -51,13 +53,13 @@ def parse_arguments():
     parser.add_argument(
         "--ds_storage", "-ds", 
         type=str, 
-        default=os.path.join("attack-server","submodules","data-quality_gui","public","titann","datasets"),
+        default="datasets_repo",
         help="Path to internal storage directory (datasets)"
     )
     parser.add_argument(
         "--model_storage", "-ms", 
         type=str, 
-        default=os.path.join("attack-server","submodules","data-quality_gui","public","titann","models"),
+        default="models_repo",
         help="Path to internal storage directory (models)"
     )
     parser.add_argument(
@@ -78,6 +80,7 @@ if __name__ == "__main__":
     os.environ['INTERNAL_MODEL_STORAGE'] = args.model_storage
     os.environ['PORT'] = str(args.port)
     os.environ['HOST'] = args.host
+    load_dotenv()
     logging.info(f"Starting FastAPI app with internal storage: {args.ds_storage} , {args.model_storage}")
     logging.info(f"Server will run on {args.host}:{args.port} with {args.workers} worker(s)")
     uvicorn.run(

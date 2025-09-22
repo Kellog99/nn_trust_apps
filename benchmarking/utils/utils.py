@@ -131,7 +131,12 @@ def get_model(
     elif model_name and model_type == "timm":
         model = ModelAdapter(model=timm.create_model(model_name, pretrained=True), name=model_name, transform=tt, task=model_task)
     elif model_name and model_type == "saved_model":
+        print("*****************************")
+        original = os.getcwd()
+        print("---------------------", original)
+        os.chdir('..')
         model = ModelAdapter(model=torch.load(model_weights_path, weights_only=False), name=model_name, transform=tt, task=model_task)
+        os.chdir(original)
     elif model_name and model_type == "saved_weights":
         # model = ResNet50Dirichlet()
         model = models_library[model_name]()

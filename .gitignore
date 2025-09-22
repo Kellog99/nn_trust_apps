@@ -3,4 +3,5 @@
 *.jpg
 *.webp
 *.db
+*.log
 __pycache__

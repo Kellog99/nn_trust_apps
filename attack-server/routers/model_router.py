@@ -25,9 +25,10 @@ def get_models() -> Union[Models, Error]:
     Get all models of the TITANN backend.
     """
     try:
-        with open(os.path.join("attack-server","resources","config.json")) as f:
+        with open(os.environ.get("TIMM_MODELS_JSON_PATH")) as f:
                 config = json.load(f)
                 MODELS = config["timm_models"]
+                MODELS = [{"name":n,"mode":"timm"} for n in MODELS]
     except Exception as e:
         # Handle unexpected errors
         logging.error(f"Unexpected error during config import: {str(e)}")
@@ -41,7 +42,7 @@ def get_models() -> Union[Models, Error]:
             item_path = os.path.join(models_root_dir, item)
             if os.path.isfile(item_path):
                 logging.info(f"Found a model: {item_path}")
-                models.append(Path(item).stem)
+                models.append({"name":Path(item).stem,"mode":"saved_model"})
         if len(models)==0:
             logging.info("No uploaded models found.")
 
@@ -51,7 +52,7 @@ def get_models() -> Union[Models, Error]:
             return Response(status_code=404, 
                             content=Error(code=404, message="No models found.").model_dump_json())
 
-        models = Models(names=models)
+        models = Models(models=models)
         return Response(status_code=200, 
                         content=models.model_dump_json())
 
@@ -72,10 +73,10 @@ def upload_model(file: UploadFile) -> Optional[Error]:
     """
     # Settings
     try:
-        with open(os.path.join("attack-server","resources","config.json")) as f:
+        with open(os.environ.get("TIMM_MODELS_JSON_PATH")) as f:
                 config = json.load(f)
                 MODELS = config["timm_models"]
-                MAX_FILE_SIZE = config["max_model_size"]
+                MAX_FILE_SIZE = os.environ.get("MAX_MODEL_SIZE_UPLOAD")
     except Exception as e:
         # Handle unexpected errors
         logging.error(f"Unexpected error during config import: {str(e)}")

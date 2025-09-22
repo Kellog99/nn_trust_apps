@@ -10,7 +10,7 @@ from annotated_types import Gt, Ge
 from pydantic import BaseModel, Field, field_validator, ValidationInfo
 from torch.utils.data import DataLoader
 from tqdm.auto import tqdm
-
+import time
 from nn_trust.attack import EvasionAttackFactory
 from nn_trust.attack._evasion import EvasionAttack
 from nn_trust.attack.evaluation._statistics import StatisticsFactory
@@ -254,7 +254,14 @@ class Evaluator:
             'atk': {}
         }
 
-    def evaluate_atk(self, atk: EvasionAttack) -> dict:
+    def evaluate_atk(self, 
+                     task = None, 
+                     dataset_name = None, 
+                     model_name = None, 
+                     attack_config = None, 
+                     benchmark_progress = None,
+                     all_attacks = None,
+                     atk: EvasionAttack = None) -> dict:
         """
         Evaluate the model on the attack that is passed.
 
@@ -263,7 +270,24 @@ class Evaluator:
         """
 
         # Process each batch
-        for batch, label, element_info in tqdm(self.config.dataloader, desc=f"Attack {self.atk_name} for model {self.config.model.name}"):
+        for idx, (batch, label, element_info) in enumerate(tqdm(self.config.dataloader, desc=f"Attack {self.atk_name} for model {self.config.model.name}")):
+            current_progress = float((idx + 1) / len(self.config.dataloader))
+            if task:
+                task.update_state(
+                    state='PROGRESS',
+                    meta={
+                        'progress': benchmark_progress,
+                        'current_attack':attack_config.name,
+                        'computing_global':False,
+                        'dataset': dataset_name,
+                        'model': model_name,
+                        'attack_progress': current_progress,
+                        'all_attacks' : all_attacks
+                    })
+                if task.is_cancelled():
+                    raise Exception("The task has been killed.")
+                
+            
             batch = batch.to(self.config.device)
             label = label.to(self.config.device)
 
@@ -300,7 +324,10 @@ class Evaluator:
 
         return self.statistics_composer.compute()
 
-    def evaluate(self):
+    def evaluate(self, 
+                 task = None,
+                 dataset_name = None, 
+                 model_name = None):
         """
         Evaluate the model against all specified attacks and compute metrics.
         """
@@ -317,15 +344,43 @@ class Evaluator:
         self.config.model.eval()
         # TODO manage this expection iw we want less overhead and dont need statistics
         # TODO manage evaluation of base model within evaluator class, not in statistics compose
+        if task:
+            logging.info("------------------ job started --------------------")
+            task.update_state(
+                state='PROGRESS',
+                meta={
+                    'progress': 0.0,
+                    'current_attack':"-",
+                    'computing_global':True,
+                    'dataset': dataset_name,
+                    'model': model_name,
+                    'attack_progress': 0.0,
+                    'all_attacks' : ["-"]
+                }
+            )
         if not self.config.output_format == "test":
             self.statistics_composer.update_global(model=self.config.model,
                                                 dataloader=self.config.dataloader)
 
         ############################ TESTING VULNERABILITIES ############################
-        for attack_config in self.config.attacks:
+        attacks = [a.name for a in self.config.attacks]
+        for i,attack_config in enumerate(self.config.attacks):
+            current_progress = float((i + 1) / len(self.config.attacks))
+            if task:
+                task.update_state(
+                    state='PROGRESS',
+                    meta={
+                        'progress': current_progress,
+                        'current_attack':attack_config.name,
+                        'computing_global':False,
+                        'dataset': dataset_name,
+                        'model': model_name,
+                        'attack_progress': 0.0,
+                        'all_attacks' : attacks
+                    }
+                )
             attack_config_dict = {k:v for k,v in attack_config.dict().items() if v is not None}
             atk_name = attack_config_dict.pop("name")
-
             try:
                 self.image_saver.new_attack(atk_name=atk_name)
                 self.atk_name = atk_name
@@ -349,7 +404,14 @@ class Evaluator:
                     logging.warning(f"\U0001F928 Attack {atk_name} does not support Model {self.config.model.name} task {self.config.model.task}. Skipped Execution.")
                     continue
 
-                self.results['atk'][atk_name] = self.evaluate_atk(atk=atk)
+                self.results['atk'][atk_name] = self.evaluate_atk(  task=task, 
+                                                                    dataset_name=dataset_name, 
+                                                                    model_name=model_name, 
+                                                                    attack_config=attack_config,
+                                                                    benchmark_progress=current_progress,
+                                                                    all_attacks=attacks,
+                                                                    atk=atk)
+                
             except Exception as e:
                 print(f"\U0001F975 Execution of attack '{atk_name}' on model '{self.config.model.name}' has failed: '{e}'")
             torch.cuda.empty_cache()

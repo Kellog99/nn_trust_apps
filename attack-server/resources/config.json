@@ -1,7 +1,0 @@
-{
-    "timm_models":["resnet50"],
-    "max_model_size": 5000,
-    "db_name": "database.db",
-    "db_url": "sqlite:///./database.db"
-}
- 
