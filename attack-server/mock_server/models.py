@@ -1,7 +1,8 @@
-from pydantic import BaseModel
-from typing import Optional, Dict, List
 import random
-import uuid
+from typing import Optional, Dict, List
+
+from pydantic import BaseModel
+
 
 class ParametersProps(BaseModel):
     name: str
@@ -16,13 +17,14 @@ class ParametersProps(BaseModel):
 class AttackProps(BaseModel):
     id: str
     knowledge: str
+    type: str
     name: str
-    description: str
     parameters: List[ParametersProps]
 
 
+######################################## Report Validator ########################################
 class InfoProps(BaseModel):
-    id : str
+    id: str
     name: str
     parameters: int
     classes: int
@@ -58,9 +60,11 @@ class ReportProps(BaseModel):
     attacks: Dict[str, AttacksProps]
 
 
+##################################################################################################
+
 class BenchmarkDataProps(BaseModel):
-    dataset : str
-    task : str
+    dataset: str
+    task: str
     accuracy: Optional[List[float]] = None
     precision: Optional[List[float]] = None
     f1score: Optional[List[float]] = None
@@ -90,13 +94,13 @@ def generate_confusion_matrix(num_classes: int) -> List[List[int]]:
 
 
 def generate_random_report(
-    id : str,
-    model_names: Optional[List[str]] = None,
-    attack_names: Optional[List[str]] = None,
-    num_attacks: int = 3,
-    min_classes: int = 2,
-    max_classes: int = 10,
-    include_optional: bool = True
+        id: str,
+        model_names: Optional[List[str]] = None,
+        attack_names: Optional[List[str]] = None,
+        num_attacks: int = 3,
+        min_classes: int = 2,
+        max_classes: int = 10,
+        include_optional: bool = True
 ) -> ReportProps:
     """
     Generate a random ReportProps object.
@@ -117,18 +121,18 @@ def generate_random_report(
             "ResNet-50", "VGG-16", "AlexNet", "DenseNet-121", "MobileNet-v2",
             "EfficientNet-B0", "Inception-v3", "BERT-base", "GPT-3.5", "CLIP"
         ]
-    
+
     if attack_names is None:
         attack_names = [
-            "FGSM", "PGD", "C&W", "DeepFool", "AutoAttack", "JSMA", 
+            "FGSM", "PGD", "C&W", "DeepFool", "AutoAttack", "JSMA",
             "Boundary", "HopSkipJump", "Square", "BanditsPriorRGF"
         ]
-    
+
     # Generate InfoProps
     num_classes = random.randint(min_classes, max_classes)
     num_params = random.randint(1000000, 500000000)  # 1M to 500M parameters
     model_name = random.choice(model_names)
-    
+
     info = InfoProps(
         id=id,  # Generate unique UUID
         name=model_name,
@@ -136,22 +140,23 @@ def generate_random_report(
         classes=num_classes,
         dimensionality=[random.randint(32, 512) for _ in range(random.randint(2, 4))]
     )
-    
+
     # Generate MetricsProps
     metrics = MetricsProps(
         params=num_params,
         accuracy=round(random.uniform(0.6, 0.98), 4) if include_optional else None,
         precision=round(random.uniform(0.6, 0.98), 4) if include_optional else None,
         f1score=round(random.uniform(0.6, 0.98), 4) if include_optional else None,
-        confusion_matrix=generate_confusion_matrix(num_classes) if include_optional and random.choice([True, False]) else None,
+        confusion_matrix=generate_confusion_matrix(num_classes) if include_optional and random.choice(
+            [True, False]) else None,
         robustness=round(random.uniform(0.1, 0.9), 4) if include_optional else None,
         wobbliness=round(random.uniform(0.0, 0.5), 4) if include_optional else None
     )
-    
+
     # Generate AttacksProps
     attacks = {}
     selected_attacks = random.sample(attack_names, min(num_attacks, len(attack_names)))
-    
+
     for attack_name in selected_attacks:
         attack = AttacksProps(
             name=attack_name,
@@ -159,14 +164,17 @@ def generate_random_report(
             accuracy=round(random.uniform(0.0, 0.8), 4) if include_optional and random.choice([True, False]) else None,
             precision=round(random.uniform(0.0, 0.8), 4) if include_optional and random.choice([True, False]) else None,
             f1score=round(random.uniform(0.0, 0.8), 4) if include_optional and random.choice([True, False]) else None,
-            misclassification=round(random.uniform(0.0, 1.0), 4) if include_optional and random.choice([True, False]) else None,
+            misclassification=round(random.uniform(0.0, 1.0), 4) if include_optional and random.choice(
+                [True, False]) else None,
             power=round(random.uniform(0.0, 1.0), 4) if include_optional and random.choice([True, False]) else None,
             num_queries=random.randint(100, 10000) if include_optional and random.choice([True, False]) else None,
-            robustness=[round(random.uniform(0.0, 1.0), 4) for _ in range(random.randint(3, 8))] if include_optional and random.choice([True, False]) else None,
-            confusion_matrix=generate_confusion_matrix(num_classes) if include_optional and random.choice([True, False]) else None
+            robustness=[round(random.uniform(0.0, 1.0), 4) for _ in
+                        range(random.randint(3, 8))] if include_optional and random.choice([True, False]) else None,
+            confusion_matrix=generate_confusion_matrix(num_classes) if include_optional and random.choice(
+                [True, False]) else None
         )
         attacks[attack_name.lower().replace("-", "_")] = attack
-    
+
     return ReportProps(
         info=info,
         metrics=metrics,
@@ -175,23 +183,23 @@ def generate_random_report(
 
 
 def generate_benchmark_data(
-    dataset : str,
-    task : str,
-    length: int,
-    min_params: int = 1000000,
-    max_params: int = 500000000,
-    min_accuracy: float = 0.5,
-    max_accuracy: float = 0.98,
-    min_precision: float = 0.5,
-    max_precision: float = 0.98,
-    min_f1score: float = 0.5,
-    max_f1score: float = 0.98,
-    min_robustness: float = 0.0,
-    max_robustness: float = 1.0,
-    min_wobbliness: float = 0.0,
-    max_wobbliness: float = 0.5,
-    sort_by_params: bool = True,
-    decimal_places: int = 4
+        dataset: str,
+        task: str,
+        length: int,
+        min_params: int = 1000000,
+        max_params: int = 500000000,
+        min_accuracy: float = 0.5,
+        max_accuracy: float = 0.98,
+        min_precision: float = 0.5,
+        max_precision: float = 0.98,
+        min_f1score: float = 0.5,
+        max_f1score: float = 0.98,
+        min_robustness: float = 0.0,
+        max_robustness: float = 1.0,
+        min_wobbliness: float = 0.0,
+        max_wobbliness: float = 0.5,
+        sort_by_params: bool = True,
+        decimal_places: int = 4
 ) -> BenchmarkDataProps:
     """
     Generate a BenchmarkDataProps object with all lists populated.
@@ -221,7 +229,7 @@ def generate_benchmark_data(
     """
     if length <= 0:
         raise ValueError("Length must be greater than 0")
-    
+
     # Validate ranges
     if min_params >= max_params:
         raise ValueError("min_params must be less than max_params")
@@ -235,23 +243,23 @@ def generate_benchmark_data(
         raise ValueError("min_robustness must be less than max_robustness")
     if min_wobbliness >= max_wobbliness:
         raise ValueError("min_wobbliness must be less than max_wobbliness")
-    
+
     # Generate parameter counts
     params = [random.randint(min_params, max_params) for _ in range(length)]
-    
+
     # Generate metric lists
     accuracy = [round(random.uniform(min_accuracy, max_accuracy), decimal_places) for _ in range(length)]
     precision = [round(random.uniform(min_precision, max_precision), decimal_places) for _ in range(length)]
     f1score = [round(random.uniform(min_f1score, max_f1score), decimal_places) for _ in range(length)]
     robustness = [round(random.uniform(min_robustness, max_robustness), decimal_places) for _ in range(length)]
     wobbliness = [round(random.uniform(min_wobbliness, max_wobbliness), decimal_places) for _ in range(length)]
-    
+
     # Sort all lists by parameter count if requested
     if sort_by_params:
         # Create list of tuples and sort by params
         combined = list(zip(params, accuracy, precision, f1score, robustness, wobbliness))
         combined.sort(key=lambda x: x[0])  # Sort by params (first element)
-        
+
         # Unpack sorted data
         params, accuracy, precision, f1score, robustness, wobbliness = zip(*combined)
         params = list(params)
@@ -260,7 +268,7 @@ def generate_benchmark_data(
         f1score = list(f1score)
         robustness = list(robustness)
         wobbliness = list(wobbliness)
-    
+
     return BenchmarkDataProps(
         dataset=dataset,
         task=task,

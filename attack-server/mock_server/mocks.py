@@ -1,16 +1,43 @@
 from typing import List
-from pydantic import BaseModel
+
+from nn_trust.attack._evasion import EvasionAttackFactory as EAF
+
 from models import AttackProps, ParametersProps
 
+
 def get_attacks() -> List[AttackProps]:
-    """Return a hardcoded list of AttackProps (from the uploaded message.json)."""
+    """
+    Return a hardcoded list of AttackProps (from the uploaded message.json).
+    """
+    listAttack = EAF.list_attacks()
+    out = [
+        AttackProps(
+            id=atk.__name__.removesuffix("Attack").lower(),
+            name=repr(atk),
+            knowledge=atk.ATTACK_KNOWLEDGE,
+            type=atk.ATTACK_TYPE,
+            parameters=[
+                ParametersProps(
+                    name=param_name,
+                    label="",
+                    min=-10000,
+                    max=10000
+                ) for param_name, param_info in
+                EAF.list_config_param(atk.__name__.removesuffix("Attack").lower(), (int, float))
+            ]
+        ) for atk in EAF.list_attacks()
+    ]
+    return out
+
+
+"""def get_attacks() -> List[AttackProps]:
     return [
         AttackProps(
             id="fgsm",
             knowledge="white",
             name="Fast Gradient Sign Method (FGSM)",
             description=(
-                "A single-step adversarial attack that uses the gradient of the loss "
+                " A single-step adversarial attack that uses the gradient of the loss "
                 "function to generate adversarial examples. It adds noise in the "
                 "direction of the gradient to fool the model."
             ),
@@ -197,4 +224,4 @@ def get_attacks() -> List[AttackProps]:
             ],
         ),
     ]
-
+"""
