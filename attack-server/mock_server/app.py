@@ -4,8 +4,9 @@ from typing import Union, List
 import uvicorn
 from fastapi import FastAPI, Response, HTTPException
 from fastapi.middleware.cors import CORSMiddleware  # Add this import
+from nn_trust.core import Task
 
-from mocks import get_attacks
+from mocks import get_attacks, get_metrics
 from models import ReportProps, Error, generate_random_report, generate_benchmark_data, BenchmarkDataProps, AttackProps
 
 app = FastAPI(name="mock-server")
@@ -67,17 +68,29 @@ def get_job_benchmark_result(dataset: str, task: str) -> Union[BenchmarkDataProp
 
 
 @app.get("/attacks/getInfo", response_model=List[AttackProps])
-def get_attacks_info() -> Union[List[AttackProps], Error]:
+def get_attacks_info(task: Task = Task.Classification) -> Union[List[AttackProps], Error]:
     """
-    Get a TITANN benchmark job result.
+    Get the list of all the available attacks for a specific task.
     """
     try:
-        out = get_attacks()
-        return out
+        return get_attacks()
 
     except Exception as e:
         logging.error(f"Unexpected error during get result: {str(e)}")
-        raise HTTPException(status_code=500, detail="Unexpected error during get result")
+        raise HTTPException(status_code=500, detail=f"Unexpected error during get result {str(e)}")
+
+
+@app.get("/metrics/getInfo", response_model=List[AttackProps])
+def get_attacks_info(task: Task = Task.Classification) -> Union[List[AttackProps], Error]:
+    """
+    Get the list of all the available attacks for a specific task.
+    """
+    try:
+        return get_metrics()
+
+    except Exception as e:
+        logging.error(f"Unexpected error during get result: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Unexpected error during get result {str(e)}")
 
 
 if __name__ == "__main__":
