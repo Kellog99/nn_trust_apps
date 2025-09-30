@@ -21,6 +21,9 @@ class AttackProps(BaseModel):
     name: str
     parameters: List[ParametersProps]
 
+class MetricProps(BaseModel):
+    id: str
+    name: str
 
 ######################################## Report Validator ########################################
 class InfoProps(BaseModel):

@@ -80,8 +80,8 @@ def get_attacks_info(task: Task = Task.Classification) -> Union[List[AttackProps
         raise HTTPException(status_code=500, detail=f"Unexpected error during get result {str(e)}")
 
 
-@app.get("/metrics/getInfo", response_model=List[AttackProps])
-def get_attacks_info(task: Task = Task.Classification) -> Union[List[AttackProps], Error]:
+@app.get("/metrics/getInfo")
+def get_statistics_info():
     """
     Get the list of all the available attacks for a specific task.
     """
