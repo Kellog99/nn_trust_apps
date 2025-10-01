@@ -5,7 +5,6 @@ from nn_trust.attack._evasion import EvasionAttackFactory as EAF
 from nn_trust.attack.evaluation._statistics import StatisticsFactory as SF
 from nn_trust.core import Task
 from pydantic_core import PydanticUndefined
-from models import AttackProps, ParametersProps, MetricProps
 
 # ---------------- Utilities --------------- #
 
