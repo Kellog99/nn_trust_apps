@@ -6,6 +6,7 @@ from fastapi import FastAPI, Response, HTTPException
 from fastapi.middleware.cors import CORSMiddleware  # Add this import
 from nn_trust.core import Task
 
+from benchmarking.submodules.nn_trust.nn_trust.attack import EvasionAttackFactory
 from mocks import get_attacks, get_metrics
 from models import ReportProps, Error, generate_random_report, generate_benchmark_data, BenchmarkDataProps, AttackProps
 
@@ -21,6 +22,7 @@ app.add_middleware(
 )
 
 
+################################## get functions ##################################
 @app.get("/report/getResult", response_model=ReportProps, responses={
     '400': {'model': Error},
     '404': {'model': Error},
@@ -93,7 +95,25 @@ def get_statistics_info():
         raise HTTPException(status_code=500, detail=f"Unexpected error during get result {str(e)}")
 
 
+###################################################################################
+
+################################## Post functions ##################################
+@app.post("/attacks/executeAttack")
+def execute_attack(attack_info: AttackProps):
+    atk = EvasionAttackFactory.create_attack(attack_info.attack, **attack_info.parameters)
+    x_adv = atk.generate(attack_info.image)
+
+    # Saving the adversarial image into the right folder
+
+    # Saving the adversarial perturbation
+    
+    # Saving the metrics
+
+
+####################################################################################
 if __name__ == "__main__":
     uvicorn.run(
-        "app:app"
+        "app:app",
+        host="127.0.0.1",
+        port=8000
     )

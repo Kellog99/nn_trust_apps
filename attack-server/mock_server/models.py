@@ -3,6 +3,7 @@ from typing import Optional, Dict, List
 
 from pydantic import BaseModel
 
+
 ######################################## Benchmark Validator ########################################
 class ParametersProps(BaseModel):
     name: str
@@ -21,9 +22,11 @@ class AttackProps(BaseModel):
     name: str
     parameters: List[ParametersProps]
 
+
 class MetricProps(BaseModel):
     id: str
     name: str
+
 
 ######################################## Report Validator ########################################
 class InfoProps(BaseModel):
@@ -282,3 +285,14 @@ def generate_benchmark_data(
         wobbliness=wobbliness,
         params=params
     )
+
+
+##################################################################################################
+
+
+############################################ Attack Execution ############################################
+class AttackProps(BaseModel):
+    model: str | None
+    attack: str
+    image: str
+    parameters: list[ParametersProps]
