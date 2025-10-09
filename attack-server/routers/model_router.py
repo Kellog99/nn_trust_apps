@@ -31,7 +31,7 @@ def get_models() -> Union[Models, Error]:
                 config = json.load(f)
                 MODELS = config["timm_models"]
                 for n in MODELS:
-                    n["mode"]="timm"
+                    n["type"]="timm"
     except Exception as e:
         # Handle unexpected errors
         logging.error(f"Unexpected error during config import: {str(e)}")
@@ -45,7 +45,23 @@ def get_models() -> Union[Models, Error]:
             item_path = os.path.join(models_root_dir, item)
             if os.path.isfile(item_path) and item_path.endswith(".pth"):
                 logging.info(f"Found a model: {item_path}")
-                models.append({"name":Path(item).stem,"mode":"saved_model"})
+
+                # Construct the corresponding JSON file path
+                json_path = item_path.replace(".pth", ".json")
+                
+                # Check if JSON file exists
+                if not os.path.isfile(json_path):
+                    raise FileNotFoundError(f"JSON file not found for model: {item}. Expected: {json_path}")
+                
+                # Read the JSON file
+                with open(json_path, 'r') as json_file:
+                    model_info = json.load(json_file)
+                
+                # Create model entry with base info and extend with JSON data
+                model_entry = {"name": Path(item).stem, "type": "saved_model"}
+                model_entry.update(model_info)
+                models.append(model_entry)
+
         if len(models)==0:
             logging.info("No uploaded models found.")
 

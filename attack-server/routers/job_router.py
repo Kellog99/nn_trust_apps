@@ -233,7 +233,7 @@ def start_bechmark_job(dataset_name : str = Query(...),
                             message="Model or Dataset repository is empty. Check repository.").model_dump_json())
 
         model = [m["name"] for m in model_response if m["name"]==model_name]
-        model_type = [m["mode"] for m in model_response if m["name"]==model_name]
+        model_type = [m["type"] for m in model_response if m["name"]==model_name]
         dataset = [d for d in json.loads(d_response.body.decode('utf-8'))["names"] if d==dataset_name]
 
         if len(model)>1 or len(model_type)>1:
@@ -286,7 +286,6 @@ def start_bechmark_job(dataset_name : str = Query(...),
                 if m["name"]==model_name:
                     model_metadata = m
             if model_metadata:
-                model_metadata.pop("mode")
                 config_models = model_metadata
             else:
                 logging.error("An error has occurred for timm model metadata retrieval")
