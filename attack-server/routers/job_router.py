@@ -191,12 +191,12 @@ def get_job_result(id: str) -> Union[Result, Error]:
                 status_code=500,
                 content=Error(code=500, message=f"Unexpected error during get result").model_dump_json())
 
-@router.post("/benchmark", response_model=None, responses={
+@router.post("/benchmark_full", response_model=None, responses={
     '400': {'model': Error},
     '500': {'model': Error},
     '409': {'model': Error},
 }, tags=["jobs management"])
-def start_bechmark_job(dataset_name : str = Query(...), 
+def start_bechmark_job(dataset_name : str = Query(...),
                        model_name : str = Query(...), 
                        body: benchmarking.BenchmarkConfigModel = Body(...)) -> Optional[Error]:
     """
@@ -292,6 +292,17 @@ def start_bechmark_job(dataset_name : str = Query(...),
         return Response(
                 status_code=500,
                 content=Error(code=500, message=f"Unexpected error during job start").model_dump_json())
+
+
+@router.post("/benchmark", response_model=None, tags=["jobs management"])
+def simple_start_bechmark_job(body: benchmarking.BenchmarkConfigModel = Body(...)) -> Optional[Error]:
+    """
+    Start a new TITANN benchmark job.
+    """
+    benchmark_config = body.dict()
+    benchmark_task = celery_tasks.benchmarking_task.delay(benchmark_config)
+    return Response(status_code=200, content=json.dumps({
+        "task_id": benchmark_task.id}), media_type="application/json")
 
 @router.post("/single_attack",responses={
     '400': {'model': Error},

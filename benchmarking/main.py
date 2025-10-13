@@ -4,109 +4,109 @@ import os
 import logging
 import traceback
 from datetime import datetime
-from .utils.config import get_data_transformation_config, read_config_file
-from .utils.evaluator import Evaluator, EvaluatorConfig, BenchmarkConfig
-from .utils.utils import get_model, get_dataloader, get_structure, config_file_path_selector
-from typing import Union, Annotated, Literal, List
+import pathlib
 
+from nn_trust.attack.evaluation.composer import ConfigStatisticComposer, StatisticComposer
+try:
+    from benchmark_utils import (
+        read_config_file,
+        BenchmarkConfig,
+        Evaluator,
+        get_structure,
+        config_file_path_selector
+    )
+except ModuleNotFoundError:
+    # when used from attack.server it need to import as if working as a module
+    from .benchmark_utils import (
+        read_config_file,
+        BenchmarkConfig,
+        Evaluator,
+        get_structure,
+        config_file_path_selector
+    )
 
-def create_versioned_path(base_path: Path, task_id : str) -> Path:
-    """
-    Args:
-        base_path (Path): The base directory where versioned folders will be created.
-        
-    Returns:
-        Path: The path to the newly created, versioned directory.
-    """
-    #timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S")
-    #run_number = 0
-    while True:
-        versioned_path = base_path / task_id
-        if not versioned_path.exists():
-            break
-        
-    versioned_path.mkdir(parents=True, exist_ok=True)
-    return versioned_path
-
-def benchmark_(config, task_ref = None):
-    
+def benchmark_(config: dict):
+    output_path = Path(config["options"]["output_path"])
+    output_path = output_path / datetime.now().strftime("%Y%m%dT%H%M%S")
+    os.makedirs(output_path, exist_ok=False)
+    config["output_path"] = str(output_path)
+    logging.info(f"Benchmark run will be save to {output_path}")
     for dataset_id, dataset in enumerate(config["datasets"]):
         # for i, model_id in enumerate(config["model"]["list_models"]):
         for model_id, model_config in enumerate(config["models"]):
 
             # transformations should depend on dataset and model
             try:
-                transform, inverse_transform = get_data_transformation_config(
-                    transform_id=dataset["transform_config"]["transform_id"],
-                    size=dataset["transform_config"]["size"],
-                    crop=dataset["transform_config"].get("crop"),
-                    # mean=dataset["transform_config"].get("mean"),
-                    # std=dataset["transform_config"].get("std"),
-                )
-
-                dataloader = get_dataloader(
-                    dataset=dataset["source_path"],
-                    batch=dataset["batch"],
-                    subset=dataset["subset"],
-                    type_dataset=dataset["type_dataset"],
-                    transform=transform,
-                    num_workers=dataset["num_workers"],
-                )
-
-                model = get_model(
-                    model_name=model_config.get("name"),
-                    model_type=model_config.get("type"),
-                    model_weights_path=model_config.get("weights_path", None),
-                    mean=dataset["transform_config"].get("mean"),
-                    std=dataset["transform_config"].get("std"),
-                    model_task=model_config.get("task")
-                )
-
-                output_path = Path(config["options"]["output_path"]) / dataset["name"]
-                if task_ref:
-                    output_path = create_versioned_path(output_path,task_ref.request.id)
-
-                num_classes = (
-                    model_config["num_classes"]
-                    if model_config["num_classes"] > 0
-                    else len(dataloader.dataset.dataset.classes)
-                )
-
-                evaluator = Evaluator(
-                    config=EvaluatorConfig(
-                        model=model,
-                        dataloader=dataloader,
-                        statistics=config["evaluation"]["statistics"],
-                        statistic_average_method=config["evaluation"]["statistic_average_method"],
-                        inverse_transformation=inverse_transform,
-                        attacks=config["attacks"],
-                        num_images_to_save=config["options"]["num_images_to_save"],
-                        save_perturbation=config["options"]["save_perturbation"],
-                        overwrite=config["options"]["overwrite"],
-                        num_classes=num_classes,
-                        output_path=output_path,
-                        output_format=config["options"]["output_format"],
-                    )
-                )
-
-                model_report = evaluator.evaluate(task_ref,dataset["name"],model_config.get("name"))
-                evaluator.save_results()
+                evaluator = Evaluator.from_config(config=config, dataset=dataset, model_config=model_config)
+                evaluator.evaluate_attacks()
+                evaluator.save_results_to_disk()
+                logging.warning(f"Evaluation results for {dataset["name"]}/{model_config["name"]} are saved to {output_path}")
             except Exception as e:
                 logging.warning(f"\n\U0001F975 Evaluation of Model {model_config['name']} on Dataset {dataset['name']} failed with exception '{e}' +++\n")
                 traceback.print_exc()
                     # Saving the structure for the report
-        structure = get_structure(output_path)
-        with open(output_path / "structure.json", "w") as f:
-            json.dump(structure, f)
 
-if __name__ == "__main__":
+    structure = get_structure(output_path)
+    with open(output_path / "structure.json", "w") as f:
+        json.dump(structure, f)
+    with open(output_path / "configuration.json", "w") as f:
+        json.dump(config, f)
+    return str(output_path)
+
+def postprocess_benchmark_run_results(benchmark_run_dir: str | pathlib.Path, verbose=True):
+    """Iterate over different datasets and models, and where possible apply statistics aggregation"""
+    benchmark_run_dir = Path(benchmark_run_dir)
+    with open(benchmark_run_dir / "configuration.json", "r") as fconfiguration:
+        config = json.load(fconfiguration)
+    datasets_dir = [dataset_dir for dataset_dir in benchmark_run_dir.iterdir() if dataset_dir.is_dir()]
+    for dataset_dir in datasets_dir:
+        models_dir = [model_dir for model_dir in dataset_dir.iterdir() if model_dir.is_dir()]
+        for model_dir in models_dir:
+            try:
+                with open(model_dir / "info.json", "r") as finfo:
+                    info = json.load(finfo)
+                statistics_composer = StatisticComposer(config=ConfigStatisticComposer(
+                    statistics=config["evaluation"]["statistics"],
+                    num_classes=info["classes"],
+                ))
+                statistics_composer.aggregator()
+                results = Evaluator.read_results_from_disk(model_dir)
+                aggregate_statistics = Evaluator.aggregate_attacks_statistics(
+                    statistics_composer=statistics_composer,
+                    results=results
+                )
+                with open(model_dir / "aggregate_statistics.json", "w") as fagg_statistics:
+                    json.dump(aggregate_statistics, fagg_statistics)
+            except Exception as e:
+                if verbose:
+                    print(f"Failed postprocessing on {dataset_dir.name}/{model_dir.name}")
+                    print(e)
+                    traceback.print_exc()
+
+
+def benchmark(config: dict):
+    output_path = benchmark_(config)
+    postprocess_benchmark_run_results(output_path)
+
+
+def main():
     handler = logging.StreamHandler()
     handler.addFilter(lambda record: record.name == "root")
-    logging.basicConfig(level=logging.WARNING, handlers=[handler])
+    logging.basicConfig(level=logging.WARN, handlers=[handler])
     # get the parser
     selected_config_path = config_file_path_selector(Path(__file__).parent / "config")
     config = read_config_file(config_filename=str(selected_config_path))
     config = BenchmarkConfig(**config)
-    print(config.dict()["attacks"])
-    benchmark_(config.dict())
+
+    output_path = benchmark_(config.model_dump())
+    #print(f"Results saved to {output_path}")
+    #postprocess_benchmark_run_results(output_path)
+
+if __name__ == "__main__":
+    main()
+
+
+
+
+
 

@@ -1,2 +1,8 @@
-from .main import benchmark_
-from .utils.evaluator import BenchmarkConfig as BenchmarkConfigModel
+from .main import benchmark_, benchmark, postprocess_benchmark_run_results
+from .benchmark_utils import (read_config_file,
+                    BenchmarkConfig,
+                    BenchmarkConfigModel,
+                    Evaluator,
+                    get_structure,
+                    config_file_path_selector
+                    )

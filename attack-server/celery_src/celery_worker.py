@@ -38,10 +38,7 @@ class CancelableTask(Task):
 
 
 @celery.task(bind=True, name="benchmarking-task", base=CancelableTask)
-def benchmark_task_wrapper(self,benchmark_input):
-    
-    return benchmarking.benchmark_(benchmark_input, task_ref=self)
-    
+def benchmarking_task(self: Task, benchmark_input: dict):
+    return benchmarking.benchmark(benchmark_input)
 
-benchmarking_task = benchmark_task_wrapper
 run_attack_task = celery.task(run_attack, name="single-image-attack-task")

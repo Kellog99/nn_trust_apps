@@ -5,7 +5,7 @@
 [submodule "benchmarking/submodules/nn_trust"]
 	path = benchmarking/submodules/nn_trust
 	url = git@github.com:LeoPhilosophers/nn_trust.git
-	branch = develop
+	branch = dev/metrics-decoupling-revC
 [submodule "attack-server/submodules/nn_trust"]
 	path = attack-server/submodules/nn_trust
 	url = git@github.com:LeoPhilosophers/nn_trust.git

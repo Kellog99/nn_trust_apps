@@ -1,6 +1,12 @@
 evaluation:
-  statistics: [ "local_accuracy", "local_precision", "local_f1score" ]
-  statistic_average_method: "macro"
+  statistics:
+    - name: 'countsamples'
+    - name: 'accuracy'
+      average: 'macro'
+    - name: 'precision'
+      average: 'macro'
+    - name: 'robustness'
+    - name: 'misclassification'
 
 options:
   load_results: false                 # loading any existing results.
@@ -9,16 +15,16 @@ options:
   save_perturbation: false
   gpu: true
   output_path: "./benchmark_out" # Path to the output folder
-  output_format: "test" # report or test
+  output_format: "report" # report or test
 
 datasets:
   - name: "imagenet" # Name of the dataset
     num_classes: 1000
-    subset: 10
-    batch: 2
+    subset: -1
+    batch: 32
     type_dataset: 1
     num_workers: 2
-    source_path: "../../../data/imagenet-1k/val_images/" # "../data/military/dataset/test/" # Path to the dataset
+    source_path: "../../data/imagenet-1k/val_images/"
     transform_config:
       size: 256
       crop: 224
@@ -33,15 +39,24 @@ models:
     num_classes: 1000
     task: "classification"
 
+  - name: 'convnext_base.clip_laion2b_augreg_ft_in12k_in1k'
+    type: 'timm'
+    pretrained: True
+    num_classes: 1000
+    task: "classification"
+
+  - name: 'vit_base_patch16_clip_224.openai_ft_in1k'
+    type: 'timm'
+    pretrained: True
+    num_classes: 1000
+    task: "classification"
+
 attacks:
   - name: 'fgsm'
-  - name: 'priorgd'
+    max_iters: 20
+  - name: 'banditprior'
+    max_iters: 50
   - name: 'dag'
-  - name: 'du'
-  - name: 'fgsm'
-    max_iters: 100
-    losses: [ "misclassification",
-          "totalvariation",
-          "similarity",
-          "bound" ]
+    max_iters: 50
+
 

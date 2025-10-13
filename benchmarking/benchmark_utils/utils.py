@@ -54,6 +54,7 @@ def get_dataloader(
     type_dataset: int,
     transform: transforms.Compose,
     num_workers: int = 4,
+    name: str | None = None,
     **kwargs,
 ) -> DataLoader:
     """
@@ -79,6 +80,11 @@ def get_dataloader(
         dataset = ImageDatasetFolder(dataset, transform=transform, is_valid_file=check_valid_image)
     else:
         raise ValueError(f"The type of the dataset {type_dataset} is not valid.")
+
+    if name is not None:
+        dataset.name = name
+    else:
+        dataset.name = Path(dataset).name
 
     if subset is None or subset < 0:
         subset = list(range(len(dataset)))
@@ -152,7 +158,7 @@ def get_model(
 
 def config_file_path_selector(config_dir: Path | str = ".") -> Path:
     """Seletc a YAML configuration file from the script directory."""
-    config_files = [f for f in os.listdir(config_dir) if f.endswith(".yaml") or f.endswith(".yml")]
+    config_files = [f for f in os.listdir(config_dir) if (f.endswith(".yaml") or f.endswith(".yml")) and f.startswith("config")]
     if not config_files:
         raise FileNotFoundError("No YAML configuration files found in the script directory.")
     print("Available configuration files:")

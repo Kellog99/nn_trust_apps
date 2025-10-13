@@ -1,6 +1,12 @@
 evaluation:
-  statistics: [ "local_accuracy", "local_precision", "local_f1score" ]
-  statistic_average_method: "macro"
+  statistics:
+    - name: 'countsamples'
+    - name: 'accuracy'
+      average: 'macro'
+    - name: 'precision'
+      average: 'macro'
+    - name: 'robustness'
+    - name: 'misclassification'
 
 options:
   load_results: false                 # loading any existing results.
@@ -9,16 +15,16 @@ options:
   save_perturbation: false
   gpu: true
   output_path: "./benchmark_out" # Path to the output folder
-  output_format: "test" # report or test
+  output_format: "report" # report or test
 
 datasets:
   - name: "imagenet" # Name of the dataset
     num_classes: 1000
-    subset: 22
-    batch: 32
+    subset: 50
+    batch: 2
     type_dataset: 1
-    num_workers: 4
-    source_path: "../imagenet-1k/val_images/" # "../data/military/dataset/test/" # Path to the dataset
+    num_workers: 2
+    source_path: "../../data/imagenet-1k/val_images/" # "../data/military/dataset/test/" # Path to the dataset
     transform_config:
       size: 256
       crop: 224
@@ -27,67 +33,16 @@ datasets:
       std: [0.2639, 0.2518, 0.2521]
 
 models:
-  - name: "resnet101.a1_in1k"
-    type: "timm"
-    pretrained: true
-    num_classes: 1000
-    input_size: 224
-  - name: 'mobilenetv4_conv_blur_medium.e500_r224_in1k'
-    type: 'timm'
-    num_classes: 1000
-  - name: 'mobilenetv4_conv_medium.e500_r224_in1k'
-    type: 'timm'
-    num_classes: 1000
-  - name: 'mobilenetv4_hybrid_medium.e500_r224_in1k'
-    type: 'timm'
-    num_classes: 1000
-  - name: 'resnetv2_18.ra4_e3600_r224_in1k'
-    type: 'timm'
-    num_classes: 1000
-  - name: 'resnetv2_18d.ra4_e3600_r224_in1k'
-    type: 'timm'
-    num_classes: 1000
-  - name: 'resnetv2_34.ra4_e3600_r224_in1k'
-    type: 'timm'
-    num_classes: 1000
-  - name: 'resnetv2_34d.ra4_e3600_r224_in1k'
-    type: 'timm'
-    num_classes: 1000
-  - name: 'resnetv2_50.a1h_in1k'
-    type: 'timm'
-    num_classes: 1000
   - name: 'resnetv2_50d_evos.ah_in1k'
     type: 'timm'
+    pretrained: True
     num_classes: 1000
-  - name: 'resnetv2_50d_gn.ah_in1k'
-    type: 'timm'
-    num_classes: 1000
-  - name: 'resnetv2_50x1_bit.goog_distilled_in1k'
-    type: 'timm'
-    num_classes: 1000
-  - name: 'resnetv2_101.a1h_in1k'
-    type: 'timm'
-    num_classes: 1000
+    task: "classification"
 
 attacks:
-  attack_list: [ 'fgsm', 'priorgd' , 'dag', 'du' ]
-  configurations:
-    fgsm:
-      max_iters: 100
-      losses: [ "misclassification",
-                "totalvariation",
-                "similarity",
-                "bound" ]
-
-    priorgd:
-      max_iters: 100
-      losses: [ "misclassification",
-                "totalvariation",
-                "similarity",
-                "bound" ]
-    dag: 
-      max_iters: 100  
-    du: 
-      max_iters: 100
-
+  - name: 'fgsm'
+    id: 'vanilla-fgsm'
+  - name: 'banditprior'
+    max_iters: 30
+    losses: ["misclassification"]
 
