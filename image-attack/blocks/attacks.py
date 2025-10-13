@@ -14,7 +14,7 @@ class ListAttacks:
         task: int,
         labels_id: dict[int | str],
         max_number_parameters: int = 3,
-        atk_not_valid: list[str] = ["hpuap", "parsimonious", "advyolo"],
+        atk_not_valid: list[str] = ["hpuap", "parsimonious", "advyolo", "blackboxtransfer", "boundary", "sphereprojection"],
     ):
         self.device = device
         self.max_number_parameters = max_number_parameters
@@ -24,10 +24,10 @@ class ListAttacks:
         self.attack_dict = {
             repr(
                 EvasionAttackFactory.create_attack(
-                    atk_id, task=task, model=ModelAdapter(model=None, name="placeholder")
+                    attack_type=atk_id, task=task, model=ModelAdapter(model=None, name="placeholder")
                 )
             ): atk_id
-            for atk_id in ["fgsm", "pgd", "deepfool"]
+            for atk_id in [x for x in EvasionAttackFactory.list_attacks() if (x not in atk_not_valid and not "baseline" in x)]
         }
         self.atk = ""
         self.labels_id = labels_id
@@ -64,7 +64,7 @@ class ListAttacks:
         # saving the attack
         self.atk = self.attack_dict[attack_name]
         atk_params = EvasionAttackFactory.list_config_param(self.atk)
-        atk_params = {k:atk_params[k] for k in ("max_iters", "p", "epsilon")}
+        atk_params = {k:atk_params[k] for k in ("max_iters", "p", "epsilon") if k in atk_params}
         parameters = []
         i = 0
         for field_name, field_info in atk_params.items():

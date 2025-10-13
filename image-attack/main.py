@@ -15,6 +15,7 @@ import warnings
 from argparse import ArgumentParser
 
 import gradio as gr
+import matplotlib.pyplot as plt
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -189,7 +190,7 @@ class TitanApp:
         out.append(self.metrics.update(step_idx=self.num_step - 1))
 
         out.append(
-            gr.update(minimum=1,
+            gr.update(minimum=0,
                       maximum=self.num_step,
                       interactive=True,
                       value=self.num_step)
@@ -290,6 +291,7 @@ if __name__ == "__main__":
     handler = logging.StreamHandler()
     handler.addFilter(lambda record: record.name == "root")
     logging.basicConfig(level=logging.INFO, handlers=[handler])
+    plt.switch_backend('agg')
 
     ############## UI creation ##############
 
