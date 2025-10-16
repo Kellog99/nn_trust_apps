@@ -5,6 +5,7 @@ import logging
 import traceback
 from datetime import datetime
 import pathlib
+import ray
 
 from nn_trust.attack.evaluation.composer import ConfigStatisticComposer, StatisticComposer
 try:
@@ -34,7 +35,6 @@ def benchmark_(config: dict):
     for dataset_id, dataset in enumerate(config["datasets"]):
         # for i, model_id in enumerate(config["model"]["list_models"]):
         for model_id, model_config in enumerate(config["models"]):
-
             # transformations should depend on dataset and model
             try:
                 evaluator = Evaluator.from_config(config=config, dataset=dataset, model_config=model_config)
@@ -52,6 +52,17 @@ def benchmark_(config: dict):
     with open(output_path / "configuration.json", "w") as f:
         json.dump(config, f)
     return str(output_path)
+            #evaluator = Evaluator.from_config(config=config, dataset=dataset, model_config=model_config)
+            #plan = evaluator.plan_attacks_evaluation()
+            #ray.init(ignore_reinit_error=True)
+            #initial_action = plan.action
+            #initial_params = plan.params
+            #initial_action(**initial_params)
+            #worker_action = ray.remote(num_gpus=1)(plan.worker_action)
+            #print(plan.worker_params)
+            #futures = [worker_action.remote(**worker_params) for worker_params in list(plan.worker_params.values())]
+            #results = ray.get(futures)
+            #ray.shutdown()
 
 def postprocess_benchmark_run_results(benchmark_run_dir: str | pathlib.Path, verbose=True):
     """Iterate over different datasets and models, and where possible apply statistics aggregation"""

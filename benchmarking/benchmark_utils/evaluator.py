@@ -17,7 +17,7 @@ import torchvision
 from annotated_types import Gt, Ge
 from pydantic import BaseModel, Field, field_validator, ValidationInfo
 from torch.utils.data import DataLoader
-
+from inspect import signature
 from nn_trust.attack import EvasionAttackFactory
 from nn_trust.attack._evasion import EvasionAttack
 from nn_trust.attack.evaluation._statistics import StatisticsFactory
@@ -29,7 +29,26 @@ from nn_trust.attack.utils.loss.loss_composer import ConfigLossComposer, LossCom
 from nn_trust.core import Task, ModelAdapter
 from .config import get_data_transformation_config
 from .utils import get_dataloader, get_model
+from typing import Dict
 
+
+class Plan:
+
+    def __init__(self, 
+                 worker_action : callable, 
+                 worker_params : Dict[str,Dict], 
+                 action : callable = None,
+                 params : Dict = None):
+        """
+        This class stores a callable to be executed with a list of parameters.
+        """
+        self.action = action
+        self.params = params
+        self.worker_action = worker_action
+        self.worker_params = worker_params
+
+    def __repr__(self):
+        return f'Plan(worker_action={self.worker_action.__name__}, num_attacks={len(self.worker_params)}, params={self.params}, worker_params={self.worker_params})'
 
 class BenchmarkEvaluationConfig(BaseModel):
     statistics: list[dict] | None = Field(default_factory=lambda x: [])
@@ -384,6 +403,51 @@ class Evaluator:
         # moved attack evaluation execution here
         self.results["attacks"] = {atk_id:self.evaluate_attack(**params) for atk_id, params in attack_evaluation_parameters.items()}
         return self.results
+    
+    def plan_attacks_evaluation(self) -> Plan:
+        """
+        Outputs an attack Plan to be executed by an Executor class
+        """
+
+        self.results['info'] = self.get_model_dataset_info()
+        attack_evaluation_parameters = {}
+
+        for i, attack_config in enumerate(self.config.attacks):
+            attack_config_dict = {k:v for k,v in attack_config.model_dump().items() if v is not None}
+            atk_id = attack_config_dict.get("id", attack_config_dict["name"])
+            if atk_id in attack_evaluation_parameters:
+                raise ValueError(f"{atk_id} is already setup for evaluation")
+            attack_evaluation_parameters[atk_id] = dict(
+                dataloader=self.config.dataloader,
+                model=self.config.model,
+                attack_config=attack_config_dict,
+                statistics=self.config.statistics,
+                device=self.config.device,
+                num_classes=self.config.num_classes,
+                verbose=True
+            )
+
+        worker_action = Evaluator.evaluate_attack_action
+        for atk_id, worker_params in attack_evaluation_parameters.items():
+            worker_params["atk_id"] = atk_id
+            worker_params["dataset_name"] = self.config.dataloader.dataset.dataset.name
+            worker_params["model_name"] = self.config.model.name
+            worker_params["output_path"] = self.config.output_path
+        
+        action = Evaluator.save_info_to_disk
+        params = dict(
+            results_info=self.results["info"],
+            dataset_name=self.config.dataloader.dataset.dataset.name,
+            model_name=self.config.model.name,
+            output_path=self.config.output_path
+        )
+        plan = Plan(
+            worker_action=worker_action,
+            worker_params=attack_evaluation_parameters,
+            action=action,
+            params=params
+        )
+        return plan
 
     def evaluate(self) -> dict:
         """This method is intended to provide the call method for evaluator class
@@ -445,6 +509,61 @@ class Evaluator:
             with open(model_result_path / "aggregate_statistics.json", 'w') as f:
                 json.dump(self.results["aggregate_statistics"], f)
         logging.info(f"Results saved to {model_result_path}")
+
+    @staticmethod
+    def save_attack_result_to_disk(atk_result : dict,
+                                   atk_id : str,
+                                   dataset_name : str , 
+                                   model_name : str , 
+                                   output_path: str | pathlib.Path ) -> None:
+        """
+        Save single attack results from static method -evaluate_attack- to a JSON file
+        """
+        
+        model_result_path = Path(output_path) / dataset_name / model_name
+        os.makedirs(model_result_path, exist_ok=True)
+        atk_res = atk_result
+        attack_result_path = model_result_path / atk_id
+        os.makedirs(attack_result_path, exist_ok=True)
+        with open(attack_result_path / "statistics.json", 'w') as f:
+            json.dump(atk_res["statistics"], f)
+        with open(attack_result_path / "statistics_states.pkl", 'wb') as f:
+            pickle.dump(atk_res["statistics_states"], f)
+        
+        logging.info(f"Single attack results saved to {model_result_path}")
+
+    @staticmethod
+    def save_info_to_disk(results_info : dict,
+                          dataset_name : str , 
+                          model_name : str , 
+                          output_path: str | pathlib.Path ) -> None:
+        """
+        Save single info to a JSON file
+        """
+        
+        
+        model_result_path = Path(output_path) / dataset_name / model_name
+        os.makedirs(model_result_path, exist_ok=True)
+        with open(model_result_path / "info.json", 'w') as f:
+            json.dump(results_info, f)
+        logging.info(f"Info saved to {model_result_path}")
+
+    @staticmethod
+    def evaluate_attack_action(**kwargs):
+        """
+        This function is the worker action of Path object.
+        """
+        sig = signature(Evaluator.evaluate_attack)
+        accepted_params = sig.parameters
+        atk_params = {k: v for k, v in kwargs.items() if k in accepted_params}
+        atk_result = Evaluator.evaluate_attack(**atk_params)
+
+        sig = signature(Evaluator.save_attack_result_to_disk)
+        accepted_params = sig.parameters
+        save_params = {k: v for k, v in kwargs.items() if k in accepted_params}
+        Evaluator.save_attack_result_to_disk(atk_result, **save_params)
+        
+
 
     @staticmethod
     def read_results_from_disk(results_dir: str | pathlib.Path):
