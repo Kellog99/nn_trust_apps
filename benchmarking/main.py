@@ -26,20 +26,57 @@ except ModuleNotFoundError:
         config_file_path_selector
     )
 
+
+def resolve_path(path: str) -> str:
+    """
+    Returns an absolute path. If the given path is not absolute,
+    it prepends a root path read from the environment variable ROOT_PATH.
+    """
+    root = os.getenv("ROOT_PATH", "")
+    if os.path.isabs(path):
+        return path
+    return os.path.join(root, path)
+
 def benchmark_(config: dict):
+    #TODO: handle env path to dataset folder
+    os.environ["ROOT_PATH"] = ""
     output_path = Path(config["options"]["output_path"])
     output_path = output_path / datetime.now().strftime("%Y%m%dT%H%M%S")
     os.makedirs(output_path, exist_ok=False)
     config["output_path"] = str(output_path)
     logging.info(f"Benchmark run will be save to {output_path}")
     for dataset_id, dataset in enumerate(config["datasets"]):
+        path = resolve_path(dataset["source_path"])
+        dataset["source_path"] = path
         # for i, model_id in enumerate(config["model"]["list_models"]):
         for model_id, model_config in enumerate(config["models"]):
+    #        # transformations should depend on dataset and model
+    #        try:
+    #            evaluator = Evaluator.from_config(config=config, dataset=dataset, model_config=model_config)
+    #            evaluator.evaluate_attacks()
+    #            evaluator.save_results_to_disk()
+    #            logging.warning(f"Evaluation results for {dataset["name"]}/{model_config["name"]} are saved to {output_path}")
+    #        except Exception as e:
+    #            logging.warning(f"\n\U0001F975 Evaluation of Model {model_config['name']} on Dataset {dataset['name']} failed with exception '{e}' +++\n")
+    #            traceback.print_exc()
+    #                # Saving the structure for the report
+#
+    #structure = get_structure(output_path)
+    #with open(output_path / "structure.json", "w") as f:
+    #    json.dump(structure, f)
+    #with open(output_path / "configuration.json", "w") as f:
+    #    json.dump(config, f)
+    #return str(output_path)
             # transformations should depend on dataset and model
             try:
+                ray.init(ignore_reinit_error=True)
+                #TODO: fix imports
+                from benchmark_utils.executor import RayActorPoolExecutor
                 evaluator = Evaluator.from_config(config=config, dataset=dataset, model_config=model_config)
-                evaluator.evaluate_attacks()
-                evaluator.save_results_to_disk()
+                plan = evaluator.plan_attacks_evaluation()
+                executor = RayActorPoolExecutor(num_actors=2)
+                executor.execute_plan(plan)
+                ray.shutdown()
                 logging.warning(f"Evaluation results for {dataset["name"]}/{model_config["name"]} are saved to {output_path}")
             except Exception as e:
                 logging.warning(f"\n\U0001F975 Evaluation of Model {model_config['name']} on Dataset {dataset['name']} failed with exception '{e}' +++\n")
@@ -52,17 +89,7 @@ def benchmark_(config: dict):
     with open(output_path / "configuration.json", "w") as f:
         json.dump(config, f)
     return str(output_path)
-            #evaluator = Evaluator.from_config(config=config, dataset=dataset, model_config=model_config)
-            #plan = evaluator.plan_attacks_evaluation()
-            #ray.init(ignore_reinit_error=True)
-            #initial_action = plan.action
-            #initial_params = plan.params
-            #initial_action(**initial_params)
-            #worker_action = ray.remote(num_gpus=1)(plan.worker_action)
-            #print(plan.worker_params)
-            #futures = [worker_action.remote(**worker_params) for worker_params in list(plan.worker_params.values())]
-            #results = ray.get(futures)
-            #ray.shutdown()
+
 
 def postprocess_benchmark_run_results(benchmark_run_dir: str | pathlib.Path, verbose=True):
     """Iterate over different datasets and models, and where possible apply statistics aggregation"""
@@ -109,7 +136,7 @@ def main():
     config = read_config_file(config_filename=str(selected_config_path))
     config = BenchmarkConfig(**config)
 
-    output_path = benchmark_(config.model_dump())
+    output_path = benchmark(config.model_dump())
     #print(f"Results saved to {output_path}")
     #postprocess_benchmark_run_results(output_path)
 

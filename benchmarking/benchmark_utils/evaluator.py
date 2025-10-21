@@ -35,6 +35,8 @@ from typing import Dict
 class Plan:
 
     def __init__(self, 
+                 dataset,
+                 model,
                  worker_action : callable, 
                  worker_params : Dict[str,Dict], 
                  action : callable = None,
@@ -42,6 +44,9 @@ class Plan:
         """
         This class stores a callable to be executed with a list of parameters.
         """
+        #TODO:add typing
+        self.dataset = dataset
+        self.model = model
         self.action = action
         self.params = params
         self.worker_action = worker_action
@@ -110,6 +115,8 @@ class EvaluatorConfig(BaseModel):
     ################# GLOBAL #################
     model: ModelAdapter | str | torch.nn.Module = Field(default=...,
                                                         description='The model on which to generate the attack.')
+    dataset : dict = Field(default=..., description="The part of the config with dataset info. Needed for parallel execution")
+
     dataloader: DataLoader | str = Field(default=...,
                             description="Dataset to use for the benchmarking.")
     attacks: List[BenchmarkAttackConfig] = Field(default_factory=list,
@@ -246,6 +253,7 @@ class Evaluator:
         return cls(
             config=EvaluatorConfig(
                 model=model,
+                dataset=dataset,
                 dataloader=dataloader,
                 statistics=config["evaluation"]["statistics"],
                 inverse_transformation=inverse_transform,
@@ -442,6 +450,8 @@ class Evaluator:
             output_path=self.config.output_path
         )
         plan = Plan(
+            dataset=self.config.dataset,
+            model = self.config.model,
             worker_action=worker_action,
             worker_params=attack_evaluation_parameters,
             action=action,
