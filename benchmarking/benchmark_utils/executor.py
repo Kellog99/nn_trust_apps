@@ -52,29 +52,32 @@ def resolve_path(path: str) -> str:
     """
     root = os.getenv("ROOT_PATH", "")
     if os.path.isabs(path):
-        return path
-    return os.path.join(root, path)   
+        p = path.split(os.getenv("ROOT_PATH")+os.sep)[1]
+    else:
+        p = path
+    return os.path.join(root, p)   
     
 
 
-@ray.remote(num_gpus=0.5)
+@ray.remote(num_gpus=1)
 class SingleGPUActor:
     def __init__(self):
         try:
             self.node_root = self.detect_node_data_root()
         except Exception:
             self.node_root = os.getcwd()
+        os.environ["RAY_OVERRIDE_ENVIRONMENT_VARIABLES_ALLOWLIST"] = "*"
         self.model = None
         self.dataloader = None
 
     def _ensure_dataset_root(self, dataset):
-        ds_root = dataset["source_path"]
+        #ds_root = dataset["source_path"]
         new_root = resolve_path(dataset["source_path"])
-        if ds_root != new_root:
-            updated = update_dataset_root_obj(dataset, new_root)
-            self.dataloader = updated
-        else:
-            self.dataloader = update_dataset_root_obj(dataset,ds_root)
+        #if ds_root != new_root:
+        updated = update_dataset_root_obj(dataset, new_root)
+        self.dataloader = updated
+        #else:
+        #    self.dataloader = update_dataset_root_obj(dataset,ds_root)
 
     def _ensure_model_state(self, model) -> None:
         self.model = model

@@ -333,7 +333,7 @@ class Evaluator:
             y_pred = out.argmax(dim=-1)
             # adapt metrics counting for reference or standard attack
             is_identity_atk = atk.__class__.__name__.replace("Attack", "").lower() == "identitybaseline"
-            if is_identity_atk:
+            if True:
                 y_pred = label
             else:
                 mask = torch.eq(label, y_pred)

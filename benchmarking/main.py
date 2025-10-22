@@ -39,7 +39,8 @@ def resolve_path(path: str) -> str:
 
 def benchmark_(config: dict):
     #TODO: handle env path to dataset folder
-    os.environ["ROOT_PATH"] = ""
+    #os.environ["ROOT_PATH"] = "/home/cristiano-carta/Desktop/datasets"
+    os.environ["RAY_OVERRIDE_ENVIRONMENT_VARIABLES_ALLOWLIST"] = "*"
     output_path = Path(config["options"]["output_path"])
     output_path = output_path / datetime.now().strftime("%Y%m%dT%H%M%S")
     os.makedirs(output_path, exist_ok=False)
