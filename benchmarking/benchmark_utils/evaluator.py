@@ -449,6 +449,7 @@ class Evaluator:
             model_name=self.config.model.name,
             output_path=self.config.output_path
         )
+        self.config.dataset["source_path"]=self.config.dataset["relative_source_path"]
         plan = Plan(
             dataset=self.config.dataset,
             model = self.config.model,

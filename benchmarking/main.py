@@ -47,6 +47,7 @@ def benchmark_(config: dict):
     config["output_path"] = str(output_path)
     logging.info(f"Benchmark run will be save to {output_path}")
     for dataset_id, dataset in enumerate(config["datasets"]):
+        dataset["relative_source_path"] = dataset["source_path"]
         path = resolve_path(dataset["source_path"])
         dataset["source_path"] = path
         # for i, model_id in enumerate(config["model"]["list_models"]):
