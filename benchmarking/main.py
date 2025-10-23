@@ -76,7 +76,7 @@ def benchmark_(config: dict):
                 from benchmark_utils.executor import RayActorPoolExecutor
                 evaluator = Evaluator.from_config(config=config, dataset=dataset, model_config=model_config)
                 plan = evaluator.plan_attacks_evaluation()
-                executor = RayActorPoolExecutor(num_actors=2)
+                executor = RayActorPoolExecutor(num_actors=1)
                 executor.execute_plan(plan)
                 ray.shutdown()
                 logging.warning(f"Evaluation results for {dataset["name"]}/{model_config["name"]} are saved to {output_path}")

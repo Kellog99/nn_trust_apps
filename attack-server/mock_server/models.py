@@ -1,6 +1,7 @@
 import random
 from typing import Optional, Dict, List
 
+from nn_trust.core import AttackType, Knowledge
 from pydantic import BaseModel
 
 
@@ -292,7 +293,15 @@ def generate_benchmark_data(
 
 ############################################ Attack Execution ############################################
 class AttackProps(BaseModel):
-    model: str | None
-    attack: str
-    image: str
+    id: str
+    name: str
+    knowledge: Knowledge
+    type: AttackType
+    description: Optional[str] = None
     parameters: list[ParametersProps]
+
+
+class AttackPost(BaseModel):
+    title: str
+    body: str
+    id: float
