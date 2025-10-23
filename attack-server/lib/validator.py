@@ -8,7 +8,7 @@ from pydantic import ValidationError
 from lib.models import ModelConfig
 from typing import Union
 
-MAX_BYTES = int(os.environ.get('MAX_MODEL_JSON_SIZE_UPLOAD')) * 1024
+MAX_BYTES = int(os.environ.get('MAX_MODEL_JSON_SIZE_UPLOAD',5000)) * 1024
 CHUNK_SIZE = 4096
 ALLOWED_MIMES = {"application/json"}
 

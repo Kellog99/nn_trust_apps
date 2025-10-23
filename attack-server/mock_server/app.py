@@ -80,7 +80,7 @@ def get_job_benchmark_result(dataset: str, task: str) -> Union[BenchmarkDataProp
 
 
 @app.get("/attacks/getInfo")
-def get_attacks_info(task: Task = Task.Classification):
+def get_attacks_info():
     """
     Get the list of all the available attacks for a specific task.
     """

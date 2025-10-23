@@ -10,7 +10,7 @@ def get_metrics(task: Task = Task.Classification) -> List[dict]:
     """
     Return the list of all the available metrics that are computable during a benchmark.
     """
-
+    #TODO: to implement MetricsConfig in the nn_trust module to obtain all possible configurations like the attacks
     return {
         stat:MetricProps(
             id=stat,

@@ -4,11 +4,13 @@
 
 from __future__ import annotations
 
-from typing import List, Optional, Dict
+from typing import List, Optional, Dict, Any
 
 from pydantic import BaseModel, Field
 
 from typing import Literal
+
+from nn_trust.core import AttackType, Knowledge
 
 class Datasets(BaseModel):
     names: Optional[List[str]] = None
@@ -66,3 +68,29 @@ class ModelConfig(BaseModel):
     pretrained: bool
     num_classes: int
     task: Literal["classification"] 
+
+class ParametersProps(BaseModel):
+    name: str
+    label: str
+    min: float
+    max: float
+    step: float
+    default: float
+    description: str
+
+class AttackProps(BaseModel):
+    id: str
+    name: str
+    description: str
+    knowledge: Optional[str] = None
+    task: Optional[str] = None
+    parameters: Optional[List[ParametersProps]] = None
+
+class MetricProps(BaseModel):
+    name: str
+
+class ExecutionConfig(BaseModel):
+    dataset: str
+    model: str
+    attacks: Any
+    metrics: Any
