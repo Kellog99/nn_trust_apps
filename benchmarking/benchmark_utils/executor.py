@@ -1,12 +1,19 @@
-from benchmark_utils.config import get_data_transformation_config
-from benchmark_utils.evaluator import Plan
+try:
+    from benchmark_utils.config import get_data_transformation_config
+    from benchmark_utils.evaluator import Plan
+    from benchmark_utils.utils import get_dataloader
+except ModuleNotFoundError:
+    # when used from attack.server or run as a subpackage use relative imports
+    from .config import get_data_transformation_config
+    from .evaluator import Plan
+    from .utils import get_dataloader
 import os
 import inspect
 from typing import Callable, Dict, List, Optional, Any
 from abc import ABC, abstractmethod
 import ray
 from ray.util import ActorPool
-from benchmark_utils.utils import get_dataloader
+# (get_dataloader imported above)
 
 
 class Executor(ABC):
@@ -50,7 +57,7 @@ def resolve_path(path: str) -> str:
     Returns an absolute path. If the given path is not absolute,
     it prepends a root path read from the environment variable ROOT_PATH.
     """
-    root = os.getenv("ROOT_PATH", "")
+    root = os.getenv("ROOT_PATH", "/home/cristiano-carta/Desktop/datasets")
     if os.path.isabs(path):
         p = path.split(os.getenv("ROOT_PATH")+os.sep)[1]
     else:

@@ -71,12 +71,18 @@ def benchmark_(config: dict):
     #return str(output_path)
             # transformations should depend on dataset and model
             try:
-                ray.init(ignore_reinit_error=True)
+                ray.init(ignore_reinit_error=True,runtime_env={
+    "py_modules": ["/home/cristiano-carta/Desktop/projects/nn_trust_apps/benchmarking"]
+})
                 #TODO: fix imports
-                from benchmark_utils.executor import RayActorPoolExecutor
+                try:
+                    from benchmark_utils.executor import RayActorPoolExecutor
+                except ModuleNotFoundError:
+                    from .benchmark_utils.executor import RayActorPoolExecutor
+                os.chdir("/home/cristiano-carta/Desktop/projects/nn_trust_apps")
                 evaluator = Evaluator.from_config(config=config, dataset=dataset, model_config=model_config)
                 plan = evaluator.plan_attacks_evaluation()
-                executor = RayActorPoolExecutor(num_actors=1)
+                executor = RayActorPoolExecutor(num_actors=2)
                 executor.execute_plan(plan)
                 ray.shutdown()
                 logging.warning(f"Evaluation results for {dataset["name"]}/{model_config["name"]} are saved to {output_path}")
@@ -126,7 +132,7 @@ def postprocess_benchmark_run_results(benchmark_run_dir: str | pathlib.Path, ver
 
 def benchmark(config: dict):
     output_path = benchmark_(config)
-    postprocess_benchmark_run_results(output_path)
+    #postprocess_benchmark_run_results(output_path)
 
 
 def main():
