@@ -84,7 +84,7 @@ def benchmark_(config: dict):
                 plan = evaluator.plan_attacks_evaluation()
                 executor = RayActorPoolExecutor(num_actors=2)
                 executor.execute_plan(plan)
-                ray.shutdown()
+                #ray.shutdown()
                 logging.warning(f"Evaluation results for {dataset["name"]}/{model_config["name"]} are saved to {output_path}")
             except Exception as e:
                 logging.warning(f"\n\U0001F975 Evaluation of Model {model_config['name']} on Dataset {dataset['name']} failed with exception '{e}' +++\n")

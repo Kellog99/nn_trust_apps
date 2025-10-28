@@ -2,7 +2,9 @@ from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 import importlib
 from typing import List, Union, Optional
-from lib.models import AttackJob, BenchmarkJob, Error, ExecutionConfig, Metric, Result
+from lib.models import AttackJob, BenchmarkJob, Error, ExecutionConfig, Metric, ReportInfoProps, ReportMetricsProps, Result
+from lib.disk_reader import find_model_and_task_dir, collect_dataset_aggregates_with_info
+from lib.attack_utils import build_benchmark_dict
 from lib import models
 from fastapi import Response, Query, Body
 import json
@@ -53,19 +55,74 @@ def get_jobs(id : str) -> Union[List[BenchmarkJob], Error]:
                 content=Error(code=500, message=f"Unexpected error during get jobs").model_dump_json())
     
 
-@router.get("/getResult", response_model=Result)
-def get_jobs_results(id: str) -> Union[Result, Error]:
+@router.get("/report/getResult")
+def get_jobs_results(id: str = Query(None),
+                     dataset : str = Query(None),
+                     model : str = Query(None)):
     """
-    Get a TITANN benchmark job result.
+    Get a TITANN benchmark report job result.
     """
     try:
-        return ""
+        #TODO: add logic. Do all this if the task results completed!
+        ROOT = "/home/cristiano-carta/Desktop/projects/nn_trust_apps/benchmark_out"
+        model_dir, task_dir = find_model_and_task_dir(ROOT,dataset,model,id)
+        benchmarking.postprocess_benchmark_run_results(task_dir)
+        with open(os.path.join(model_dir,'info.json'), "r", encoding="utf-8") as f:
+            info = json.load(f)
+        with open(os.path.join(model_dir,'aggregate_statistics.json'), "r", encoding="utf-8") as f:
+            aggregate = json.load(f)
+            aggregate["params"] = info["parameters"]
+        # collect statistic.json from subfolders of model_dir
+        statistics = {}
+        for entry in os.listdir(model_dir):
+            entry_path = os.path.join(model_dir, entry)
+            #print("A",entry_path)
+            if os.path.isdir(entry_path):
+                stat_file = os.path.join(entry_path, "statistics.json")
+                print("B",stat_file)
+                if os.path.exists(stat_file) and os.path.isfile(stat_file):
+                    try:
+                        with open(stat_file, "r", encoding="utf-8") as sf:
+                            statistics[entry] = json.load(sf)
+                    except Exception as e:
+                        logging.warning(f"Could not load statistics.json in '{entry_path}': {e}")
+        
+        return {
+            "info":info,
+            "metrics": aggregate,
+            "attacks": statistics
+        }
+    
     except Exception as e:
         logging.error(f"Unexpected error during get result: {str(e)}")
         return Response(
                 status_code=500,
                 content=Error(code=500, message=f"Unexpected error during get result").model_dump_json())
 
+    
+@router.get("/benchmark/getResult")
+def get_jobs_results(dataset : str = Query(...), task : str = Query(None)):
+    """
+    Get a TITANN benchmark job result.
+    """
+    try:
+        ROOT = "/home/cristiano-carta/Desktop/projects/nn_trust_apps/benchmark_out"
+        results = collect_dataset_aggregates_with_info(
+            base_dir=ROOT,
+            dataset=dataset,
+        )
+        print(results)
+        return build_benchmark_dict(results,dataset,"classification")
+    
+    except Exception as e:
+        logging.error(f"Unexpected error during get result: {str(e)}")
+        return Response(
+                status_code=500,
+                content=Error(code=500, message=f"Unexpected error during get result").model_dump_json())
+
+
+    
+    
 @router.post("/start", response_model=str)
 def start_benchmark_job(body: ExecutionConfig = Body(...)) -> Union[str,Error]:
     """
@@ -117,7 +174,6 @@ def start_benchmark_job(body: ExecutionConfig = Body(...)) -> Union[str,Error]:
                 content=Error(code=404, 
                               message=f"No dataset found: {dataset_name}").model_dump_json())
         
-        #TODO: dataset and benchmark metadata should not be in the post, but in the repository!
         file_path = os.path.join(os.environ.get('INTERNAL_MODEL_STORAGE'),f"{model_name}.json")
 
         if model_type[0]=="saved_model":
@@ -159,12 +215,7 @@ def start_benchmark_job(body: ExecutionConfig = Body(...)) -> Union[str,Error]:
                             message=f"Can't find dataset metadata in the repository for dataset:{dataset_name}").model_dump_json())
 
 
-        #if len(config_dataset)>1:
-        #    logging.error(f"Benchmark can be launched only on one dataset at a time.")
-        #    return Response(
-        #        status_code=400,
-        #        content=Error(code=400, 
-        #                      message=f"Benchmark can be launched only on one dataset at a time.").model_dump_json())
+        #TODO: Make this configurable
         benchmark_config = {}
         benchmark_config['options'] = {
                 "load_results": False,
@@ -187,7 +238,6 @@ def start_benchmark_job(body: ExecutionConfig = Body(...)) -> Union[str,Error]:
         benchmark_config['evaluation'] = {}
         benchmark_config["evaluation"]["statistics"] = body.metrics
         
-        #TODO:
         benchmarking.benchmark(benchmark_config)
         return JSONResponse(status_code=200,content="id")
 

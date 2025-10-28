@@ -66,7 +66,7 @@ def resolve_path(path: str) -> str:
     
 
 
-@ray.remote(num_gpus=1)
+@ray.remote(num_gpus=0.5)
 class SingleGPUActor:
     def __init__(self):
         try:
@@ -127,6 +127,7 @@ class RayActorPoolExecutor(Executor):
         return actors
 
     def execute_plan(self, plan: Plan) -> List[Any]:
+        os.chdir("/home/cristiano-carta/Desktop/projects/nn_trust_apps")
         initial_action = plan.action
         initial_params = plan.params
         initial_action(**initial_params)
@@ -148,10 +149,9 @@ class RayActorPoolExecutor(Executor):
             tasks.append((worker_action, worker_conf, plan.dataset, plan.model))
             task_ids.append(task_id)
 
-        results = list(self.pool.map_unordered(
+        self.pool.map_unordered(
             lambda actor, args: actor.execute_worker.remote(*args),
             tasks
-        ))
+        )
 
-        # Return results paired with task IDs
-        return list(zip(task_ids, results))
+        return None

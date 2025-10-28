@@ -94,3 +94,39 @@ class ExecutionConfig(BaseModel):
     model: str
     attacks: Any
     metrics: Any
+
+class ReportProps(BaseModel):
+    info: ReportInfoProps
+    metrics: ReportMetricsProps
+    attacks: Dict[str, ReportAttacksProps]
+
+
+class ReportMetricsProps(BaseModel):
+    params: int
+    accuracy: Optional[float] = None
+    precision: Optional[float] = None
+    f1score: Optional[float] = None
+    confusion_matrix: Optional[List[List[int]]] = None
+    robustness: Optional[float] = None
+    wobbliness: Optional[float] = None
+
+
+class ReportAttacksProps(BaseModel):
+    name: str
+    risk: float
+    accuracy: Optional[float] = None
+    precision: Optional[float] = None
+    f1score: Optional[float] = None
+    misclassification: Optional[float] = None
+    power: Optional[float] = None
+    num_queries: Optional[int] = None
+    robustness: Optional[List[float]] = None
+    confusion_matrix: Optional[List[List[int]]] = None
+
+class ReportInfoProps(BaseModel):
+    id: str
+    name: str
+    parameters: int
+    classes: int
+    dimensionality: List[int]
+
