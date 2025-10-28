@@ -13,6 +13,8 @@ from typing import Callable, Dict, List, Optional, Any
 from abc import ABC, abstractmethod
 import ray
 from ray.util import ActorPool
+from datetime import datetime
+from fastapi.encoders import jsonable_encoder
 # (get_dataloader imported above)
 
 
@@ -64,8 +66,56 @@ def resolve_path(path: str) -> str:
         p = path
     return os.path.join(root, p)   
     
+@ray.remote
+class ProgressTracker:
+    def __init__(self):
+        self.tasks: Dict[str, Dict] = {}
 
+    def create_task(self, task_id: str, task_type: str, **kwargs) -> str:
+        self.tasks[task_id] = {
+            "task_type": task_type,
+            "status": "created",
+            "progress": 0,
+            "message": "Task created",
+            "created_at": jsonable_encoder(datetime.now()),
+            "updated_at": jsonable_encoder(datetime.now()),
+            "error": None,
+            "result": None,
+            **kwargs
+        }
+        return task_id
 
+    def update_progress(self, task_id: str, status: str, progress: int = None, message: str = None, error: str = None, result: Any = None):
+        if task_id in self.tasks:
+            task = self.tasks[task_id]
+            task["status"] = status
+            task["updated_at"] = jsonable_encoder(datetime.now())
+            if progress is not None:
+                task["progress"] = progress
+            if message is not None:
+                task["message"] = message
+            if error is not None:
+                task["error"] = error
+            if result is not None:
+                task["result"] = result
+
+    def get_task_status(self, task_id: str) -> Optional[Dict]:
+        return self.tasks.get(task_id)
+
+    def list_tasks(self) -> Dict[str, Dict]:
+        return self.tasks
+    
+    def wrapper(self, func, *args, **kwargs):
+        """Wraps a callable to log before/after execution."""
+        
+        result = func(*args, **kwargs)
+
+        return result
+
+    def execute(self, func, *args, **kwargs):
+        """Execute a callable with the wrapper."""
+        return self.wrapper(func, *args, **kwargs)
+    
 @ray.remote(num_gpus=0.5)
 class SingleGPUActor:
     def __init__(self):
@@ -93,7 +143,7 @@ class SingleGPUActor:
                        worker_action: Callable, 
                        worker_conf: Dict[str, Any],
                        dataset : dict,   
-                       model,               
+                       model               
                         ):
         
         ds = dataset
@@ -115,6 +165,7 @@ class RayActorPoolExecutor(Executor):
         self.num_actors = num_actors
         self.actors = []
         self.pool = None
+        self.tracker = ProgressTracker.remote()
 
     def _create_actors(self, n: int) -> List[Any]:
         actors = []
@@ -127,7 +178,7 @@ class RayActorPoolExecutor(Executor):
         return actors
 
     def execute_plan(self, plan: Plan) -> List[Any]:
-        os.chdir("/home/cristiano-carta/Desktop/projects/nn_trust_apps")
+        os.chdir("/home/cristiano-carta/Desktop/projects/nn_trust_apps/attack-server")
         initial_action = plan.action
         initial_params = plan.params
         initial_action(**initial_params)
@@ -146,6 +197,7 @@ class RayActorPoolExecutor(Executor):
         tasks = []
         task_ids = []
         for task_id, worker_conf in task_confs.items():
+            worker_conf["tracker"] = self.tracker
             tasks.append((worker_action, worker_conf, plan.dataset, plan.model))
             task_ids.append(task_id)
 

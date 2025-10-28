@@ -275,6 +275,7 @@ class Evaluator:
             device: torch.device,
             num_classes: int,
             verbose: bool = False,
+            tracker = None
         ) -> dict:
         """
         Evaluate the model on the attack that is passed.
@@ -317,7 +318,11 @@ class Evaluator:
         else:
             progress_bar = enumerate(dataloader)
 
+        task_id = f"{atk_id}"
+        tracker.create_task.remote(task_id,"attack")
         for idx, (batch, label, element_info) in progress_bar:
+            if tracker:
+                tracker.update_progress.remote(task_id, status="in_progress", progress=int((idx / len(dataloader)) * 100), message=f"Processing batch {idx+1}/{len(dataloader)}")
             batch = batch.to(device)
             label = label.to(device)
             y_one_hot = torch.nn.functional.one_hot(label, num_classes=num_classes)
@@ -359,6 +364,8 @@ class Evaluator:
         statistics_states = statistics_composer.get_raw_state()
         statistics_composer.reset()
         torch.cuda.empty_cache()
+        if tracker:
+            tracker.update_progress.remote(task_id, status="completed", progress=100, message=f"Completed attack {atk_id}")
         return {"statistics": statistics_results, "statistics_states":statistics_states}
 
     def get_model_dataset_info(self) -> dict:
@@ -567,14 +574,18 @@ class Evaluator:
         sig = signature(Evaluator.evaluate_attack)
         accepted_params = sig.parameters
         atk_params = {k: v for k, v in kwargs.items() if k in accepted_params}
+        tracker = kwargs.get("tracker", None)
+        if tracker:
+            atk_params["tracker"] = tracker
         atk_result = Evaluator.evaluate_attack(**atk_params)
-
+        print("PIPPO",tracker)
         sig = signature(Evaluator.save_attack_result_to_disk)
         accepted_params = sig.parameters
         save_params = {k: v for k, v in kwargs.items() if k in accepted_params}
-        Evaluator.save_attack_result_to_disk(atk_result, **save_params)
-        
-
+        if tracker:
+            tracker.execute.remote(Evaluator.save_attack_result_to_disk, atk_result, **save_params)
+        else:
+            Evaluator.save_attack_result_to_disk(atk_result, **save_params)
 
     @staticmethod
     def read_results_from_disk(results_dir: str | pathlib.Path):

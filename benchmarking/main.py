@@ -50,46 +50,73 @@ def benchmark_(config: dict):
         dataset["relative_source_path"] = dataset["source_path"]
         path = resolve_path(dataset["source_path"])
         dataset["source_path"] = path
-        # for i, model_id in enumerate(config["model"]["list_models"]):
         for model_id, model_config in enumerate(config["models"]):
-    #        # transformations should depend on dataset and model
-    #        try:
-    #            evaluator = Evaluator.from_config(config=config, dataset=dataset, model_config=model_config)
-    #            evaluator.evaluate_attacks()
-    #            evaluator.save_results_to_disk()
-    #            logging.warning(f"Evaluation results for {dataset["name"]}/{model_config["name"]} are saved to {output_path}")
-    #        except Exception as e:
-    #            logging.warning(f"\n\U0001F975 Evaluation of Model {model_config['name']} on Dataset {dataset['name']} failed with exception '{e}' +++\n")
-    #            traceback.print_exc()
-    #                # Saving the structure for the report
-#
-    #structure = get_structure(output_path)
-    #with open(output_path / "structure.json", "w") as f:
-    #    json.dump(structure, f)
-    #with open(output_path / "configuration.json", "w") as f:
-    #    json.dump(config, f)
-    #return str(output_path)
-            # transformations should depend on dataset and model
             try:
                 ray.init(ignore_reinit_error=True,runtime_env={
-    "py_modules": ["/home/cristiano-carta/Desktop/projects/nn_trust_apps/benchmarking"]
-})
+                    "py_modules": ["/home/cristiano-carta/Desktop/projects/nn_trust_apps/benchmarking"]
+                })
                 #TODO: fix imports
                 try:
                     from benchmark_utils.executor import RayActorPoolExecutor
                 except ModuleNotFoundError:
                     from .benchmark_utils.executor import RayActorPoolExecutor
+            
                 os.chdir("/home/cristiano-carta/Desktop/projects/nn_trust_apps")
                 evaluator = Evaluator.from_config(config=config, dataset=dataset, model_config=model_config)
                 plan = evaluator.plan_attacks_evaluation()
                 executor = RayActorPoolExecutor(num_actors=2)
                 executor.execute_plan(plan)
-                #ray.shutdown()
+                
                 logging.warning(f"Evaluation results for {dataset["name"]}/{model_config["name"]} are saved to {output_path}")
             except Exception as e:
                 logging.warning(f"\n\U0001F975 Evaluation of Model {model_config['name']} on Dataset {dataset['name']} failed with exception '{e}' +++\n")
                 traceback.print_exc()
                     # Saving the structure for the report
+
+    structure = get_structure(output_path)
+    with open(output_path / "structure.json", "w") as f:
+        json.dump(structure, f)
+    with open(output_path / "configuration.json", "w") as f:
+        json.dump(config, f)
+    return str(output_path)
+
+def parallel_benchmark_(config: dict, executor):
+
+    #TODO: handle env path to dataset folder
+    #os.environ["ROOT_PATH"] = "/home/cristiano-carta/Desktop/datasets"
+    os.environ["RAY_OVERRIDE_ENVIRONMENT_VARIABLES_ALLOWLIST"] = "*"
+    output_path = Path(config["options"]["output_path"])
+    output_path = output_path / datetime.now().strftime("%Y%m%dT%H%M%S")
+    os.makedirs(output_path, exist_ok=False)
+    config["output_path"] = str(output_path)
+    logging.info(f"Benchmark run will be save to {output_path}")
+
+    for dataset_id, dataset in enumerate(config["datasets"]):
+        dataset["relative_source_path"] = dataset["source_path"]
+        path = resolve_path(dataset["source_path"])
+        dataset["source_path"] = path
+        for model_id, model_config in enumerate(config["models"]):
+            try:
+                #TODO: fix imports
+                ray.init(ignore_reinit_error=True,runtime_env={
+                    "py_modules": ["/home/cristiano-carta/Desktop/projects/nn_trust_apps/benchmarking"]
+                })
+                try:
+                    from benchmark_utils.executor import RayActorPoolExecutor
+                except ModuleNotFoundError:
+                    from .benchmark_utils.executor import RayActorPoolExecutor
+            
+                os.chdir("/home/cristiano-carta/Desktop/projects/nn_trust_apps")
+
+                evaluator = Evaluator.from_config(config=config, dataset=dataset, model_config=model_config)
+                plan = evaluator.plan_attacks_evaluation()
+                #executor = RayActorPoolExecutor(num_actors=2)
+                executor.execute_plan(plan)
+
+                logging.warning(f"Evaluation results for {dataset["name"]}/{model_config["name"]} are saved to {output_path}")
+            except Exception as e:
+                logging.warning(f"\n\U0001F975 Evaluation of Model {model_config['name']} on Dataset {dataset['name']} failed with exception '{e}' +++\n")
+                traceback.print_exc()
 
     structure = get_structure(output_path)
     with open(output_path / "structure.json", "w") as f:
@@ -130,8 +157,8 @@ def postprocess_benchmark_run_results(benchmark_run_dir: str | pathlib.Path, ver
                     traceback.print_exc()
 
 
-def benchmark(config: dict):
-    output_path = benchmark_(config)
+def benchmark(config: dict, executor=None):
+    output_path = parallel_benchmark_(config, executor=executor)
     #postprocess_benchmark_run_results(output_path)
 
 

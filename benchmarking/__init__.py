@@ -4,5 +4,6 @@ from .benchmark_utils import (read_config_file,
                     BenchmarkConfigModel,
                     Evaluator,
                     get_structure,
-                    config_file_path_selector
+                    config_file_path_selector,
+                    executor
                     )

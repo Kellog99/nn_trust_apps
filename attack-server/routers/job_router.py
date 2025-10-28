@@ -17,12 +17,17 @@ from PIL import Image
 from tqdm.auto import tqdm
 from routers.dataset_router import get_datasets
 from routers.model_router import get_models
-
+import ray
 celery_utils = importlib.import_module("attack-server.celery_src.utils")
 celery_tasks = importlib.import_module("attack-server.celery_src.celery_worker")
 benchmarking = importlib.import_module("benchmarking")
 
 router = APIRouter(prefix="/job", tags=["jobs management", "jobs utils"])
+
+ray.init(ignore_reinit_error=True,runtime_env={
+                    "py_modules": ["/home/cristiano-carta/Desktop/projects/nn_trust_apps/benchmarking"]
+                })
+executor = benchmarking.benchmark_utils.executor.RayActorPoolExecutor(num_actors=2)
 
 
 def check_model_and_dataset_in_running_jobs(job, d, m):
@@ -41,19 +46,20 @@ def check_attack_already_launched(attacks, req_attacks):
 # ----------------- SERVICES --------------------------
 
 @router.get("/getJobs")
-def get_jobs(id : str) -> Union[List[BenchmarkJob], Error]:
+def get_jobs(id : str = Query(None)):
     """
     Get all running benchmark jobs in the TITANN backend.
     """
     try:
+        return ray.get(executor.tracker.list_tasks.remote())
         #TODO: implement optional id filter
-        return ""
     except Exception as e:
         logging.error(f"Unexpected error during get jobs: {str(e)}")
         return Response(
                 status_code=500,
                 content=Error(code=500, message=f"Unexpected error during get jobs").model_dump_json())
     
+
 
 @router.get("/report/getResult")
 def get_jobs_results(id: str = Query(None),
@@ -98,8 +104,7 @@ def get_jobs_results(id: str = Query(None),
         return Response(
                 status_code=500,
                 content=Error(code=500, message=f"Unexpected error during get result").model_dump_json())
-
-    
+ 
 @router.get("/benchmark/getResult")
 def get_jobs_results(dataset : str = Query(...), task : str = Query(None)):
     """
@@ -121,8 +126,7 @@ def get_jobs_results(dataset : str = Query(...), task : str = Query(None)):
                 content=Error(code=500, message=f"Unexpected error during get result").model_dump_json())
 
 
-    
-    
+
 @router.post("/start", response_model=str)
 def start_benchmark_job(body: ExecutionConfig = Body(...)) -> Union[str,Error]:
     """
@@ -238,7 +242,7 @@ def start_benchmark_job(body: ExecutionConfig = Body(...)) -> Union[str,Error]:
         benchmark_config['evaluation'] = {}
         benchmark_config["evaluation"]["statistics"] = body.metrics
         
-        benchmarking.benchmark(benchmark_config)
+        benchmarking.benchmark(benchmark_config,executor)
         return JSONResponse(status_code=200,content="id")
 
     except Exception as e:
@@ -246,7 +250,6 @@ def start_benchmark_job(body: ExecutionConfig = Body(...)) -> Union[str,Error]:
         return Response(
                 status_code=500,
                 content=Error(code=500, message=f"Unexpected error during job start").model_dump_json())
-
 
 
 
