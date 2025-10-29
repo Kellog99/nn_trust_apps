@@ -275,7 +275,9 @@ class Evaluator:
             device: torch.device,
             num_classes: int,
             verbose: bool = False,
-            tracker = None
+            tracker = None,
+            benchmark_id : str = None,
+            num_tasks : str = None
         ) -> dict:
         """
         Evaluate the model on the attack that is passed.
@@ -318,11 +320,13 @@ class Evaluator:
         else:
             progress_bar = enumerate(dataloader)
 
-        task_id = f"{atk_id}"
-        tracker.create_task.remote(task_id,"attack")
+        tracker.create_task.remote(f"{atk_id}_{benchmark_id}","attack", benchmark_id = benchmark_id, num_tasks=num_tasks)
         for idx, (batch, label, element_info) in progress_bar:
             if tracker:
-                tracker.update_progress.remote(task_id, status="in_progress", progress=int((idx / len(dataloader)) * 100), message=f"Processing batch {idx+1}/{len(dataloader)}")
+                tracker.update_progress.remote(f"{atk_id}_{benchmark_id}", 
+                                               status="in_progress", 
+                                               progress=int((idx / len(dataloader)) * 100), 
+                                               message=f"Processing batch {idx+1}/{len(dataloader)}")
             batch = batch.to(device)
             label = label.to(device)
             y_one_hot = torch.nn.functional.one_hot(label, num_classes=num_classes)
@@ -338,6 +342,7 @@ class Evaluator:
             y_pred = out.argmax(dim=-1)
             # adapt metrics counting for reference or standard attack
             is_identity_atk = atk.__class__.__name__.replace("Attack", "").lower() == "identitybaseline"
+            #TODO: add mask again
             if True:
                 y_pred = label
             else:
@@ -365,7 +370,7 @@ class Evaluator:
         statistics_composer.reset()
         torch.cuda.empty_cache()
         if tracker:
-            tracker.update_progress.remote(task_id, status="completed", progress=100, message=f"Completed attack {atk_id}")
+            tracker.update_progress.remote(f"{atk_id}_{benchmark_id}", status="completed", progress=100, message=f"Completed attack {atk_id}")
         return {"statistics": statistics_results, "statistics_states":statistics_states}
 
     def get_model_dataset_info(self) -> dict:
@@ -571,21 +576,31 @@ class Evaluator:
         """
         This function is the worker action of Path object.
         """
-        sig = signature(Evaluator.evaluate_attack)
-        accepted_params = sig.parameters
-        atk_params = {k: v for k, v in kwargs.items() if k in accepted_params}
-        tracker = kwargs.get("tracker", None)
-        if tracker:
-            atk_params["tracker"] = tracker
-        atk_result = Evaluator.evaluate_attack(**atk_params)
-        print("PIPPO",tracker)
-        sig = signature(Evaluator.save_attack_result_to_disk)
-        accepted_params = sig.parameters
-        save_params = {k: v for k, v in kwargs.items() if k in accepted_params}
-        if tracker:
-            tracker.execute.remote(Evaluator.save_attack_result_to_disk, atk_result, **save_params)
-        else:
-            Evaluator.save_attack_result_to_disk(atk_result, **save_params)
+        try:
+            logging.info("CACCA2")
+            sig = signature(Evaluator.evaluate_attack)
+            accepted_params = sig.parameters
+            atk_params = {k: v for k, v in kwargs.items() if k in accepted_params}
+            tracker = kwargs.get("tracker", None)
+            benchmark_id = kwargs.get("benchmark_id", None)
+            num_tasks = kwargs.get("num_tasks",None)
+            if tracker:
+                atk_params["tracker"] = tracker
+            if benchmark_id:
+                atk_params["benchmark_id"] = benchmark_id
+            if num_tasks:
+                atk_params["num_tasks"] = num_tasks
+            atk_result = Evaluator.evaluate_attack(**atk_params)
+            sig = signature(Evaluator.save_attack_result_to_disk)
+            accepted_params = sig.parameters
+            save_params = {k: v for k, v in kwargs.items() if k in accepted_params}
+            if tracker:
+                tracker.execute.remote(Evaluator.save_attack_result_to_disk, atk_result, **save_params)
+            else:
+                Evaluator.save_attack_result_to_disk(atk_result, **save_params)
+        except Exception as e:
+            logging.info(e)
+            raise e
 
     @staticmethod
     def read_results_from_disk(results_dir: str | pathlib.Path):

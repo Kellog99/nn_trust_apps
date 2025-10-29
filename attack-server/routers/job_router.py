@@ -24,10 +24,14 @@ benchmarking = importlib.import_module("benchmarking")
 
 router = APIRouter(prefix="/job", tags=["jobs management", "jobs utils"])
 
-ray.init(ignore_reinit_error=True,runtime_env={
-                    "py_modules": ["/home/cristiano-carta/Desktop/projects/nn_trust_apps/benchmarking"]
-                })
-executor = benchmarking.benchmark_utils.executor.RayActorPoolExecutor(num_actors=2)
+# Setting up number of actors and executor
+num_actors = int(os.environ.get("RAY_NUM_ACTORS",1))
+modules = os.environ.get("RAY_PY_MODULES",None)      
+if modules:
+    ray.init(ignore_reinit_error=True,runtime_env={
+        "py_modules": [modules]
+    })
+executor = benchmarking.benchmark_utils.executor.RayActorPoolExecutor(num_actors=num_actors)
 
 
 def check_model_and_dataset_in_running_jobs(job, d, m):
@@ -51,8 +55,13 @@ def get_jobs(id : str = Query(None)):
     Get all running benchmark jobs in the TITANN backend.
     """
     try:
-        return ray.get(executor.tracker.list_tasks.remote())
-        #TODO: implement optional id filter
+        tasks = ray.get(executor.tracker.list_tasks.remote())
+        if id:
+            id = id.replace(" ","")
+            return {k: v for k, v in tasks.items() if v["benchmark_id"]==id}
+        else:
+            return tasks
+
     except Exception as e:
         logging.error(f"Unexpected error during get jobs: {str(e)}")
         return Response(
@@ -69,23 +78,34 @@ def get_jobs_results(id: str = Query(None),
     Get a TITANN benchmark report job result.
     """
     try:
-        #TODO: add logic. Do all this if the task results completed!
-        ROOT = "/home/cristiano-carta/Desktop/projects/nn_trust_apps/benchmark_out"
-        model_dir, task_dir = find_model_and_task_dir(ROOT,dataset,model,id)
+    
+        model_dir, task_dir = find_model_and_task_dir(os.environ.get("BENCHMARK_OUTPUT_DIR"),dataset,model,id)
+        benchmark_id = task_dir.split(os.sep)[-1]
+        tasks = ray.get(executor.tracker.list_tasks.remote())
+        
+        completed_tasks = []
+        for _,v in tasks.items():
+            num_tasks = v["num_tasks"]
+            if v["benchmark_id"]==benchmark_id and v["status"]=="completed" and v["progress"]==100:
+                completed_tasks.append(v)
+    
+        if len(completed_tasks)==0 or len(completed_tasks)<num_tasks:
+            logging.error(f"Benchmark {benchmark_id} not finished yet")
+            return Response(
+                    status_code=409,
+                    content=Error(code=409, message=f"Benchmark {benchmark_id} not finished yet").model_dump_json())
+ 
         benchmarking.postprocess_benchmark_run_results(task_dir)
         with open(os.path.join(model_dir,'info.json'), "r", encoding="utf-8") as f:
             info = json.load(f)
         with open(os.path.join(model_dir,'aggregate_statistics.json'), "r", encoding="utf-8") as f:
             aggregate = json.load(f)
             aggregate["params"] = info["parameters"]
-        # collect statistic.json from subfolders of model_dir
         statistics = {}
         for entry in os.listdir(model_dir):
             entry_path = os.path.join(model_dir, entry)
-            #print("A",entry_path)
             if os.path.isdir(entry_path):
                 stat_file = os.path.join(entry_path, "statistics.json")
-                print("B",stat_file)
                 if os.path.exists(stat_file) and os.path.isfile(stat_file):
                     try:
                         with open(stat_file, "r", encoding="utf-8") as sf:
@@ -111,12 +131,11 @@ def get_jobs_results(dataset : str = Query(...), task : str = Query(None)):
     Get a TITANN benchmark job result.
     """
     try:
-        ROOT = "/home/cristiano-carta/Desktop/projects/nn_trust_apps/benchmark_out"
+        #TODO:finish implementing this with aggregation function if aggregation is not yet happened
         results = collect_dataset_aggregates_with_info(
-            base_dir=ROOT,
+            base_dir=os.environ.get("BENCHMARK_OUTPUT_DIR"),
             dataset=dataset,
         )
-        print(results)
         return build_benchmark_dict(results,dataset,"classification")
     
     except Exception as e:
@@ -219,17 +238,17 @@ def start_benchmark_job(body: ExecutionConfig = Body(...)) -> Union[str,Error]:
                             message=f"Can't find dataset metadata in the repository for dataset:{dataset_name}").model_dump_json())
 
 
-        #TODO: Make this configurable
+        
         benchmark_config = {}
         benchmark_config['options'] = {
-                "load_results": False,
-                "overwrite": True,
-                "num_images_to_save": -1,
-                "save_perturbation": False,
-                "gpu": True,
-                "output_path": "./benchmark_out",
-                "output_format": "report"
-                }
+            "load_results": os.environ.get("BENCHMARK_LOAD_RESULTS", "False").lower() == "true",
+            "overwrite": os.environ.get("BENCHMARK_OVERWRITE", "True").lower() == "true",
+            "num_images_to_save": int(os.environ.get("BENCHMARK_NUM_IMAGES_TO_SAVE", "-1")),
+            "save_perturbation": os.environ.get("BENCHMARK_SAVE_PERTURBATION", "False").lower() == "true",
+            "gpu": os.environ.get("BENCHMARK_GPU", "True").lower() == "true",
+            "output_path": os.environ.get("BENCHMARK_OUTPUT_DIR", "./benchmark_out"),
+            "output_format": os.environ.get("BENCHMARK_OUTPUT_FORMAT", "report")
+        }
 
         if model_type[0]=="saved_model":
             config_models["weights_path"] = os.path.join(os.environ.get('INTERNAL_MODEL_STORAGE'),f"{model_name}.pth")
@@ -241,9 +260,8 @@ def start_benchmark_job(body: ExecutionConfig = Body(...)) -> Union[str,Error]:
         benchmark_config['attacks'] = body.attacks
         benchmark_config['evaluation'] = {}
         benchmark_config["evaluation"]["statistics"] = body.metrics
-        
-        benchmarking.benchmark(benchmark_config,executor)
-        return JSONResponse(status_code=200,content="id")
+        task_id = benchmarking.benchmark(benchmark_config,executor)
+        return JSONResponse(status_code=200,content=task_id)
 
     except Exception as e:
         logging.error(f"Unexpected error during job start: {str(e)}")

@@ -8,7 +8,7 @@ from pydantic import ValidationError
 from lib.models import ModelConfig
 from typing import Union
 
-MAX_BYTES = int(os.environ.get('MAX_MODEL_JSON_SIZE_UPLOAD',5000)) * 1024
+
 CHUNK_SIZE = 4096
 ALLOWED_MIMES = {"application/json"}
 
@@ -43,6 +43,7 @@ def json_safety_check(metadata: Union[str, dict]) -> dict:
         logging.error("Input must be a string or dict")
         raise HTTPException(status_code=400, detail="Input must be a JSON string or dict")
     
+    MAX_BYTES = int(os.environ.get('MAX_MODEL_JSON_SIZE_UPLOAD',5000)) * 1024
     # Check size limit
     if len(raw_bytes) > MAX_BYTES:
         logging.error(f"JSON exceeded size limit of {MAX_BYTES} bytes")

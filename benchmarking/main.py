@@ -32,14 +32,14 @@ def resolve_path(path: str) -> str:
     Returns an absolute path. If the given path is not absolute,
     it prepends a root path read from the environment variable ROOT_PATH.
     """
-    root = os.getenv("ROOT_PATH", "")
+    root = os.getenv("DATASETS_REPO", "default")
+    if root=="default":
+        raise Exception("Env varible DATASET_REPO must be specified.")
     if os.path.isabs(path):
         return path
     return os.path.join(root, path)
 
 def benchmark_(config: dict):
-    #TODO: handle env path to dataset folder
-    #os.environ["ROOT_PATH"] = "/home/cristiano-carta/Desktop/datasets"
     os.environ["RAY_OVERRIDE_ENVIRONMENT_VARIABLES_ALLOWLIST"] = "*"
     output_path = Path(config["options"]["output_path"])
     output_path = output_path / datetime.now().strftime("%Y%m%dT%H%M%S")
@@ -82,11 +82,10 @@ def benchmark_(config: dict):
 
 def parallel_benchmark_(config: dict, executor):
 
-    #TODO: handle env path to dataset folder
-    #os.environ["ROOT_PATH"] = "/home/cristiano-carta/Desktop/datasets"
     os.environ["RAY_OVERRIDE_ENVIRONMENT_VARIABLES_ALLOWLIST"] = "*"
     output_path = Path(config["options"]["output_path"])
-    output_path = output_path / datetime.now().strftime("%Y%m%dT%H%M%S")
+    benchmark_id = datetime.now().strftime("%Y%m%dT%H%M%S")
+    output_path = output_path / benchmark_id
     os.makedirs(output_path, exist_ok=False)
     config["output_path"] = str(output_path)
     logging.info(f"Benchmark run will be save to {output_path}")
@@ -97,22 +96,22 @@ def parallel_benchmark_(config: dict, executor):
         dataset["source_path"] = path
         for model_id, model_config in enumerate(config["models"]):
             try:
-                #TODO: fix imports
-                ray.init(ignore_reinit_error=True,runtime_env={
-                    "py_modules": ["/home/cristiano-carta/Desktop/projects/nn_trust_apps/benchmarking"]
-                })
-                try:
-                    from benchmark_utils.executor import RayActorPoolExecutor
-                except ModuleNotFoundError:
-                    from .benchmark_utils.executor import RayActorPoolExecutor
-            
-                os.chdir("/home/cristiano-carta/Desktop/projects/nn_trust_apps")
-
+                modules = os.environ.get("RAY_PY_MODULES",None)
+                if modules:
+                    ray.init(ignore_reinit_error=True,runtime_env={
+                        "py_modules": [modules]
+                    })
+                
+                #try:
+                #    from benchmark_utils.executor import RayActorPoolExecutor
+                #except ModuleNotFoundError:
+                #    from .benchmark_utils.executor import RayActorPoolExecutor
                 evaluator = Evaluator.from_config(config=config, dataset=dataset, model_config=model_config)
                 plan = evaluator.plan_attacks_evaluation()
-                #executor = RayActorPoolExecutor(num_actors=2)
-                executor.execute_plan(plan)
-
+                #executor = RayActorPoolExecutor(num_actors=1)
+                benchmark_id = executor.execute_plan(plan, benchmark_id)
+                #import time
+                #time.sleep(1000)
                 logging.warning(f"Evaluation results for {dataset["name"]}/{model_config["name"]} are saved to {output_path}")
             except Exception as e:
                 logging.warning(f"\n\U0001F975 Evaluation of Model {model_config['name']} on Dataset {dataset['name']} failed with exception '{e}' +++\n")
@@ -123,7 +122,7 @@ def parallel_benchmark_(config: dict, executor):
         json.dump(structure, f)
     with open(output_path / "configuration.json", "w") as f:
         json.dump(config, f)
-    return str(output_path)
+    return benchmark_id
 
 
 def postprocess_benchmark_run_results(benchmark_run_dir: str | pathlib.Path, verbose=True):
@@ -158,7 +157,7 @@ def postprocess_benchmark_run_results(benchmark_run_dir: str | pathlib.Path, ver
 
 
 def benchmark(config: dict, executor=None):
-    output_path = parallel_benchmark_(config, executor=executor)
+    return parallel_benchmark_(config, executor=executor)
     #postprocess_benchmark_run_results(output_path)
 
 
