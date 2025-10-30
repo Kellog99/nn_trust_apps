@@ -18,6 +18,7 @@ from tqdm.auto import tqdm
 from routers.dataset_router import get_datasets
 from routers.model_router import get_models
 import ray
+from pathlib import Path
 celery_utils = importlib.import_module("attack-server.celery_src.utils")
 celery_tasks = importlib.import_module("attack-server.celery_src.celery_worker")
 benchmarking = importlib.import_module("benchmarking")
@@ -46,6 +47,13 @@ def check_attack_already_launched(attacks, req_attacks):
     """
     return any(item in attacks for item in req_attacks), set(attacks) & set(req_attacks)
 
+def has_aggregate(task_dir: str, dataset: str) -> bool:
+    """Return True if the given task_dir/<dataset> contains any 'aggregate.json' file."""
+    task_path = Path(task_dir).expanduser().resolve()
+    dataset_dir = task_path / dataset
+    if not dataset_dir.is_dir():
+        return False
+    return any(p.name == "aggregate.json" for p in dataset_dir.rglob("aggregate.json"))
     
 # ----------------- SERVICES --------------------------
 
@@ -81,7 +89,13 @@ def get_jobs_results(id: str = Query(None),
     
         model_dir, task_dir = find_model_and_task_dir(os.environ.get("BENCHMARK_OUTPUT_DIR"),dataset,model,id)
         benchmark_id = task_dir.split(os.sep)[-1]
-        tasks = ray.get(executor.tracker.list_tasks.remote())
+        tasks = {k:v for k,v in ray.get(executor.tracker.list_tasks.remote().items()) if v["benchmark_id"]==benchmark_id}
+
+        if not tasks:
+            logging.error(f"Benchmark {benchmark_id} not found")
+            return Response(
+                    status_code=404,
+                    content=Error(code=404, message=f"Benchmark {benchmark_id} not found").model_dump_json())
         
         completed_tasks = []
         for _,v in tasks.items():
@@ -131,7 +145,30 @@ def get_jobs_results(dataset : str = Query(...), task : str = Query(None)):
     Get a TITANN benchmark job result.
     """
     try:
-        #TODO:finish implementing this with aggregation function if aggregation is not yet happened
+        tasks = ray.get(executor.tracker.list_tasks.remote())
+
+        if not tasks:
+            logging.error(f"No benchmarks found")
+            return Response(
+                    status_code=404,
+                    content=Error(code=404, message=f"No benchmarks found").model_dump_json())
+        
+        completed_tasks = []
+
+        for _,v in tasks.items():
+            num_tasks = v["num_tasks"]
+            if v["status"]=="completed" and v["progress"]==100:
+                completed_tasks.append(v)
+                task_dir = os.path.join(os.environ.get("BENCHMARK_OUTPUT_DIR"),v["benchmark_id"])
+                if not has_aggregate(task_dir,dataset):
+                    benchmarking.postprocess_benchmark_run_results(task_dir)
+
+        if len(completed_tasks)==0 or len(completed_tasks)<num_tasks:
+            logging.error(f"No benchmark is finished yet")
+            return Response(
+                    status_code=409,
+                    content=Error(code=409, message=f"No benchmark is finished yet").model_dump_json())
+        
         results = collect_dataset_aggregates_with_info(
             base_dir=os.environ.get("BENCHMARK_OUTPUT_DIR"),
             dataset=dataset,

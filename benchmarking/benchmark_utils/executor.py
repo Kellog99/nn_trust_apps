@@ -11,7 +11,7 @@ import inspect
 from typing import Callable, Dict, List, Optional, Any
 from abc import ABC, abstractmethod
 import ray
-import uuid
+import re
 from ray.util import ActorPool
 from datetime import datetime
 from fastapi.encoders import jsonable_encoder
@@ -66,12 +66,77 @@ def resolve_path(path: str) -> str:
         p = path
     return os.path.join(root, p)   
 
+BENCHMARK_ID_REGEX = re.compile(r'^\d{8}T\d{6}$')  # adjust if your benchmark id format differs
+
+def _iter_dirs(path: str):
+    """Yield non-hidden directory names (sorted) inside path."""
+    try:
+        for name in sorted(os.listdir(path)):
+            if name.startswith('.'):
+                continue
+            full = os.path.join(path, name)
+            if os.path.isdir(full):
+                yield name
+    except FileNotFoundError:
+        return
+
+def collect_benchmark_attacks(root: str) -> List[Dict[str, str]]:
+    """
+    Walks `root` (expected to be 'benchmarkids' folder) and collects every attack folder found.
+    Returns list of {"benchmark_id": <id>, "attack": <attack_name>, "num_tasks": <count>}.
+    Prints a simple folder-explorer view as it iterates.
+    """
+    root = os.path.abspath(root)
+    results = []
+    bench_to_attacks = {}
+
+    print("Benchmark found on disk: ", os.path.basename(root) + os.sep)
+    for bench in _iter_dirs(root):
+        if not BENCHMARK_ID_REGEX.match(bench):
+            continue
+        bench_path = os.path.join(root, bench)
+        print(f"  {bench}/")
+
+        attacks_found = []
+        for dataset in _iter_dirs(bench_path):
+            ds_path = os.path.join(bench_path, dataset)
+            print(f"    {dataset}/")
+            for model in _iter_dirs(ds_path):
+                model_path = os.path.join(ds_path, model)
+                print(f"      {model}/")
+                for attack in _iter_dirs(model_path):
+                    print(f"        {attack}/")
+                    attacks_found.append(attack)
+
+        # store attacks found for this benchmark
+        bench_to_attacks[bench] = attacks_found
+
+    # build final results with num_tasks
+    for bench, attacks in bench_to_attacks.items():
+        num_tasks = len(attacks)
+        for attack in attacks:
+            results.append({
+                "benchmark_id": bench,
+                "attack": attack,
+                "num_tasks": num_tasks
+            })
+
+    return results
 
 
 @ray.remote
 class ProgressTracker:
     def __init__(self):
         self.tasks: Dict[str, Dict] = {}
+        on_disk_tasks = collect_benchmark_attacks(os.environ.get("BENCHMARK_OUTPUT_DIR","./benchmark_out"))
+        for task in on_disk_tasks:
+            self.create_task(task_id=f"{task["attack"]}_{task["benchmark_id"]}",
+                             task_type="attack",
+                             message="Task read from disk at boot up",
+                             status="completed",
+                             progress=100,
+                             num_tasks=task["num_tasks"],
+                             benchmark_id=task["benchmark_id"])
 
     def create_task(self, task_id: str, task_type: str, **kwargs) -> str:
         self.tasks[task_id] = {

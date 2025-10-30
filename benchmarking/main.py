@@ -84,6 +84,7 @@ def parallel_benchmark_(config: dict, executor):
 
     os.environ["RAY_OVERRIDE_ENVIRONMENT_VARIABLES_ALLOWLIST"] = "*"
     output_path = Path(config["options"]["output_path"])
+    os.environ["BENCHMARK_OUTPUT_DIR"] = str(output_path)
     benchmark_id = datetime.now().strftime("%Y%m%dT%H%M%S")
     output_path = output_path / benchmark_id
     os.makedirs(output_path, exist_ok=False)
