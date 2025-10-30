@@ -59,8 +59,8 @@ def get_models() -> Union[Models, Error]:
                 
                 # Create model entry with base info and extend with JSON data
                 model_entry = {"name": Path(item).stem, "type": "saved_model"}
-                model_entry.update(model_info)
-                models.append(model_entry)
+                merged_model_info = model_info | model_entry
+                models.append(merged_model_info)
 
         if len(models)==0:
             logging.info("No uploaded models found.")

@@ -24,7 +24,7 @@ datasets:
     batch: 2
     type_dataset: 2
     num_workers: 2
-    source_path: "animals/data" # "../data/military/dataset/test/" # Path to the dataset
+    source_path: "/home/cristiano-carta/Desktop/datasets/animals/data" # "../data/military/dataset/test/" # Path to the dataset
     transform_config:
       size: 256
       crop: 224

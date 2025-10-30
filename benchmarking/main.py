@@ -6,7 +6,6 @@ import traceback
 from datetime import datetime
 import pathlib
 import ray
-
 from nn_trust.attack.evaluation.composer import ConfigStatisticComposer, StatisticComposer
 try:
     from benchmark_utils import (
@@ -42,30 +41,31 @@ def resolve_path(path: str) -> str:
 def benchmark_(config: dict):
     os.environ["RAY_OVERRIDE_ENVIRONMENT_VARIABLES_ALLOWLIST"] = "*"
     output_path = Path(config["options"]["output_path"])
-    output_path = output_path / datetime.now().strftime("%Y%m%dT%H%M%S")
+    benchmark_id = datetime.now().strftime("%Y%m%dT%H%M%S")
+    output_path = output_path / benchmark_id
     os.makedirs(output_path, exist_ok=False)
     config["output_path"] = str(output_path)
     logging.info(f"Benchmark run will be save to {output_path}")
     for dataset_id, dataset in enumerate(config["datasets"]):
         dataset["relative_source_path"] = dataset["source_path"]
-        path = resolve_path(dataset["source_path"])
-        dataset["source_path"] = path
+        if os.path.isabs(dataset["source_path"]):
+            os.environ["DATASETS_REPO"] = dataset["source_path"]
+        else:
+            #This ensures a check: if source is not an absolute path, a dataset root must be specified!
+            path = resolve_path(dataset["source_path"])
+            dataset["source_path"] = path
         for model_id, model_config in enumerate(config["models"]):
             try:
-                ray.init(ignore_reinit_error=True,runtime_env={
-                    "py_modules": ["/home/cristiano-carta/Desktop/projects/nn_trust_apps/benchmarking"]
-                })
-                #TODO: fix imports
+                ray.init(ignore_reinit_error=True)
                 try:
                     from benchmark_utils.executor import RayActorPoolExecutor
                 except ModuleNotFoundError:
                     from .benchmark_utils.executor import RayActorPoolExecutor
             
-                os.chdir("/home/cristiano-carta/Desktop/projects/nn_trust_apps")
                 evaluator = Evaluator.from_config(config=config, dataset=dataset, model_config=model_config)
                 plan = evaluator.plan_attacks_evaluation()
-                executor = RayActorPoolExecutor(num_actors=2)
-                executor.execute_plan(plan)
+                executor = RayActorPoolExecutor(num_actors=1)
+                executor.execute_plan(plan,benchmark_id=benchmark_id,use_event_loop=False)
                 
                 logging.warning(f"Evaluation results for {dataset["name"]}/{model_config["name"]} are saved to {output_path}")
             except Exception as e:
@@ -103,16 +103,9 @@ def parallel_benchmark_(config: dict, executor):
                         "py_modules": [modules]
                     })
                 
-                #try:
-                #    from benchmark_utils.executor import RayActorPoolExecutor
-                #except ModuleNotFoundError:
-                #    from .benchmark_utils.executor import RayActorPoolExecutor
                 evaluator = Evaluator.from_config(config=config, dataset=dataset, model_config=model_config)
                 plan = evaluator.plan_attacks_evaluation()
-                #executor = RayActorPoolExecutor(num_actors=1)
                 benchmark_id = executor.execute_plan(plan, benchmark_id)
-                #import time
-                #time.sleep(1000)
                 logging.warning(f"Evaluation results for {dataset["name"]}/{model_config["name"]} are saved to {output_path}")
             except Exception as e:
                 logging.warning(f"\n\U0001F975 Evaluation of Model {model_config['name']} on Dataset {dataset['name']} failed with exception '{e}' +++\n")
@@ -161,6 +154,10 @@ def benchmark(config: dict, executor=None):
     return parallel_benchmark_(config, executor=executor)
     #postprocess_benchmark_run_results(output_path)
 
+def benchmark_from_main(config: dict):
+    return benchmark_(config)
+    #postprocess_benchmark_run_results(output_path)
+
 
 def main():
     handler = logging.StreamHandler()
@@ -171,7 +168,7 @@ def main():
     config = read_config_file(config_filename=str(selected_config_path))
     config = BenchmarkConfig(**config)
 
-    output_path = benchmark(config.model_dump())
+    output_path = benchmark_from_main(config.model_dump())
     #print(f"Results saved to {output_path}")
     #postprocess_benchmark_run_results(output_path)
 

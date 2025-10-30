@@ -60,7 +60,6 @@ def get_dataloader(
     """
     Return the dataloader to use and the inverse transformation to use for displaying the images
     """
-    print("HHHHHHHHHHHHHHHHH",dataset)
     if not os.path.exists(dataset):
         raise ValueError(f"The dataset --------{dataset} does not exists.")
     if type_dataset == 1:

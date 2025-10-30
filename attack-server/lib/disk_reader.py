@@ -126,9 +126,6 @@ def collect_dataset_aggregates_with_info(
     # iterate tasks in a deterministic order
     for task_dir in sorted(p for p in base.iterdir() if p.is_dir()):
         logger.info(f"Entering task directory: {task_dir.name} -> {task_dir}")
-        print("---------------------------------")
-        print(f"Entering task directory: {task_dir.name} -> {task_dir}")
-        print("---------------------------------")
         try:
             task_mtime = float(task_dir.stat().st_mtime)
         except Exception:

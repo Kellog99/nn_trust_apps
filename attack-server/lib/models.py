@@ -35,6 +35,7 @@ class JobConfig(BaseModel):
 
 class AttackConfig(BaseModel):
     attack_name: str
+    model_name : str
     image: str
     p: float = 2.0
     epsilon: float = 50.0
@@ -64,7 +65,7 @@ class AttackJob(BaseModel):
 
 class ModelConfig(BaseModel):
     name: str
-    type: str
+    type: Optional[str] = None
     pretrained: bool
     num_classes: int
     task: Literal["classification"] 

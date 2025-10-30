@@ -61,7 +61,7 @@ def resolve_path(path: str) -> str:
     if not root:
         raise Exception("When performing parallel attacks, a DATASET_REPO env variable must be specified for every node!")
     if os.path.isabs(path):
-        p = path.split(os.getenv("DATASET_REPO")+os.sep)[1]
+        return path
     else:
         p = path
     return os.path.join(root, p)   
@@ -242,7 +242,7 @@ class RayActorPoolExecutor(Executor):
         self.pool = ActorPool(actors)
         return actors
 
-    def execute_plan(self, plan: Plan, benchmark_id : str) -> List[Any]:
+    def execute_plan(self, plan: Plan, benchmark_id : str, use_event_loop : bool = True) -> List[Any]:
         initial_action = plan.action
         initial_params = plan.params
         initial_action(**initial_params)
@@ -264,15 +264,22 @@ class RayActorPoolExecutor(Executor):
             worker_conf["benchmark_id"] = benchmark_id
             worker_conf["num_tasks"] = num_tasks
             tasks.append((worker_action, worker_conf, plan.dataset, plan.model))
+        if use_event_loop==True:
+            async def launch_tasks():
+                loop = asyncio.get_event_loop()
+                
+                loop.run_in_executor(None, lambda: list(self.pool.map_unordered(
+                    lambda actor, args: actor.execute_worker.remote(*args),
+                    tasks
+                )))
 
-        async def launch_tasks():
-            loop = asyncio.get_event_loop()
-            
-            loop.run_in_executor(None, lambda: list(self.pool.map_unordered(
-                lambda actor, args: actor.execute_worker.remote(*args),
-                tasks
-            )))
+            asyncio.create_task(launch_tasks())
 
-        asyncio.create_task(launch_tasks())
+        else:
+           list(self.pool.map_unordered(
+                    lambda actor, args: actor.execute_worker.remote(*args),
+                    tasks
+                )) 
+
 
         return benchmark_id

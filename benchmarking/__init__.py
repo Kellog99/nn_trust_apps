@@ -5,5 +5,6 @@ from .benchmark_utils import (read_config_file,
                     Evaluator,
                     get_structure,
                     config_file_path_selector,
-                    executor
+                    executor,
+                    get_model
                     )

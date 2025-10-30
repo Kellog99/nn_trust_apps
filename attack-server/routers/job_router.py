@@ -1,8 +1,8 @@
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 import importlib
-from typing import List, Union, Optional
-from lib.models import AttackJob, BenchmarkJob, Error, ExecutionConfig, Metric, ReportInfoProps, ReportMetricsProps, Result
+from typing import Union, Optional
+from lib.models import Error, ExecutionConfig
 from lib.disk_reader import find_model_and_task_dir, collect_dataset_aggregates_with_info
 from lib.attack_utils import build_benchmark_dict
 from lib import models
@@ -11,16 +11,21 @@ import json
 import logging
 import base64
 import io
-import redis
 import os
 from PIL import Image
-from tqdm.auto import tqdm
 from routers.dataset_router import get_datasets
 from routers.model_router import get_models
 import ray
 from pathlib import Path
-celery_utils = importlib.import_module("attack-server.celery_src.utils")
-celery_tasks = importlib.import_module("attack-server.celery_src.celery_worker")
+import PIL
+import torch
+from nn_trust.attack import EvasionAttackFactory, EvasionAttackConfig
+from nn_trust.core import ModelAdapter, Task, Knowledge
+import logging
+from torchvision import transforms
+import PIL
+
+
 benchmarking = importlib.import_module("benchmarking")
 
 router = APIRouter(prefix="/job", tags=["jobs management", "jobs utils"])
@@ -34,6 +39,7 @@ if modules:
     })
 executor = benchmarking.benchmark_utils.executor.RayActorPoolExecutor(num_actors=num_actors)
 
+# ------------------ UTILITY --------------------------
 
 def check_model_and_dataset_in_running_jobs(job, d, m):
     """
@@ -57,6 +63,7 @@ def has_aggregate(task_dir: str, dataset: str) -> bool:
     
 # ----------------- SERVICES --------------------------
 
+# --- Progress --- #
 @router.get("/getJobs")
 def get_jobs(id : str = Query(None)):
     """
@@ -75,9 +82,9 @@ def get_jobs(id : str = Query(None)):
         return Response(
                 status_code=500,
                 content=Error(code=500, message=f"Unexpected error during get jobs").model_dump_json())
-    
 
 
+# --- Results --- #
 @router.get("/report/getResult")
 def get_jobs_results(id: str = Query(None),
                      dataset : str = Query(None),
@@ -89,7 +96,7 @@ def get_jobs_results(id: str = Query(None),
     
         model_dir, task_dir = find_model_and_task_dir(os.environ.get("BENCHMARK_OUTPUT_DIR"),dataset,model,id)
         benchmark_id = task_dir.split(os.sep)[-1]
-        tasks = {k:v for k,v in ray.get(executor.tracker.list_tasks.remote().items()) if v["benchmark_id"]==benchmark_id}
+        tasks = {k:v for k,v in ray.get(executor.tracker.list_tasks.remote()).items() if v["benchmark_id"]==benchmark_id}
 
         if not tasks:
             logging.error(f"Benchmark {benchmark_id} not found")
@@ -182,7 +189,7 @@ def get_jobs_results(dataset : str = Query(...), task : str = Query(None)):
                 content=Error(code=500, message=f"Unexpected error during get result").model_dump_json())
 
 
-
+# --- Start --- #
 @router.post("/start", response_model=str)
 async def start_benchmark_job(body: ExecutionConfig = Body(...)) -> Union[str,Error]:
     """
@@ -240,6 +247,7 @@ async def start_benchmark_job(body: ExecutionConfig = Body(...)) -> Union[str,Er
             if os.path.exists(file_path) and os.path.isfile(file_path):
                 with open(file_path, "r", encoding="utf-8") as f:
                     config_models = json.load(f)  # load into dict
+                    config_models["type"]="saved_model"
                 logging.info("Loaded JSON metadata")
             else:
                 logging.error(f"Can't find model metadata in the repository for model:{model_name}")
@@ -307,11 +315,8 @@ async def start_benchmark_job(body: ExecutionConfig = Body(...)) -> Union[str,Er
                 content=Error(code=500, message=f"Unexpected error during job start").model_dump_json())
 
 
-
-@router.post("/attack",responses={
-    '400': {'model': Error},
-    '500': {'model': Error},
-}, tags=["jobs management"])
+# --- Single attack --- #
+@router.post("/attack")
 async def start_singleattack_job(body: models.AttackConfig) -> Optional[Error]:
     """
     Start a new TITANN attack on single image job.
@@ -321,8 +326,103 @@ async def start_singleattack_job(body: models.AttackConfig) -> Optional[Error]:
         # Decode base64 image string and convert to torch tensor
         image_bytes = base64.b64decode(body.image)
         image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
-        #TODO: add custom model support
-        adv_img, y, y_adv = celery_utils.run_attack(
+
+        # Get the model
+        model_name = body.model_name
+        m_response = get_models()
+        model_response = json.loads(m_response.body.decode('utf-8'))["models"]
+
+        if m_response.status_code!=200:
+            logging.error("Model repository is empty. Check repository.")
+            return Response(
+                status_code=404,
+                content=Error(code=404, 
+                            message="Model or Dataset repository is empty. Check repository.").model_dump_json())
+        
+        model = [m["name"] for m in model_response if m["name"]==model_name]
+        model_type = [m["type"] for m in model_response if m["name"]==model_name]
+
+        if len(model)>1 or len(model_type)>1:
+            logging.error(f"The provided model string {model_name} has had more than one match. Check model repository")
+            return Response(
+                status_code=409,
+                content=Error(code=409, 
+                              message=f"The provided model string {model_name} has had more than one match. Check model repository").model_dump_json())
+        
+        if len(model)==0 or len(model_type)==0:
+            logging.error(f"No model found: {model_name}")
+            return Response(
+                status_code=404,
+                content=Error(code=404, 
+                              message=f"No model found: {model_name}").model_dump_json())
+        
+        file_path = os.path.join(os.environ.get('INTERNAL_MODEL_STORAGE'),f"{model_name}.json")
+
+        if model_type[0]=="saved_model":
+            if os.path.exists(file_path) and os.path.isfile(file_path):
+                with open(file_path, "r", encoding="utf-8") as f:
+                    config_models = json.load(f)  # load into dict
+                    config_models["type"]="saved_model"
+                logging.info("Loaded JSON metadata")
+            else:
+                logging.error(f"Can't find model metadata in the repository for model:{model_name}")
+                return Response(
+                    status_code=404,
+                    content=Error(code=404, 
+                                message=f"Can't find model metadata in the repository for model:{model_name}").model_dump_json())
+        elif model_type[0]=="timm":
+            model_metadata = None
+            for m in model_response:
+                if m["name"]==model_name:
+                    model_metadata = m
+            if model_metadata:
+                config_models = model_metadata
+            else:
+                logging.error("An error has occurred for timm model metadata retrieval")
+                return Response(
+                    status_code=404,
+                    content=Error(code=404, 
+                                message="An error has occurred for timm model metadata retrieval").model_dump_json())
+        
+        if model_type[0]=="saved_model":
+            config_models["weights_path"] = os.path.join(os.environ.get('INTERNAL_MODEL_STORAGE'),f"{model_name}.pth")
+
+        model_ad = benchmarking.get_model(
+            model_name=config_models.get("name"),
+            model_type=config_models.get("type"),
+            model_weights_path=config_models.get("weights_path", None),
+            model_task=config_models.get("task")
+        )
+        
+        def run_attack(model_ad, img: PIL.Image,attack_name:str,epsilon:float,p:float,max_iters:int):
+            device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+            logging.info(f"Running attack on {device}")
+
+            img = transforms.ToTensor()(img).unsqueeze(0).to(device)
+            
+            model_ad.model.eval()
+            model_ad.model.to(device)
+
+            cnf = EvasionAttackFactory.get_config(
+                attack_type=attack_name,
+                model=model_ad,
+                task=Task.Classification,
+                device=device,
+                verbose=True,
+                epsilon=epsilon,
+                p=p,
+                max_iters=max_iters
+                )
+
+            atk = EvasionAttackFactory.create_attack(attack_type=attack_name, config=cnf)
+            labels = model_ad(img).argmax(1)
+            labels_ohe = torch.nn.functional.one_hot(labels, num_classes=1000)
+            x_adv = atk.generate(x=img, y=labels_ohe)
+            labels_adv = model_ad(x_adv).argmax(1)
+            return transforms.ToPILImage()(x_adv[0]), labels.item(), labels_adv.item()
+        
+        adv_img, y, y_adv = run_attack(
+            model_ad=model_ad,
             img=image,
             attack_name=body.attack_name,
             p=body.p,
@@ -334,7 +434,7 @@ async def start_singleattack_job(body: models.AttackConfig) -> Optional[Error]:
         buffered = io.BytesIO()
         adv_img.save(buffered, format="PNG")
         adv_img_base64 = base64.b64encode(buffered.getvalue()).decode("utf-8")
-        #TODO:adapt input, in order to do so, explode run_attack function above also to include model control explicitly
+        #TODO:adapt output 
         result_data = {
             "status": "success",
             "adv_img": adv_img_base64,
@@ -349,7 +449,7 @@ async def start_singleattack_job(body: models.AttackConfig) -> Optional[Error]:
         )
 
     except Exception as e:
-        logging.error(f"Unexpected error during job start: {str(e)}")
+        logging.error(f"Unexpected error during attack: {str(e)}")
         return Response(
                 status_code=500,
-                content=Error(code=500, message=f"Unexpected error during job start").model_dump_json())
+                content=Error(code=500, message=f"Unexpected error during attack").model_dump_json())
