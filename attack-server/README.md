@@ -9,7 +9,16 @@ Positioned at project top level directory `attack-server`:
 #### Python Dependencies
 ```bash
 uv pip install -e submodules/nn_trust
+uv pip install timm   #somehow needed outside the lock
 uv sync
+```
+
+always update nn_trust submodules to develop.
+
+```bash
+cd attack-server/submodules/nn_trust #same for benchmarking submodule!
+git checkout develop
+git pull origin develop
 ```
 
 ## Environment Configuration
