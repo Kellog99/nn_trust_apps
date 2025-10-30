@@ -15,7 +15,7 @@ import re
 from ray.util import ActorPool
 from datetime import datetime
 from fastapi.encoders import jsonable_encoder
-
+import asyncio
 
 class Executor(ABC):
     @abstractmethod
@@ -184,8 +184,8 @@ class ProgressTracker:
         return self.wrapper(func, *args, **kwargs)
 
 
-@ray.remote(num_gpus=1)
-class SingleGPUActor:
+@ray.remote(num_gpus=float(os.environ.get("FRACTION_FOR_GPU_ACTOR",1)))
+class GPUActor:
     def __init__(self):
         try:
             self.node_root = self.detect_node_data_root()
@@ -236,7 +236,7 @@ class RayActorPoolExecutor(Executor):
     def _create_actors(self, n: int) -> List[Any]:
         actors = []
         for _ in range(n):
-            actor_handle = SingleGPUActor.remote()
+            actor_handle = GPUActor.remote()
             actors.append(actor_handle)
         self.actors = actors
         self.pool = ActorPool(actors)
@@ -265,12 +265,14 @@ class RayActorPoolExecutor(Executor):
             worker_conf["num_tasks"] = num_tasks
             tasks.append((worker_action, worker_conf, plan.dataset, plan.model))
 
-        if self.num_actors==1:
-            futures = [self.actors[0].execute_worker.remote(*args) for args in tasks]
-        else:    
-            self.pool.map_unordered(
+        async def launch_tasks():
+            loop = asyncio.get_event_loop()
+            
+            loop.run_in_executor(None, lambda: list(self.pool.map_unordered(
                 lambda actor, args: actor.execute_worker.remote(*args),
                 tasks
-            )
+            )))
+
+        asyncio.create_task(launch_tasks())
 
         return benchmark_id

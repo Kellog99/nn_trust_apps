@@ -184,7 +184,7 @@ def get_jobs_results(dataset : str = Query(...), task : str = Query(None)):
 
 
 @router.post("/start", response_model=str)
-def start_benchmark_job(body: ExecutionConfig = Body(...)) -> Union[str,Error]:
+async def start_benchmark_job(body: ExecutionConfig = Body(...)) -> Union[str,Error]:
     """
     Start a new TITANN benchmark job.
     """
