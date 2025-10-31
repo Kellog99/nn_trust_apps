@@ -228,9 +228,7 @@ class MetricsSection:
     @staticmethod
     def _format_metric(value):
         if isinstance(value, float):
-            if value < 0.01:
-                return f"{value:.2e}"
-            return f"{value:.4f}"
+            return f"{value:.4f}"  
         elif isinstance(value, int):
             return f"{value:,}"
         return str(value)
@@ -254,7 +252,7 @@ class AttacksSection:
         
         # Detailed attack reports
         for attack_name, attack_data in attacks.items():
-            if attack_name != 'reference':
+            #if attack_name != 'reference':
                 elements.extend(AttacksSection._build_attack_detail(
                     attack_name, attack_data, styles
                 ))
@@ -271,7 +269,7 @@ class AttacksSection:
         table_data = [headers]
         
         for attack_name, attack_data in attacks.items():
-            if attack_name != 'reference':
+            #if attack_name != 'reference':
                 row = [
                     attack_name.upper(),
                     AttacksSection._format_value(attack_data.get('robustness')),
@@ -364,11 +362,10 @@ class AttacksSection:
         if value is None:
             return 'N/A'
         if isinstance(value, float):
-            if value < 0.01:
-                return f"{value:.2e}"
-            return f"{value:.4f}"
+            return f"{value:.4f}"  
+        elif isinstance(value, int):
+            return f"{value:,}"
         return str(value)
-
 
 class AdversarialReportGenerator:
     """Main report generator class"""

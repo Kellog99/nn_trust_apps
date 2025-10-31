@@ -343,7 +343,7 @@ class Evaluator:
             # adapt metrics counting for reference or standard attack
             is_identity_atk = atk.__class__.__name__.replace("Attack", "").lower() == "identitybaseline"
             #TODO: add mask again
-            if True:
+            if is_identity_atk:
                 y_pred = label
             else:
                 mask = torch.eq(label, y_pred)
