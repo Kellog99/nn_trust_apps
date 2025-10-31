@@ -5,6 +5,7 @@ from typing import Union, Optional
 from lib.models import Error, ExecutionConfig
 from lib.disk_reader import find_model_and_task_dir, collect_dataset_aggregates_with_info
 from lib.attack_utils import build_benchmark_dict
+from lib.pdf_report import AdversarialReportGenerator
 from lib import models
 from fastapi import Response, Query, Body
 import json
@@ -88,7 +89,8 @@ def get_jobs(id : str = Query(None)):
 @router.get("/report/getResult")
 def get_jobs_results(id: str = Query(None),
                      dataset : str = Query(None),
-                     model : str = Query(None)):
+                     model : str = Query(None),
+                     pdf_report : bool = Query(None)):
     """
     Get a TITANN benchmark report job result.
     """
@@ -134,12 +136,23 @@ def get_jobs_results(id: str = Query(None),
                     except Exception as e:
                         logging.warning(f"Could not load statistics.json in '{entry_path}': {e}")
         
-        return {
+        report_data = {
             "info":info,
             "metrics": aggregate,
             "attacks": statistics
         }
-    
+
+        if pdf_report and bool(pdf_report)==True:
+            generator = AdversarialReportGenerator(logo_path='./resources/logo_leonardo.png')
+            report_file = './resources/adversarial_report.pdf'
+            generator.generate(report_data, report_file)
+            with open(report_file, 'rb') as pdf_file:
+                pdf_bytes = pdf_file.read()
+                return base64.b64encode(pdf_bytes).decode('utf-8')
+        else:
+            return report_data
+
+        
     except Exception as e:
         logging.error(f"Unexpected error during get result: {str(e)}")
         return Response(

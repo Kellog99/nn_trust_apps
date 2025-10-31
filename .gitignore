@@ -5,4 +5,6 @@
 *.db
 *.log
 *.json
+*.png
+*.pdf
 __pycache__
