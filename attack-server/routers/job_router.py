@@ -16,6 +16,7 @@ import os
 from PIL import Image
 from routers.dataset_router import get_datasets
 from routers.model_router import get_models
+from routers.info_router import get_attacks_info
 import ray
 from pathlib import Path
 import PIL
@@ -30,6 +31,14 @@ import PIL
 benchmarking = importlib.import_module("benchmarking")
 
 router = APIRouter(prefix="/job", tags=["jobs management", "jobs utils"])
+
+if not hasattr(router, "state"):
+    class _RouterState:
+        pass
+    router.state = _RouterState()
+    
+if not hasattr(router.state, "attacks"):
+    router.state.attacks = get_attacks_info()
 
 # Setting up number of actors and executor
 num_actors = int(os.environ.get("RAY_NUM_ACTORS",1))
@@ -74,9 +83,32 @@ def get_jobs(id : str = Query(None)):
         tasks = ray.get(executor.tracker.list_tasks.remote())
         if id:
             id = id.replace(" ","")
-            return {k: v for k, v in tasks.items() if v["benchmark_id"]==id}
+            output = []
+            if tasks:
+                for k,v in tasks.items():
+                    output_dict = {}
+                    if v["benchmark_id"]==id:
+                        atk_id = k.split(f"_{v["benchmark_id"]}")[0]
+                        output_dict["id"] = atk_id
+                        output_dict["name"] = router.state.attacks[atk_id].name if atk_id!="reference" else "Reference (Identity Attack)"
+                        output_dict["status"] = v["status"]
+                        output_dict["progress"] = v["progress"]
+                        if output_dict:
+                            output.append(output_dict)
+            return output
         else:
-            return tasks
+            output = []
+            if tasks:
+                for k,v in tasks.items():
+                    output_dict = {}
+                    atk_id = k.split(f"_{v["benchmark_id"]}")[0]
+                    output_dict["id"] = atk_id
+                    output_dict["name"] = router.state.attacks[atk_id].name if atk_id!="reference" else "Reference (Identity Attack)"
+                    output_dict["status"] = v["status"]
+                    output_dict["progress"] = v["progress"]
+                    if output_dict:
+                        output.append(output_dict)
+            return output
 
     except Exception as e:
         logging.error(f"Unexpected error during get jobs: {str(e)}")

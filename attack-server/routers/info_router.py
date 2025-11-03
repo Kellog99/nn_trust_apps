@@ -108,7 +108,7 @@ def get_attacks_info():
                     parameters=parameters
                 )
             else:
-                print(atk)
+                pass
         return out
 
     except Exception as e:
