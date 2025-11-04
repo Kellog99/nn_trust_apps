@@ -320,7 +320,7 @@ class Evaluator:
         else:
             progress_bar = enumerate(dataloader)
 
-        tracker.create_task.remote(f"{atk_id}_{benchmark_id}","attack", benchmark_id = benchmark_id, num_tasks=num_tasks)
+        #tracker.create_task.remote(f"{atk_id}_{benchmark_id}","attack", benchmark_id = benchmark_id, num_tasks=num_tasks)
         for idx, (batch, label, element_info) in progress_bar:
             if tracker:
                 tracker.update_progress.remote(f"{atk_id}_{benchmark_id}", 
@@ -343,7 +343,7 @@ class Evaluator:
             # adapt metrics counting for reference or standard attack
             is_identity_atk = atk.__class__.__name__.replace("Attack", "").lower() == "identitybaseline"
             #TODO: add mask again
-            if is_identity_atk:
+            if True:
                 y_pred = label
             else:
                 mask = torch.eq(label, y_pred)
@@ -368,6 +368,7 @@ class Evaluator:
         statistics_results = statistics_composer.compute()
         statistics_states = statistics_composer.get_raw_state()
         statistics_composer.reset()
+        print("PING")
         torch.cuda.empty_cache()
         if tracker:
             tracker.update_progress.remote(f"{atk_id}_{benchmark_id}", status="completed", progress=100, message=f"Completed attack {atk_id}")
@@ -577,7 +578,6 @@ class Evaluator:
         This function is the worker action of Path object.
         """
         try:
-            logging.info("CACCA2")
             sig = signature(Evaluator.evaluate_attack)
             accepted_params = sig.parameters
             atk_params = {k: v for k, v in kwargs.items() if k in accepted_params}

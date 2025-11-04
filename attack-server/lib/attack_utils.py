@@ -1,5 +1,6 @@
 from typing import List, Dict, Any, Iterable
-
+from lib.models import BenchmarkModelProps
+import numpy as np
 
 def _coerce_number(x):
     """Convert string/value to int or float, otherwise return original value."""
@@ -116,3 +117,71 @@ def build_benchmark_dict(
             result[key].extend([None] * (n - len(result[key])))
     
     return result
+
+
+def transform_to_benchmark(raw_data: list[dict], task: str = 'image_classification') -> list[BenchmarkModelProps]:
+    """Transform raw model data into sorted BenchmarkModelProps with metric rankings."""
+    
+    # Sort by parameters
+    sorted_data = sorted(raw_data, key=lambda x: x['parameters'])
+    
+    # Extract metric keys (exclude 'name' and 'parameters')
+    metric_keys = {k for item in sorted_data for k in item if k not in ['name', 'parameters']}
+    
+    # Build metric matrix for vectorized ranking
+    n_models = len(sorted_data)
+    metric_matrix = {key: np.empty(n_models) for key in metric_keys}
+    
+    for idx, item in enumerate(sorted_data):
+        for key in metric_keys:
+            metric_matrix[key][idx] = item.get(key, -np.inf)
+    
+    # Calculate ranks (higher value = higher rank)
+    #rankings = {key: np.argsort(np.argsort(-vals)) + 1 for key, vals in metric_matrix.items()}
+    
+    # Build result
+    return [
+        BenchmarkModelProps(
+            name=item['name'],
+            param=item['parameters'],
+            task=task,
+            metrics={k: item[k] for k in metric_keys if k in item}
+            #metric_rank={k: int(rankings[k][idx]) for k in metric_keys if k in item}
+        )
+        for idx, item in enumerate(sorted_data)
+    ]
+
+def enrich_with_ranks(models, metrics_to_rank=None, ascending=False):
+    """
+    Enrich models with metric ranks.
+    Args:
+        models: List of model dictionaries with 'metrics' key
+        metrics_to_rank: List of metric names to rank. If None, ranks all metrics.
+        ascending: If True, lower values get better ranks. If False, higher values get better ranks.
+    Returns:
+        List of enriched models with ranks added to 'metrics' dict as '{metric_name}_rank'
+    """
+    import copy
+    # Deep copy to avoid modifying original data
+    enriched_models = copy.deepcopy(models)
+    
+    # Get all metric names from first model if not specified
+    if metrics_to_rank is None:
+        metrics_to_rank = list(enriched_models[0]['metrics'].keys())
+    
+    # For each metric, compute ranks
+    for metric_name in metrics_to_rank:
+        # Extract metric values with model indices
+        metric_values = [
+            (i, model['metrics'][metric_name]) 
+            for i, model in enumerate(enriched_models)
+        ]
+        
+        # Sort by value (descending by default for "higher is better")
+        metric_values.sort(key=lambda x: x[1], reverse=not ascending)
+        
+        # Assign ranks (1-based) directly in metrics dict
+        for rank, (model_idx, value) in enumerate(metric_values, start=1):
+            enriched_models[model_idx]['metrics'][f'{metric_name}_rank'] = rank
+    
+    return enriched_models

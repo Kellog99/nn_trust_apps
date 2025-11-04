@@ -131,3 +131,10 @@ class ReportInfoProps(BaseModel):
     classes: int
     dimensionality: List[int]
 
+class BenchmarkModelProps(BaseModel):
+    name: str
+    param: int
+    task: str
+    metrics: Dict[str, float | int]
+
+

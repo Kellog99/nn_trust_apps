@@ -170,8 +170,11 @@ def collect_dataset_aggregates_with_info(
                     with info_path.open("r", encoding="utf-8") as ih:
                         info = json.load(ih)
                         params = info.get("parameters")
+                        m_name = info.get("name")
                         if params is not None:
                             data["parameters"] = params
+                        if m_name is not None:
+                            data["name"] = m_name
                             logger.info(f"        Loaded parameters from {info_path.name}")
                 except Exception:
                     logger.warning(f"        WARNING: failed to read or parse {info_path.name} (ignoring)")

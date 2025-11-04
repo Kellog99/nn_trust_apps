@@ -4,7 +4,7 @@ import importlib
 from typing import Union, Optional
 from lib.models import Error, ExecutionConfig
 from lib.disk_reader import find_model_and_task_dir, collect_dataset_aggregates_with_info
-from lib.attack_utils import build_benchmark_dict
+from lib.attack_utils import transform_to_benchmark, enrich_with_ranks
 from lib.pdf_report import AdversarialReportGenerator
 from lib import models
 from fastapi import Response, Query, Body
@@ -164,7 +164,12 @@ def get_jobs_results(id: str = Query(None),
                 if os.path.exists(stat_file) and os.path.isfile(stat_file):
                     try:
                         with open(stat_file, "r", encoding="utf-8") as sf:
-                            statistics[entry] = json.load(sf)
+                            sf_data = json.load(sf)
+                            sf_data["name"] = router.state.attacks[entry.lower()].name
+                            sf_data["risk"] = 0.5
+                            sf_data["num_queries"] = 1
+                            sf_data["power"] = 0.5
+                            statistics[entry.upper()] = sf_data
                     except Exception as e:
                         logging.warning(f"Could not load statistics.json in '{entry_path}': {e}")
         
@@ -225,7 +230,9 @@ def get_jobs_results(dataset : str = Query(...), task : str = Query(None)):
             base_dir=os.environ.get("BENCHMARK_OUTPUT_DIR"),
             dataset=dataset,
         )
-        return build_benchmark_dict(results,dataset,"classification")
+        
+        out = transform_to_benchmark(results,task="classification")
+        return enrich_with_ranks([o.model_dump() for o in out])
     
     except Exception as e:
         logging.error(f"Unexpected error during get result: {str(e)}")

@@ -263,6 +263,11 @@ class RayActorPoolExecutor(Executor):
             worker_conf["tracker"] = self.tracker
             worker_conf["benchmark_id"] = benchmark_id
             worker_conf["num_tasks"] = num_tasks
+            if "id" in worker_conf["attack_config"]:
+                atk_id = worker_conf["attack_config"]["id"]
+            else:
+                atk_id = worker_conf["attack_config"]["name"]
+            self.tracker.create_task.remote(f"{atk_id}_{benchmark_id}","attack", benchmark_id = benchmark_id, num_tasks=num_tasks)
             tasks.append((worker_action, worker_conf, plan.dataset, plan.model))
         if use_event_loop==True:
             async def launch_tasks():
