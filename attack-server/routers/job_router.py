@@ -159,6 +159,16 @@ def get_jobs_results(id: str = Query(None),
         benchmarking.postprocess_benchmark_run_results(task_dir)
         with open(os.path.join(model_dir,'info.json'), "r", encoding="utf-8") as f:
             info = json.load(f)
+
+        #----# thumbnail
+        try:
+            import requests
+            #TODO: to add in the env
+            prototype = json.loads(requests.get("http://localhost:8000/getDataset?dataset=animals").text)["prototype"]["datas"][0]
+        except Exception as e:
+            prototype = None
+        #----#
+
         with open(os.path.join(model_dir,'aggregate_statistics.json'), "r", encoding="utf-8") as f:
             aggregate = json.load(f)
             aggregate["params"] = info["parameters"]
@@ -206,6 +216,8 @@ def get_jobs_results(id: str = Query(None),
                 pdf_bytes = pdf_file.read()
                 return base64.b64encode(pdf_bytes).decode('utf-8')
         else:
+            if prototype:
+                report_data["prototype"] = prototype
             return report_data
 
         
