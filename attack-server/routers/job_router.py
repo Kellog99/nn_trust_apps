@@ -218,6 +218,7 @@ def get_jobs_results(id: str = Query(None),
         else:
             if prototype:
                 report_data["prototype"] = prototype
+            report_data["tool"] = "nntrust"
             return report_data
 
         
