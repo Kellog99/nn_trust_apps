@@ -1,6 +1,7 @@
 from pathlib import Path
 from typing import Optional, Tuple, Union
 import logging
+import os
 
 def find_model_and_task_dir(
     base_dir: Union[str, Path],
@@ -106,13 +107,15 @@ def collect_dataset_aggregates_with_info(
     dataset: str,
     *,
     filenames_pattern: str = "aggregate*.json",
+    keep_latest_only: bool = True,
 ) -> List[Dict[str, Any]]:
     """
-    Simple, talking traversal but using logging:
-      - logs when entering a task dir, dataset dir, and each model dir (agg parent)
-      - for each relative dataset-path (model folder) keeps only the aggregate from
-        the latest task folder (by task folder mtime)
-      - returns aggregate dicts augmented with:
+    Traverses base_dir for aggregate files for a given dataset.
+
+    Features:
+      - Logs traversal progress.
+      - Optionally keeps only the latest aggregate (per relative path) based on task folder mtime.
+      - Augments each aggregate dict with:
           "__task_dir": task folder name (string)
           "__task_mtime": task folder mtime (float)
           "__agg_path": full path to the aggregate file (string)
@@ -121,9 +124,9 @@ def collect_dataset_aggregates_with_info(
     if not base.exists() or not base.is_dir():
         raise FileNotFoundError(f"base_dir not found or not a directory: {base}")
 
-    latest_per_relpath: Dict[str, tuple[float, Dict[str, Any]]] = {}
+    latest_per_relpath: Dict[str, list[tuple[float, Dict[str, Any]]]] = {}
 
-    # iterate tasks in a deterministic order
+    # iterate tasks in deterministic order
     for task_dir in sorted(p for p in base.iterdir() if p.is_dir()):
         logger.info(f"Entering task directory: {task_dir.name} -> {task_dir}")
         try:
@@ -137,17 +140,13 @@ def collect_dataset_aggregates_with_info(
             continue
 
         logger.info(f"  Found dataset directory: {dataset_dir}")
-
-        # keep track of which model dirs we've announced for this task (avoid duplicates)
         announced_model_dirs = set()
 
-        # find aggregates under this dataset (including nested model dirs)
         for agg_file in dataset_dir.rglob(filenames_pattern):
             if not agg_file.is_file():
                 continue
 
             model_dir = agg_file.parent
-            # announce model directories once per task
             model_dir_key = str(model_dir.relative_to(dataset_dir)) if model_dir != dataset_dir else "."
             if model_dir_key not in announced_model_dirs:
                 logger.info(f"    Entering model directory: {model_dir_key} -> {model_dir}")
@@ -155,7 +154,6 @@ def collect_dataset_aggregates_with_info(
 
             logger.info(f"      Found aggregate file: {agg_file.name}")
 
-            # load aggregate json (skip if invalid)
             try:
                 with agg_file.open("r", encoding="utf-8") as fh:
                     data = json.load(fh)
@@ -163,7 +161,6 @@ def collect_dataset_aggregates_with_info(
                 logger.warning(f"      WARNING: failed to read JSON from {agg_file}: {e} (skipping)")
                 continue
 
-            # try to load parameters from sibling info.json
             info_path = agg_file.parent / "info.json"
             if info_path.is_file():
                 try:
@@ -171,6 +168,7 @@ def collect_dataset_aggregates_with_info(
                         info = json.load(ih)
                         params = info.get("parameters")
                         m_name = info.get("name")
+                        data["benchmark_id"] = str(task_dir).split(os.sep)[-1]
                         if params is not None:
                             data["parameters"] = params
                         if m_name is not None:
@@ -179,25 +177,28 @@ def collect_dataset_aggregates_with_info(
                 except Exception:
                     logger.warning(f"        WARNING: failed to read or parse {info_path.name} (ignoring)")
 
-            # determine relative key under the dataset directory
             try:
                 rel_parent = agg_file.parent.relative_to(dataset_dir)
-                rel_key = str(rel_parent)  # will be '.' for files directly under dataset_dir
+                rel_key = str(rel_parent)
             except Exception:
                 rel_key = str(agg_file.parent)
 
-            # attach metadata
             result = dict(data)
+            latest_per_relpath.setdefault(rel_key, []).append((task_mtime, result))
 
-            # keep only the latest by task_mtime
-            existing = latest_per_relpath.get(rel_key)
-            if existing is None or task_mtime > existing[0]:
-                latest_per_relpath[rel_key] = (task_mtime, result)
-                logger.info(f"        -> Keeping this aggregate for '{rel_key}' (task mtime={task_mtime})")
-            else:
-                logger.info(f"        -> Skipping (older than existing for '{rel_key}')")
+    # --- Decide what to return ---
+    if keep_latest_only:
+        kept = [
+            sorted(entries, key=lambda t: t[0], reverse=True)[0][1]
+            for entries in latest_per_relpath.values()
+        ]
+        logger.info(f"Done. Collected {len(kept)} latest aggregates (per relative path).")
+    else:
+        kept = [
+            result
+            for entries in latest_per_relpath.values()
+            for _, result in sorted(entries, key=lambda t: t[0], reverse=True)
+        ]
+        logger.info(f"Done. Collected {len(kept)} aggregates (all, not filtered).")
 
-    # return results sorted newest-first by mtime
-    kept = [entry[1] for entry in sorted(latest_per_relpath.values(), key=lambda t: t[0], reverse=True)]
-    logger.info(f"Done. Collected {len(kept)} aggregates (latest per relative path).")
     return kept

@@ -135,6 +135,7 @@ class BenchmarkModelProps(BaseModel):
     name: str
     param: int
     task: str
+    benchmark_id : str
     metrics: Dict[str, float | int]
 
 

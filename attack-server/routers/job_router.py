@@ -70,7 +70,24 @@ def has_aggregate(task_dir: str, dataset: str) -> bool:
     if not dataset_dir.is_dir():
         return False
     return any(p.name == "aggregate.json" for p in dataset_dir.rglob("aggregate.json"))
-    
+
+def extract_rank_metrics(models, model_name):
+    """
+    Given a list of model dictionaries and a model name, extract all metrics
+    whose keys end with '_rank' for that model.
+
+    Parameters:
+        models (list): List of model dictionaries.
+        model_name (str): Name of the model to search for.
+
+    Returns:
+        dict: A dictionary of metrics ending with '_rank', or an empty dict if not found.
+    """
+    for model in models:
+        if model.get("name") == model_name:
+            metrics = model.get("metrics", {})
+            return {k: v for k, v in metrics.items() if k.endswith("_rank")}
+    return {}    
 # ----------------- SERVICES --------------------------
 
 # --- Progress --- #
@@ -97,18 +114,7 @@ def get_jobs(id : str = Query(None)):
                             output.append(output_dict)
             return output
         else:
-            output = []
-            if tasks:
-                for k,v in tasks.items():
-                    output_dict = {}
-                    atk_id = k.split(f"_{v["benchmark_id"]}")[0]
-                    output_dict["id"] = atk_id
-                    output_dict["name"] = router.state.attacks[atk_id].name if atk_id!="reference" else "Reference (Identity Attack)"
-                    output_dict["status"] = v["status"]
-                    output_dict["progress"] = v["progress"]
-                    if output_dict:
-                        output.append(output_dict)
-            return output
+            return tasks
 
     except Exception as e:
         logging.error(f"Unexpected error during get jobs: {str(e)}")
@@ -156,6 +162,19 @@ def get_jobs_results(id: str = Query(None),
         with open(os.path.join(model_dir,'aggregate_statistics.json'), "r", encoding="utf-8") as f:
             aggregate = json.load(f)
             aggregate["params"] = info["parameters"]
+            results = collect_dataset_aggregates_with_info(
+                base_dir=os.environ.get("BENCHMARK_OUTPUT_DIR"),
+                dataset=str(model_dir).split(os.sep)[-2],
+                keep_latest_only=False,
+            )
+
+            out = transform_to_benchmark(results,task="classification")
+            out = enrich_with_ranks(out)
+            out = extract_rank_metrics(out,str(model_dir).split(os.sep)[-1])
+            num_b = len(results)
+            out["total benchmarks"] = num_b
+            aggregate = aggregate | out   
+
         statistics = {}
         for entry in os.listdir(model_dir):
             entry_path = os.path.join(model_dir, entry)
@@ -197,7 +216,7 @@ def get_jobs_results(id: str = Query(None),
                 content=Error(code=500, message=f"Unexpected error during get result").model_dump_json())
  
 @router.get("/benchmark/getResult")
-def get_jobs_results(dataset : str = Query(...), task : str = Query(None)):
+def get_jobs_results(dataset : str = Query(...), task : str = Query(None), id : str = Query(None)):
     """
     Get a TITANN benchmark job result.
     """
@@ -229,10 +248,14 @@ def get_jobs_results(dataset : str = Query(...), task : str = Query(None)):
         results = collect_dataset_aggregates_with_info(
             base_dir=os.environ.get("BENCHMARK_OUTPUT_DIR"),
             dataset=dataset,
+            keep_latest_only=False
         )
         
         out = transform_to_benchmark(results,task="classification")
-        return enrich_with_ranks([o.model_dump() for o in out])
+        if id:
+            return [o for o in enrich_with_ranks(out) if o["benchmark_id"]!=id]
+        else:
+            return enrich_with_ranks(out)
     
     except Exception as e:
         logging.error(f"Unexpected error during get result: {str(e)}")
