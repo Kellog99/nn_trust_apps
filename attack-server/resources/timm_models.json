@@ -3,8 +3,15 @@
         {"name":"resnet50",
          "type": "timm",
         "pretrained": true,
-        "num_classes": 1000,
+        "num_classes": 90,
         "task": "classification"
+        },
+        {
+        "name":"resnet18",
+        "type":"timm",
+        "pretrained":true,
+        "num_classes":90,
+        "task":"classification"
         }
     ],
     "max_model_size": 5000
