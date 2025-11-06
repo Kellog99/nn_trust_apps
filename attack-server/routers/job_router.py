@@ -88,6 +88,75 @@ def extract_rank_metrics(models, model_name):
             metrics = model.get("metrics", {})
             return {k: v for k, v in metrics.items() if k.endswith("_rank")}
     return {}    
+
+def find_image(start_dir: str):
+    """
+    Depth-first search through directories starting at `start_dir`
+    to find the first image file. Once found, return the path
+    relative to `start_dir`.
+    Directories and files are explored in alphabetical order.
+    """
+    image_exts = {'.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.tiff', '.tif', '.svg'}
+    stack = [start_dir]
+    visited = set()
+
+    while stack:
+        path = stack.pop()
+        try:
+            if os.path.islink(path):
+                continue
+
+            if os.path.isdir(path):
+                real = os.path.realpath(path)
+                if real in visited:
+                    continue
+                visited.add(real)
+
+                try:
+                    entries = list(os.scandir(path))
+                except PermissionError:
+                    continue
+
+                # Sort entries alphabetically by name
+                entries.sort(key=lambda e: e.name.lower(), reverse=True)
+                # reverse=True because we’re using a stack (LIFO), so we push reversed order
+                for entry in entries:
+                    stack.append(entry.path)
+
+            else:
+                _, ext = os.path.splitext(path)
+                if ext.lower() in image_exts:
+                    abs_path = os.path.abspath(path)
+                    return os.path.join(start_dir.split(os.sep)[-1],os.path.relpath(abs_path, start_dir))
+        except Exception:
+            continue
+
+    return None
+
+def read_all_reports(root_folder : str):
+    """
+    Recursively searches for all 'report.json' files under the given root folder
+    and returns a list of their parsed JSON contents (as dictionaries).
+
+    Args:
+        root_folder (str): The path to the root directory to start the search.
+
+    Returns:
+        list[dict]: A list of dictionaries loaded from each report.json file.
+    """
+    reports = []
+
+    for dirpath, dirnames, filenames in os.walk(root_folder):
+        if "report.json" in filenames:
+            report_path = os.path.join(dirpath, "report.json")
+            try:
+                with open(report_path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                    reports.append(data)
+            except (json.JSONDecodeError, OSError) as e:
+                print(f"⚠️ Could not read {report_path}: {e}")
+
+    return reports
 # ----------------- SERVICES --------------------------
 
 # --- Progress --- #
@@ -155,58 +224,71 @@ def get_jobs_results(id: str = Query(None),
             return Response(
                     status_code=409,
                     content=Error(code=409, message=f"Benchmark {benchmark_id} not finished yet").model_dump_json())
- 
-        benchmarking.postprocess_benchmark_run_results(task_dir)
-        with open(os.path.join(model_dir,'info.json'), "r", encoding="utf-8") as f:
-            info = json.load(f)
-
-        #----# thumbnail
-        try:
-            import requests
-            #TODO: to add in the env
-            prototype = json.loads(requests.get("http://localhost:8000/getDataset?dataset=animals").text)["prototype"]["datas"][0]
-        except Exception as e:
-            prototype = None
-        #----#
-
-        with open(os.path.join(model_dir,'aggregate_statistics.json'), "r", encoding="utf-8") as f:
-            aggregate = json.load(f)
-            aggregate["params"] = info["parameters"]
-            results = collect_dataset_aggregates_with_info(
-                base_dir=os.environ.get("BENCHMARK_OUTPUT_DIR"),
-                dataset=str(model_dir).split(os.sep)[-2],
-                keep_latest_only=False,
-            )
-
-            out = transform_to_benchmark(results,task="classification")
-            out = enrich_with_ranks(out)
-            out = extract_rank_metrics(out,str(model_dir).split(os.sep)[-1])
-            num_b = len(results)
-            out["total benchmarks"] = num_b
-            aggregate = aggregate | out   
-
-        statistics = {}
-        for entry in os.listdir(model_dir):
-            entry_path = os.path.join(model_dir, entry)
-            if os.path.isdir(entry_path):
-                stat_file = os.path.join(entry_path, "statistics.json")
-                if os.path.exists(stat_file) and os.path.isfile(stat_file):
-                    try:
-                        with open(stat_file, "r", encoding="utf-8") as sf:
-                            sf_data = json.load(sf)
-                            sf_data["name"] = router.state.attacks[entry.lower()].name
-                            sf_data["risk"] = 0.5
-                            sf_data["num_queries"] = 1
-                            sf_data["power"] = 0.5
-                            statistics[entry.upper()] = sf_data
-                    except Exception as e:
-                        logging.warning(f"Could not load statistics.json in '{entry_path}': {e}")
         
-        report_data = {
-            "info":info,
-            "metrics": aggregate,
-            "attacks": statistics
-        }
+        if os.path.exists(os.path.join(task_dir,"report.json")):
+            with open(os.path.join(task_dir,"report.json"), 'r', encoding='utf-8') as f:
+                report_data = json.load(f)  
+            prototype=None
+        else:
+
+            benchmarking.postprocess_benchmark_run_results(task_dir)
+            with open(os.path.join(model_dir,'info.json'), "r", encoding="utf-8") as f:
+                info = json.load(f)
+
+            #----# thumbnail
+            try:
+                import requests
+                #TODO: to add in the env
+                prototype = json.loads(requests.get("http://localhost:8000/getDataset?dataset=animals").text)["prototype"]["datas"][0]
+            except Exception as e:
+                prototype = find_image(os.path.join(os.environ.get("DATASETS_REPO"),str(model_dir).split(os.sep)[-2]))
+            #----#
+
+            with open(os.path.join(model_dir,'aggregate_statistics.json'), "r", encoding="utf-8") as f:
+                aggregate = json.load(f)
+                aggregate["params"] = info["parameters"]
+                results = collect_dataset_aggregates_with_info(
+                    base_dir=os.environ.get("BENCHMARK_OUTPUT_DIR"),
+                    dataset=str(model_dir).split(os.sep)[-2],
+                    keep_latest_only=False,
+                )
+
+                out = transform_to_benchmark(results,task="classification")
+                out = enrich_with_ranks(out)
+                out = extract_rank_metrics(out,str(model_dir).split(os.sep)[-1])
+                num_b = len(results)
+                out["total benchmarks"] = num_b
+                aggregate = aggregate | out   
+
+            statistics = {}
+            for entry in os.listdir(model_dir):
+                entry_path = os.path.join(model_dir, entry)
+                if os.path.isdir(entry_path):
+                    stat_file = os.path.join(entry_path, "statistics.json")
+                    if os.path.exists(stat_file) and os.path.isfile(stat_file):
+                        try:
+                            with open(stat_file, "r", encoding="utf-8") as sf:
+                                sf_data = json.load(sf)
+                                sf_data["name"] = router.state.attacks[entry.lower()].name
+                                sf_data["risk"] = 0.5
+                                sf_data["num_queries"] = 1
+                                sf_data["power"] = 0.5
+                                statistics[entry.upper()] = sf_data
+                        except Exception as e:
+                            logging.warning(f"Could not load statistics.json in '{entry_path}': {e}")
+            
+            report_data = {
+                "info":info,
+                "metrics": aggregate,
+                "attacks": statistics
+            }
+            if prototype:
+                report_data["prototype"] = prototype
+            report_data["tool"] = "nntrust"
+
+            with open(os.path.join(task_dir,"report.json"), "w", encoding="utf-8") as f:
+                json.dump(report_data, f)
+
 
         if pdf_report and bool(pdf_report)==True:
             generator = AdversarialReportGenerator(logo_path='./resources/logo_leonardo.png')
@@ -216,9 +298,6 @@ def get_jobs_results(id: str = Query(None),
                 pdf_bytes = pdf_file.read()
                 return base64.b64encode(pdf_bytes).decode('utf-8')
         else:
-            if prototype:
-                report_data["prototype"] = prototype
-            report_data["tool"] = "nntrust"
             return report_data
 
         
@@ -276,6 +355,9 @@ def get_jobs_results(dataset : str = Query(...), task : str = Query(None), id : 
                 status_code=500,
                 content=Error(code=500, message=f"Unexpected error during get result").model_dump_json())
 
+@router.get("/report/getReports")
+def get_reports():
+    return read_all_reports(os.environ.get("BENCHMARK_OUTPUT_DIR"))
 
 # --- Start --- #
 @router.post("/start", response_model=str)
@@ -401,7 +483,6 @@ async def start_benchmark_job(body: ExecutionConfig = Body(...)) -> Union[str,Er
         return Response(
                 status_code=500,
                 content=Error(code=500, message=f"Unexpected error during job start").model_dump_json())
-
 
 # --- Single attack --- #
 @router.post("/attack")
