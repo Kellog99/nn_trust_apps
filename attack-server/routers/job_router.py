@@ -1,4 +1,4 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse
 import importlib
 from typing import Union, Optional
@@ -285,6 +285,7 @@ def get_jobs_results(id: str = Query(None),
             if prototype:
                 report_data["prototype"] = prototype
             report_data["tool"] = "nntrust"
+            report_data["dataset"] = str(model_dir).split(os.sep)[-2]
 
             with open(os.path.join(task_dir,"report.json"), "w", encoding="utf-8") as f:
                 json.dump(report_data, f)
@@ -358,6 +359,25 @@ def get_jobs_results(dataset : str = Query(...), task : str = Query(None), id : 
 @router.get("/report/getReports")
 def get_reports():
     return read_all_reports(os.environ.get("BENCHMARK_OUTPUT_DIR"))
+
+@router.post("/report/upload")
+async def upload_report(request : Request):
+    try:
+        report = await request.json()
+        if "info" not in report:
+            raise Exception("Info not in the report.")
+        if "name" not in report["info"]:
+            raise Exception("Model name not in the report.")
+        if "dataset" not in report:
+            raise Exception("Dataset name not in the report.")
+        
+        _, task_dir = find_model_and_task_dir(os.environ.get("BENCHMARK_OUTPUT_DIR"),report["dataset"],report["info"]["name"],None)
+        with open(os.path.join(task_dir,"report.json"), 'w') as f:
+            json.dump(report, f, indent=2)
+        return Response()
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error saving JSON: {str(e)}")
 
 # --- Start --- #
 @router.post("/start", response_model=str)
