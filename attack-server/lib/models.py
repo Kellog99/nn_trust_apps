@@ -34,12 +34,9 @@ class JobConfig(BaseModel):
     model: str = Field(..., example='resnet50')
 
 class AttackConfig(BaseModel):
-    attack_name: str
-    model_name : str
     image: str
-    p: float = 2.0
-    epsilon: float = 50.0
-    max_iters: int = 30
+    model_name : str
+    attack : Any
 
 class Error(BaseModel):
     code: int
@@ -137,5 +134,16 @@ class BenchmarkModelProps(BaseModel):
     task: str
     benchmark_id : str
     metrics: Dict[str, float | int]
+
+class SingleAttackProps(BaseModel):
+    x: str
+    x_adv: str
+    adv_perturbation: str
+    original_prediction: str
+    adversarial_prediction: str
+    # the first is the confidence of the original class while the second is the confidence of the most probable class during each iteration
+    confidence: tuple[list[float], list[float]]
+    # Container of all the possible metrics that can be useful
+    advance_metrics: dict[str, float]
 
 

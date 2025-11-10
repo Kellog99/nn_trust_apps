@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse
 import importlib
 from typing import Union, Optional
-from lib.models import Error, ExecutionConfig
+from lib.models import Error, ExecutionConfig, SingleAttackProps
 from lib.disk_reader import find_model_and_task_dir, collect_dataset_aggregates_with_info
 from lib.attack_utils import transform_to_benchmark, enrich_with_ranks
 from lib.pdf_report import AdversarialReportGenerator
@@ -23,10 +23,13 @@ import PIL
 import torch
 from nn_trust.attack import EvasionAttackFactory, EvasionAttackConfig
 from nn_trust.core import ModelAdapter, Task, Knowledge
+from torchmetrics.image import StructuralSimilarityIndexMeasure
+import time
+import numpy
 import logging
 from torchvision import transforms
 import PIL
-
+import copy
 
 benchmarking = importlib.import_module("benchmarking")
 
@@ -492,7 +495,7 @@ async def start_benchmark_job(body: ExecutionConfig = Body(...)) -> Union[str,Er
 
         benchmark_config['datasets'] = [config_dataset]
         benchmark_config['models'] = [config_models]
-        benchmark_config['attacks'] = body.attacks
+        benchmark_config['attacks'] = [{param["label"]:param["default"] for param in attack["parameters"]} | {"name":attack["id"]} for attack in body.attacks]
         benchmark_config['evaluation'] = {}
         benchmark_config["evaluation"]["statistics"] = body.metrics
         task_id = benchmarking.benchmark(benchmark_config,executor)
@@ -506,7 +509,7 @@ async def start_benchmark_job(body: ExecutionConfig = Body(...)) -> Union[str,Er
 
 # --- Single attack --- #
 @router.post("/attack")
-async def start_singleattack_job(body: models.AttackConfig) -> Optional[Error]:
+async def start_singleattack_job(body : models.AttackConfig = Body(...)) -> Optional[Error]:
     """
     Start a new TITANN attack on single image job.
     """
@@ -582,8 +585,8 @@ async def start_singleattack_job(body: models.AttackConfig) -> Optional[Error]:
             model_weights_path=config_models.get("weights_path", None),
             model_task=config_models.get("task")
         )
-        
-        def run_attack(model_ad, img: PIL.Image,attack_name:str,epsilon:float,p:float,max_iters:int):
+
+        def run_attack(model_ad, img: PIL.Image, attack_name: str, config: dict):
             device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
             logging.info(f"Running attack on {device}")
 
@@ -592,53 +595,76 @@ async def start_singleattack_job(body: models.AttackConfig) -> Optional[Error]:
             model_ad.model.eval()
             model_ad.model.to(device)
 
+            confs = copy.deepcopy(config)
+            confs.pop("epsilon", None)
+            confs.pop("p", None)
+            confs.pop("max_iters", None)
             cnf = EvasionAttackFactory.get_config(
                 attack_type=attack_name,
                 model=model_ad,
                 task=Task.Classification,
                 device=device,
                 verbose=True,
-                epsilon=epsilon,
-                p=p,
-                max_iters=max_iters
+                **confs
                 )
-
+            
             atk = EvasionAttackFactory.create_attack(attack_type=attack_name, config=cnf)
             labels = model_ad(img).argmax(1)
             labels_ohe = torch.nn.functional.one_hot(labels, num_classes=1000)
+            start = time.time()
             x_adv = atk.generate(x=img, y=labels_ohe)
+            end = time.time()
             labels_adv = model_ad(x_adv).argmax(1)
-            return transforms.ToPILImage()(x_adv[0]), labels.item(), labels_adv.item()
+            return transforms.ToPILImage()(x_adv[0]), x_adv, labels_adv.item(), x_adv - img, img, end-start
         
-        adv_img, y, y_adv = run_attack(
+        params = {}
+        for param in body.attack["parameters"]:
+            params[param["label"]] = param["default"]
+
+        adv_img, x_adv, y_adv, pert, tensor_image, execution_time = run_attack(
             model_ad=model_ad,
             img=image,
-            attack_name=body.attack_name,
-            p=body.p,
-            epsilon=body.epsilon,
-            max_iters=body.max_iters
+            attack_name=body.attack["id"],
+            config=params
         )
         
         # Prepare image data to return
         buffered = io.BytesIO()
         adv_img.save(buffered, format="PNG")
         adv_img_base64 = base64.b64encode(buffered.getvalue()).decode("utf-8")
-        #TODO:adapt output 
-        result_data = {
-            "status": "success",
-            "adv_img": adv_img_base64,
-            "y": y,
-            "y_adv": y_adv
-        }
+
+        buffered = io.BytesIO()
+        pert_image = transforms.ToPILImage()(pert[0])
+        pert_image.save(buffered, format="PNG")
+        pert_image_base64 = base64.b64encode(buffered.getvalue()).decode("utf-8")
+        
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        # Execute the attack and get results
+        ssim = StructuralSimilarityIndexMeasure().to(device)
+        out =  SingleAttackProps(
+            x=body.image,
+            adv_perturbation=pert_image_base64,
+            x_adv=adv_img_base64,
+            original_prediction="original",
+            adversarial_prediction="adversarial",
+            confidence=([],
+                        []),
+            advance_metrics={
+                "ssim": ssim(tensor_image, x_adv).item(),
+                "distance": torch.norm(pert, p=1).item(),
+                "executionTime": execution_time
+            })
+        ### ------------- ###
 
         return Response(
             status_code=200, 
-            content=json.dumps(result_data), 
+            content=out.model_dump_json(), 
             media_type="application/json"
         )
 
     except Exception as e:
         logging.error(f"Unexpected error during attack: {str(e)}")
+        
         return Response(
                 status_code=500,
                 content=Error(code=500, message=f"Unexpected error during attack").model_dump_json())
