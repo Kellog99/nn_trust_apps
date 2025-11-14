@@ -1,4 +1,4 @@
-from .main import benchmark_, benchmark, postprocess_benchmark_run_results
+from .main import benchmark, postprocess_benchmark_run_results
 from .benchmark_utils import (read_config_file,
                     BenchmarkConfig,
                     BenchmarkConfigModel,

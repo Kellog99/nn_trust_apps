@@ -495,7 +495,11 @@ async def start_benchmark_job(body: ExecutionConfig = Body(...)) -> Union[str,Er
 
         benchmark_config['datasets'] = [config_dataset]
         benchmark_config['models'] = [config_models]
-        benchmark_config['attacks'] = [{param["label"]:param["default"] for param in attack["parameters"]} | {"name":attack["id"]} for attack in body.attacks]
+        benchmark_config['attacks'] = [
+            {param["label"]: param["default"] for param in attack.get("parameters", [])}
+            | {"name": attack["name"]}
+            for attack in body.attacks
+]
         benchmark_config['evaluation'] = {}
         benchmark_config["evaluation"]["statistics"] = body.metrics
         task_id = benchmarking.benchmark(benchmark_config,executor)
