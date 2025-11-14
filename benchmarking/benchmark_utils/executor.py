@@ -15,7 +15,9 @@ import re
 from ray.util import ActorPool
 from datetime import datetime
 from fastapi.encoders import jsonable_encoder
+from typing import Union
 import asyncio
+from ray.util.scheduling_strategies import NodeAffinitySchedulingStrategy
 
 class Executor(ABC):
     @abstractmethod
@@ -228,10 +230,22 @@ class RayActorPoolExecutor(Executor):
     def __init__(self,
                  num_actors: Optional[int] = None,
                 ):
+        os.environ["RAY_OVERRIDE_ENVIRONMENT_VARIABLES_ALLOWLIST"] = "*"
+        modules = os.environ.get("RAY_PY_MODULES", None)
+        if modules:
+            ray.init(ignore_reinit_error=True, runtime_env={
+                "py_modules": [modules]
+            })
         self.num_actors = num_actors
+        self.use_event_loop = True
         self.actors = []
         self.pool = None
-        self.tracker = ProgressTracker.remote()
+        self.tracker = ProgressTracker.options(
+            scheduling_strategy=NodeAffinitySchedulingStrategy(
+                node_id=ray.get_runtime_context().get_node_id(),
+                soft=False
+            )
+        ).remote()
 
     def _create_actors(self, n: int) -> List[Any]:
         actors = []
@@ -242,49 +256,71 @@ class RayActorPoolExecutor(Executor):
         self.pool = ActorPool(actors)
         return actors
 
-    def execute_plan(self, plan: Plan, benchmark_id : str, use_event_loop : bool = True) -> List[Any]:
-        initial_action = plan.action
-        initial_params = plan.params
-        initial_action(**initial_params)
-        worker_action = plan.worker_action
-        task_confs = plan.worker_params
-        num_tasks = len(task_confs)
-        if num_tasks == 0:
-            return []
-    
-        num_actors = self.num_actors or min(num_tasks, len(task_confs))
+    def execute_plan(self, plans: Union[Plan, List[Plan]], benchmark_id: str) -> List[Any]:
+        # Convert single plan to list for uniform processing
+        if not isinstance(plans, list):
+            plans = [plans]
+        
+        # Collect all tasks from all plans
+        all_tasks = []
+        
+        for plan in plans:
+            initial_action = plan.action
+            initial_params = plan.params
+            initial_action(**initial_params)
+            
+            worker_action = plan.worker_action
+            task_confs = plan.worker_params
+            
+            # Skip plans with no tasks
+            if len(task_confs) == 0:
+                continue
+            
+            # Process tasks for this plan
+            for _, worker_conf in task_confs.items():
+                worker_conf["tracker"] = self.tracker
+                worker_conf["benchmark_id"] = benchmark_id
+                worker_conf["num_tasks"] = len(task_confs)
+                
+                if "id" in worker_conf["attack_config"]:
+                    atk_id = worker_conf["attack_config"]["id"]
+                else:
+                    atk_id = worker_conf["attack_config"]["name"]
+                
+                self.tracker.create_task.remote(
+                    f"{atk_id}_{benchmark_id}",
+                    "attack",
+                    benchmark_id=benchmark_id,
+                    num_tasks=len(task_confs)
+                )
+                
+                all_tasks.append((worker_action, worker_conf, plan.dataset, plan.model))
+        
+        # If no tasks collected from any plan, return benchmark_id
+        if len(all_tasks) == 0:
+            return benchmark_id
+        
+        # Create actors based on total number of tasks
+        num_tasks = len(all_tasks)
+        num_actors = self.num_actors or min(num_tasks, num_tasks)
         num_actors = max(1, min(num_actors, num_tasks))
-
+        
         if not self.actors or len(self.actors) != num_actors:
             self._create_actors(num_actors)
-
-        tasks = []
-        for _, worker_conf in task_confs.items():
-            worker_conf["tracker"] = self.tracker
-            worker_conf["benchmark_id"] = benchmark_id
-            worker_conf["num_tasks"] = num_tasks
-            if "id" in worker_conf["attack_config"]:
-                atk_id = worker_conf["attack_config"]["id"]
-            else:
-                atk_id = worker_conf["attack_config"]["name"]
-            self.tracker.create_task.remote(f"{atk_id}_{benchmark_id}","attack", benchmark_id = benchmark_id, num_tasks=num_tasks)
-            tasks.append((worker_action, worker_conf, plan.dataset, plan.model))
-        if use_event_loop==True:
+        
+        # Execute all tasks
+        if self.use_event_loop == True:
             async def launch_tasks():
                 loop = asyncio.get_event_loop()
-                
                 loop.run_in_executor(None, lambda: list(self.pool.map_unordered(
                     lambda actor, args: actor.execute_worker.remote(*args),
-                    tasks
+                    all_tasks
                 )))
-
             asyncio.create_task(launch_tasks())
-
         else:
-           list(self.pool.map_unordered(
-                    lambda actor, args: actor.execute_worker.remote(*args),
-                    tasks
-                )) 
-
-
+            list(self.pool.map_unordered(
+                lambda actor, args: actor.execute_worker.remote(*args),
+                all_tasks
+            ))
+        
         return benchmark_id

@@ -1,7 +1,6 @@
 import os
 import random
 from pathlib import Path
-
 import numpy
 import timm
 from PIL import Image as PILImage
@@ -12,10 +11,21 @@ from torch.utils.data import DataLoader, Subset
 from torchvision import transforms
 from torchvision.datasets import ImageFolder
 from torchvision.models import resnet50
-
 from nn_trust.core import ModelAdapter
 from .imagenet2012_loader import ImageNetTrainDataset
 from .model_library import models_library
+
+def resolve_path(path: str) -> str:
+    """
+    Returns an absolute path. If the given path is not absolute,
+    it prepends a root path read from the environment variable ROOT_PATH.
+    """
+    root = os.getenv("DATASETS_REPO", "default")
+    if root=="default":
+        raise Exception("Env varible DATASETS_REPO must be specified.")
+    if os.path.isabs(path):
+        return Exception("When performing benchmarking multi node or from attack server, dataset paths must be relative.")
+    return os.path.join(root, path)
 
 
 class ImageDatasetFolder(ImageFolder):
