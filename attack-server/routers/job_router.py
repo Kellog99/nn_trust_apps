@@ -3,9 +3,7 @@ from fastapi.responses import JSONResponse
 import importlib
 from typing import Union, Optional
 from lib.models import Error, ExecutionConfig, SingleAttackProps
-from lib.disk_reader import find_model_and_task_dir, collect_dataset_aggregates_with_info
-from lib.attack_utils import transform_to_benchmark, enrich_with_ranks
-from lib.pdf_report import AdversarialReportGenerator
+from lib.disk_reader import find_model_and_task_dir
 from lib import models
 from fastapi import Response, Query, Body
 import json
@@ -16,16 +14,14 @@ import os
 from PIL import Image
 from routers.dataset_router import get_datasets
 from routers.model_router import get_models
-from routers.info_router import get_attacks_info
 import ray
 from pathlib import Path
 import PIL
 import torch
 from nn_trust.attack import EvasionAttackFactory, EvasionAttackConfig
-from nn_trust.core import ModelAdapter, Task, Knowledge
+from nn_trust.core import Task
 from torchmetrics.image import StructuralSimilarityIndexMeasure
 import time
-import numpy
 import logging
 from torchvision import transforms
 import PIL
@@ -41,7 +37,7 @@ if not hasattr(router, "state"):
     router.state = _RouterState()
     
 if not hasattr(router.state, "attacks"):
-    router.state.attacks = get_attacks_info()
+    router.state.attacks = benchmarking.get_attacks_info()
 
 # Setting up number of actors and executor
 num_actors = int(os.environ.get("RAY_NUM_ACTORS",1))
@@ -73,24 +69,6 @@ def has_aggregate(task_dir: str, dataset: str) -> bool:
     if not dataset_dir.is_dir():
         return False
     return any(p.name == "aggregate.json" for p in dataset_dir.rglob("aggregate.json"))
-
-def extract_rank_metrics(models, model_name):
-    """
-    Given a list of model dictionaries and a model name, extract all metrics
-    whose keys end with '_rank' for that model.
-
-    Parameters:
-        models (list): List of model dictionaries.
-        model_name (str): Name of the model to search for.
-
-    Returns:
-        dict: A dictionary of metrics ending with '_rank', or an empty dict if not found.
-    """
-    for model in models:
-        if model.get("name") == model_name:
-            metrics = model.get("metrics", {})
-            return {k: v for k, v in metrics.items() if k.endswith("_rank")}
-    return {}    
 
 def find_image(start_dir: str):
     """
@@ -241,8 +219,7 @@ def get_jobs_results(id: str = Query(None),
             #----# thumbnail
             try:
                 import requests
-                #TODO: to add in the env
-                prototype = json.loads(requests.get("http://localhost:8000/getDataset?dataset=animals").text)["prototype"]["datas"][0]
+                prototype = json.loads(requests.get(f"http://{os.getenv('DQ_HOST')}:{os.getenv('DQ_PORT')}/getDataset?dataset=animals").text)["prototype"]["datas"][0]
             except Exception as e:
                 prototype = find_image(os.path.join(os.environ.get("DATASETS_REPO"),str(model_dir).split(os.sep)[-2]))
             #----#
@@ -250,15 +227,15 @@ def get_jobs_results(id: str = Query(None),
             with open(os.path.join(model_dir,'aggregate_statistics.json'), "r", encoding="utf-8") as f:
                 aggregate = json.load(f)
                 aggregate["params"] = info["parameters"]
-                results = collect_dataset_aggregates_with_info(
+                results = benchmarking.collect_dataset_aggregates_with_info(
                     base_dir=os.environ.get("BENCHMARK_OUTPUT_DIR"),
                     dataset=str(model_dir).split(os.sep)[-2],
                     keep_latest_only=False,
                 )
 
-                out = transform_to_benchmark(results,task="classification")
-                out = enrich_with_ranks(out)
-                out = extract_rank_metrics(out,str(model_dir).split(os.sep)[-1])
+                out = benchmarking.transform_to_benchmark(results,task="classification")
+                out = benchmarking.enrich_with_ranks(out)
+                out = benchmarking.extract_rank_metrics(out,str(model_dir).split(os.sep)[-1])
                 num_b = len(results)
                 out["total benchmarks"] = num_b
                 aggregate = aggregate | out   
@@ -295,7 +272,7 @@ def get_jobs_results(id: str = Query(None),
 
 
         if pdf_report and bool(pdf_report)==True:
-            generator = AdversarialReportGenerator(logo_path='./resources/logo_leonardo.png')
+            generator = benchmarking.AdversarialReportGenerator(logo_path='./resources/logo_leonardo.png')
             report_file = './resources/adversarial_report.pdf'
             generator.generate(report_data, report_file)
             with open(report_file, 'rb') as pdf_file:

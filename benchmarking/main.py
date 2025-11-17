@@ -5,8 +5,6 @@ import logging
 import traceback
 from datetime import datetime
 import pathlib
-from typing import Optional, List
-from pydantic import BaseModel
 import base64
 from nn_trust.attack.evaluation.composer import ConfigStatisticComposer, StatisticComposer
 
@@ -20,14 +18,13 @@ try:
     )
     from benchmark_utils.executor import RayActorPoolExecutor, Executor
     from benchmark_utils.utils import resolve_path
-    from benchmark_utils.to_transfer_functions import (
+    from benchmark_utils.report_functions import (
     collect_dataset_aggregates_with_info, 
     enrich_with_ranks, extract_rank_metrics, 
     get_attacks_info, 
-    transform_to_benchmark,
-    AdversarialReportGenerator,
-    find_model_and_task_dir
+    transform_to_benchmark
     )
+    from benchmark_utils.pdf_report import AdversarialReportGenerator
 except ModuleNotFoundError:
     # when used from attack.server it need to import as if working as a module
     from .benchmark_utils import (
@@ -39,14 +36,13 @@ except ModuleNotFoundError:
     )
     from .benchmark_utils.executor import RayActorPoolExecutor, Executor
     from .benchmark_utils.utils import resolve_path
-    from .benchmark_utils.to_transfer_functions import (
+    from .benchmark_utils.report_functions import (
     collect_dataset_aggregates_with_info, 
     enrich_with_ranks, extract_rank_metrics, 
     get_attacks_info, 
-    transform_to_benchmark,
-    AdversarialReportGenerator,
-    find_model_and_task_dir
+    transform_to_benchmark
     )
+    from .benchmark_utils.pdf_report import AdversarialReportGenerator
 
 
 # --- Bencharking functions --- #
@@ -74,7 +70,7 @@ def benchmark_single_node_serial(config: dict):
         json.dump(config, f)
     return str(output_path)
 
-def benchmark_multi_node_parallel(config: dict, executor : Executor, num_gpus_per_actor: int = None):
+def benchmark_multi_node_parallel(config: dict, executor : Executor, num_gpus_per_worker: int = None):
     plans = []
     output_path = Path(config["options"]["output_path"])
     benchmark_id = datetime.now().strftime("%Y%m%dT%H%M%S")
@@ -90,8 +86,8 @@ def benchmark_multi_node_parallel(config: dict, executor : Executor, num_gpus_pe
             try:
                 evaluator = Evaluator.from_config(config=config, dataset=dataset, model_config=model_config)
                 plan = evaluator.plan_attacks_evaluation()
-                if num_gpus_per_actor is not None:
-                    os.environ["FRACTION_FOR_GPU_ACTOR"]=str(num_gpus_per_actor)
+                if num_gpus_per_worker is not None:
+                    os.environ["FRACTION_FOR_GPU_ACTOR"]=str(num_gpus_per_worker)
                 plans.append(plan)
                 logging.warning(f"Evaluation results for {dataset["name"]}/{model_config["name"]} are saved to {output_path}")
             except Exception as e:
@@ -109,7 +105,7 @@ def benchmark_multi_node_parallel(config: dict, executor : Executor, num_gpus_pe
         json.dump(config, f)
     return str(output_path)
 
-def benchmark_single_node_parallel(config: dict,  executor : Executor, num_gpus_per_actor: int = None):
+def benchmark_single_node_parallel(config: dict,  executor : Executor, num_gpus_per_worker: int = None):
     plans = []
     output_path = Path(config["options"]["output_path"])
     benchmark_id = datetime.now().strftime("%Y%m%dT%H%M%S")
@@ -125,8 +121,8 @@ def benchmark_single_node_parallel(config: dict,  executor : Executor, num_gpus_
             try:
                 evaluator = Evaluator.from_config(config=config, dataset=dataset, model_config=model_config)
                 plan = evaluator.plan_attacks_evaluation()
-                if num_gpus_per_actor is not None:
-                    os.environ["FRACTION_FOR_GPU_ACTOR"]=str(num_gpus_per_actor)
+                if num_gpus_per_worker is not None:
+                    os.environ["FRACTION_FOR_GPU_ACTOR"]=str(num_gpus_per_worker)
                 plans.append(plan)
                 logging.warning(f"Evaluation results for {dataset["name"]}/{model_config["name"]} are saved to {output_path}")
             except Exception as e:
@@ -203,31 +199,30 @@ def postprocess_benchmark_run_results(benchmark_run_dir: str | pathlib.Path, ver
                     traceback.print_exc()
 
 def create_benchmark_report(benchmark_run_dir: str | pathlib.Path, 
-                            output_path : str, 
-                            task_id : str = None,
-                            model_name : str = None, 
-                            dataset_name : str = None, 
+                            model_name : str, 
+                            dataset_name : str, 
+                            output_path : str = os.getcwd(),
                             pdf_report: bool = False):
-    model_dir, task_dir = find_model_and_task_dir(base_dir=benchmark_run_dir, dataset=dataset_name, model=model_name, task_id=task_id)
-
-    dataset_name = str(model_dir).split(os.sep)[-2]
-    model_name = str(model_dir).split(os.sep)[-1]
+    
+    model_dir = os.path.join(benchmark_run_dir, dataset_name, model_name)
 
     with open(os.path.join(model_dir,'info.json'), "r", encoding="utf-8") as f:
                 info = json.load(f)
 
+    parts = benchmark_run_dir.split(os.sep)
+    parent_benchmark_dir = os.sep.join(parts[:-1])  
     with open(os.path.join(model_dir,'aggregate_statistics.json'), "r", encoding="utf-8") as f:
         aggregate = json.load(f)
         aggregate["params"] = info["parameters"]
-        results = collect_dataset_aggregates_with_info(
-            base_dir=benchmark_run_dir,
+        results = collect_dataset_aggregates_with_info( #TODO: adapt this
+            base_dir=parent_benchmark_dir,
             dataset=dataset_name,
             keep_latest_only=False,
         )
 
-        out = transform_to_benchmark(results,task="classification")
-        out = enrich_with_ranks(out)
-        out = extract_rank_metrics(out,model_name)
+        out = transform_to_benchmark(results,task="classification") #TODO: adapt this
+        out = enrich_with_ranks(out) #TODO: adapt this
+        out = extract_rank_metrics(out,model_name) #TODO: adapt this
         num_b = len(results)
         out["total benchmarks"] = num_b
         aggregate = aggregate | out   
@@ -271,13 +266,13 @@ def create_benchmark_report(benchmark_run_dir: str | pathlib.Path,
 def benchmark(config: dict, executor: Executor):
     return benchmark_from_attack_server(config, executor=executor)
 
-def benchmark_from_main(config: dict, mode : str, executor : Executor, num_gpus_per_actor: int = None):
+def benchmark_from_main(config: dict, mode : str, executor : Executor, num_gpus_per_worker: int = None):
     if mode=="single_node_serial": 
         return benchmark_single_node_serial(config)
     elif mode=="single_node_parallel":
-        return benchmark_single_node_parallel(config, executor=executor, num_gpus_per_actor=num_gpus_per_actor)
+        return benchmark_single_node_parallel(config, executor=executor, num_gpus_per_worker=num_gpus_per_worker)
     elif mode=="multi_node_parallel":
-        return benchmark_multi_node_parallel(config, executor=executor, num_gpus_per_actor=num_gpus_per_actor)
+        return benchmark_multi_node_parallel(config, executor=executor, num_gpus_per_worker=num_gpus_per_worker)
     else:
         raise ValueError(f"Benchmark mode {mode} not supported.")
 
@@ -296,25 +291,25 @@ def main():
     config = BenchmarkConfig(**config)
 
     # --- TO ADD IN THE ARGUMENT PARSER --- #
-    mode = "multi_node_parallel"
+    mode = "single_node_parallel"
     num_workers = 1
     num_gpus_per_worker = 1
     executor_type = "ray"
     executor = executors_factory(executor_type=executor_type, num_workers=num_workers)
     executor.use_event_loop = False
-    # ---------------------------- #
+    # ------------------------------------- #
 
     benchmark_from_main(config.model_dump(), 
                         mode=mode, 
                         executor=executor, 
-                        num_gpus_per_actor=num_gpus_per_worker)
+                        num_gpus_per_worker=num_gpus_per_worker)
    
 def save():
-    postprocess_benchmark_run_results("/home/cristiano-carta/Desktop/output/20251114T182349")
-    create_benchmark_report(benchmark_run_dir="/home/cristiano-carta/Desktop/output/",
-                            dataset_name="wateranimals",
-                            model_name="resnet50",
-                            output_path="/home/cristiano-carta/Desktop",
+    postprocess_benchmark_run_results("/home/cristiano-carta/Desktop/output/20251117T114235")
+    create_benchmark_report(benchmark_run_dir="/home/cristiano-carta/Desktop/output/20251117T114235",
+                            dataset_name="landanimals",
+                            model_name="convnext_base.clip_laion2b_augreg_ft_in12k_in1k",
+                            output_path="/home/cristiano-carta/Desktop/output",
                             pdf_report=True)
 
 

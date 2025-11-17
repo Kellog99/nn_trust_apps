@@ -14,7 +14,6 @@ import ray
 import re
 from ray.util import ActorPool
 from datetime import datetime
-from fastapi.encoders import jsonable_encoder
 from typing import Union
 import asyncio
 from ray.util.scheduling_strategies import NodeAffinitySchedulingStrategy
@@ -57,17 +56,20 @@ def update_dataset_root_obj(dataset: dict, new_root: str):
 def resolve_path(path: str) -> str:
     """
     Returns an absolute path. If the given path is not absolute,
-    it prepends a root path read from the environment variable ROOT_PATH.
+    it prepends a root path read from the environment variable DATASETS_REPO.
+    Raises an exception if path is relative and DATASETS_REPO is not set.
     """
-    root = os.getenv("DATASETS_REPO",None)
-    if not root:
-        raise Exception("When performing parallel attacks, a DATASET_REPO env variable must be specified for every node!")
     if os.path.isabs(path):
         return path
-    else:
-        p = path
-    return os.path.join(root, p)   
-
+    
+    root = os.getenv("DATASETS_REPO", None)
+    if root is None:
+        raise Exception(
+            "Relative path provided but DATASETS_REPO environment variable is not set. "
+            "Please set DATASETS_REPO or provide an absolute path."
+        )
+    
+    return os.path.join(root, path)
 BENCHMARK_ID_REGEX = re.compile(r'^\d{8}T\d{6}$')  # adjust if your benchmark id format differs
 
 def _iter_dirs(path: str):
@@ -141,13 +143,14 @@ class ProgressTracker:
                              benchmark_id=task["benchmark_id"])
 
     def create_task(self, task_id: str, task_type: str, **kwargs) -> str:
+        now = datetime.now()
         self.tasks[task_id] = {
             "task_type": task_type,
             "status": "created",
             "progress": 0,
             "message": "Task created",
-            "created_at": jsonable_encoder(datetime.now()),
-            "updated_at": jsonable_encoder(datetime.now()),
+            "created_at": now.isoformat(),
+            "updated_at": now.isoformat(),
             "error": None,
             "result": None,
             **kwargs
@@ -156,9 +159,10 @@ class ProgressTracker:
 
     def update_progress(self, task_id: str, status: str, progress: int = None, message: str = None, error: str = None, result: Any = None):
         if task_id in self.tasks:
+            now = datetime.now()
             task = self.tasks[task_id]
             task["status"] = status
-            task["updated_at"] = jsonable_encoder(datetime.now())
+            task["updated_at"] = now.isoformat()
             if progress is not None:
                 task["progress"] = progress
             if message is not None:
@@ -184,7 +188,6 @@ class ProgressTracker:
     def execute(self, func, *args, **kwargs):
         """Execute a callable with the wrapper."""
         return self.wrapper(func, *args, **kwargs)
-
 
 @ray.remote(num_gpus=float(os.environ.get("FRACTION_FOR_GPU_ACTOR",1)))
 class GPUActor:
@@ -221,7 +224,6 @@ class GPUActor:
         worker_conf["model"] = self.model
          
         return worker_action(**worker_conf)
-
 
 
 
