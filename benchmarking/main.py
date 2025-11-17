@@ -290,7 +290,7 @@ def main():
     config = read_config_file(config_filename=str(selected_config_path))
     config = BenchmarkConfig(**config)
 
-    # --- TO ADD IN THE ARGUMENT PARSER --- #
+    # --- TO ADD IN THE CONFIG --- #
     mode = "single_node_parallel"
     num_workers = 1
     num_gpus_per_worker = 1
