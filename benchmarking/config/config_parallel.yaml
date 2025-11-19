@@ -16,15 +16,19 @@ options:
   gpu: true
   output_path: "/home/cristiano-carta/Desktop/output" # Path to the output folder
   output_format: "report"                             # "report" or "test"
+  mode : "multi_node_parallel"
+  num_workers : 1
+  num_gpus_per_worker : 1
+  executor_type : "ray"
 
 datasets:
-  - name: "wateranimals"             # Dataset name
-    num_classes: 78
-    subset: 50
-    batch: 32
+  - name: "animals"             # Dataset name
+    num_classes: 90
+    subset: 100
+    batch: 20
     type_dataset: 2
     num_workers: 2
-    source_path: "/home/cristiano-carta/Desktop/datasets/wateranimals/data"
+    source_path: "animals/data"
     transform_config:
       size: 256
       crop: 224
@@ -37,7 +41,7 @@ datasets:
   #  batch: 32
   #  type_dataset: 2
   #  num_workers: 2
-  #  source_path: "/home/cristiano-carta/Desktop/datasets/landanimals/data"
+  #  source_path: "landanimals/data"
   #  transform_config:
   #    size: 256
   #    crop: 224
@@ -46,11 +50,11 @@ datasets:
   #    std: [0.2639, 0.2518, 0.2521]
 
 models:
-  - name: 'convnext_base.clip_laion2b_augreg_ft_in12k_in1k'
-    type: 'timm'
-    pretrained: true
-    num_classes: 1000
-    task: "classification"
+  #- name: 'convnext_base.clip_laion2b_augreg_ft_in12k_in1k'
+  #  type: 'timm'
+  #  pretrained: true
+  #  num_classes: 1000
+  #  task: "classification"
   - name: 'resnet50'
     type: 'timm'
     pretrained: true
@@ -58,9 +62,29 @@ models:
     task: "classification"
 
 attacks:
-  - name: 'fgsm'
-    max_iters: 50
-  - name: 'pgd'
-    max_iters: 50
+#  - name: 'autozoom'
   - name: 'banditprior'
-    max_iters: 100
+#  - name: 'binary'
+#  - name: 'blackboxtransfer'
+#  - name: 'boundary'
+#  - name: 'contrastbaseline'
+#  - name: 'dag'
+#  - name: 'deepfool'
+#  - name: 'du'
+#  - name: 'fgsm'
+#  - name: 'fuap'
+  - name: 'gaussianbaseline'
+#  - name: 'gduap'
+#  - name: 'geoda'
+#  - name: 'identitybaseline'
+#  - name: 'localsearch'
+#  - name: 'patchfgsm'
+#  - name: 'patchpgd'
+#  - name: 'pgd'
+#  - name: 'pgdkde'
+#  - name: 'priorgd'
+#  - name: 'saltnpeppernoisebaseline'
+#  - name: 'signopt'
+  - name: 'simba'
+#  - name: 'uniformbaseline'
+  - name: 'zoo'

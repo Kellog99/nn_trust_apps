@@ -41,12 +41,13 @@ if not hasattr(router.state, "attacks"):
 
 # Setting up number of actors and executor
 num_actors = int(os.environ.get("RAY_NUM_ACTORS",1))
+num_gpu_per_actors = int(os.environ.get("FRACTION_FOR_GPU_ACTOR",1))
 modules = os.environ.get("RAY_PY_MODULES",None)      
 if modules:
     ray.init(ignore_reinit_error=True,runtime_env={
         "py_modules": [modules]
     })
-executor = benchmarking.benchmark_utils.executor.RayActorPoolExecutor(num_actors=num_actors)
+executor = benchmarking.benchmark_utils.executor.RayActorPoolExecutor(num_actors=num_actors,num_gpus_per_actor=num_gpu_per_actors)
 
 # ------------------ UTILITY --------------------------
 
@@ -211,7 +212,6 @@ def get_jobs_results(id: str = Query(None),
                 report_data = json.load(f)  
             prototype=None
         else:
-
             benchmarking.postprocess_benchmark_run_results(task_dir)
             with open(os.path.join(model_dir,'info.json'), "r", encoding="utf-8") as f:
                 info = json.load(f)
@@ -318,17 +318,17 @@ def get_jobs_results(dataset : str = Query(...), task : str = Query(None), id : 
                     status_code=409,
                     content=Error(code=409, message=f"No benchmark is finished yet").model_dump_json())
         
-        results = collect_dataset_aggregates_with_info(
+        results = benchmarking.collect_dataset_aggregates_with_info(
             base_dir=os.environ.get("BENCHMARK_OUTPUT_DIR"),
             dataset=dataset,
             keep_latest_only=False
         )
         
-        out = transform_to_benchmark(results,task="classification")
+        out = benchmarking.transform_to_benchmark(results,task="classification")
         if id:
-            return [o for o in enrich_with_ranks(out) if o["benchmark_id"]!=id]
+            return [o for o in benchmarking.enrich_with_ranks(out) if o["benchmark_id"]!=id]
         else:
-            return enrich_with_ranks(out)
+            return benchmarking.enrich_with_ranks(out)
     
     except Exception as e:
         logging.error(f"Unexpected error during get result: {str(e)}")
@@ -470,15 +470,19 @@ async def start_benchmark_job(body: ExecutionConfig = Body(...)) -> Union[str,Er
 
         config_dataset["source_path"] = os.path.join(dataset_name,"data")
 
+        
         benchmark_config['datasets'] = [config_dataset]
         benchmark_config['models'] = [config_models]
         benchmark_config['attacks'] = [
-            {param["label"]: param["default"] for param in attack.get("parameters", [])}
-            | {"name": attack["name"]}
-            for attack in body.attacks
-]
+        {
+            "name": attack["id"],
+            **{param["label"]: param["default"] for param in attack.get("parameters", [])}
+        }
+        for attack in body.attacks
+        ]
         benchmark_config['evaluation'] = {}
         benchmark_config["evaluation"]["statistics"] = body.metrics
+        print(benchmark_config['attacks'])
         task_id = benchmarking.benchmark(benchmark_config,executor)
         return JSONResponse(status_code=200,content=task_id)
 

@@ -237,7 +237,7 @@ class RayActorPoolExecutor(Executor):
         modules = os.environ.get("RAY_PY_MODULES", None)
         if modules:
             ray.init(ignore_reinit_error=True, runtime_env={
-                "py_modules": [modules]
+                "working_dir": modules
             })
         self.num_actors = num_actors
         self.num_gpus_per_actor = num_gpus_per_actor

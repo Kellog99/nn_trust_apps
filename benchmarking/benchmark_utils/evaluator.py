@@ -66,6 +66,10 @@ class BenchmarkOptionConfig(BaseModel):
     gpu: bool
     output_path: str
     output_format: str
+    mode : Literal["single_node_parallel", "multi_node_parallel", "single_node_serial"]
+    num_workers : int
+    num_gpus_per_worker : float
+    executor_type : Literal["ray"]
 
 class BenchmarkDatasetTransformConfig(BaseModel):
     size: int
@@ -285,94 +289,100 @@ class Evaluator:
             Args:
                 atk: the attack that has to be performed.
         """
-        # INIT MODEL , DATA, STATISTICCOMPOSER, ATTACK
-        ## 1. STATISTICCOMPOSER
-        statistics_composer = StatisticComposer(config=ConfigStatisticComposer(
-            statistics=statistics,
-            num_classes=num_classes
-        ))
-        ## 2. ATTACK
-        atk_name = attack_config.pop("name")
-        atk_id = attack_config.pop("id", atk_name)
-        if "losses" in attack_config:
-            # If losses are specified, convert them to Loss objects
-            attack_config['loss'] = LossComposer(ConfigLossComposer(
-                loss=attack_config['losses'],
-                p=attack_config.get('p', 2.0),
-                loss_weights=attack_config.get('loss_weights', [1.0] * len(attack_config['losses'])),
+        try:
+            # INIT MODEL , DATA, STATISTICCOMPOSER, ATTACK
+            ## 1. STATISTICCOMPOSER
+            statistics_composer = StatisticComposer(config=ConfigStatisticComposer(
+                statistics=statistics,
+                num_classes=num_classes
             ))
-        atk = EvasionAttackFactory.create_attack(
-            atk_name,
-            model=model,
-            device=device,
-            task=Task.Classification,
-            targeted=False,
-            **attack_config
-        )
-        atk.name = atk_id
-        if model.task not in atk.TASKS:
-            raise ValueError(
-                f"\U0001F928 Attack {atk_name} does not support Model {model.name} task {model.task}.")
+            ## 2. ATTACK
+            atk_name = attack_config.pop("name")
+            atk_id = attack_config.pop("id", atk_name)
+            if "losses" in attack_config:
+                # If losses are specified, convert them to Loss objects
+                attack_config['loss'] = LossComposer(ConfigLossComposer(
+                    loss=attack_config['losses'],
+                    p=attack_config.get('p', 2.0),
+                    loss_weights=attack_config.get('loss_weights', [1.0] * len(attack_config['losses'])),
+                ))
+            atk = EvasionAttackFactory.create_attack(
+                atk_name,
+                model=model,
+                device=device,
+                task=Task.Classification,
+                targeted=False,
+                **attack_config
+            )
+            atk.name = atk_id
+            if model.task not in atk.TASKS:
+                raise ValueError(
+                    f"\U0001F928 Attack {atk_name} does not support Model {model.name} task {model.task}.")
 
-        ### PREPARE EXECUTION
-        if verbose:
-            progress_bar = enumerate(tqdm(dataloader, desc=f"Attack {atk.name} for model {model.name}"))
-        else:
-            progress_bar = enumerate(dataloader)
-
-        #tracker.create_task.remote(f"{atk_id}_{benchmark_id}","attack", benchmark_id = benchmark_id, num_tasks=num_tasks)
-        for idx, (batch, label, element_info) in progress_bar:
-            if tracker:
-                tracker.update_progress.remote(f"{atk_id}_{benchmark_id}", 
-                                               status="in_progress", 
-                                               progress=int((idx / len(dataloader)) * 100), 
-                                               message=f"Processing batch {idx+1}/{len(dataloader)}")
-            batch = batch.to(device)
-            label = label.to(device)
-            y_one_hot = torch.nn.functional.one_hot(label, num_classes=num_classes)
-            x_adv = atk.generate(
-                x=batch,
-                y=y_one_hot
-            ).detach()
-
-            with torch.no_grad():
-                out = model(batch)
-                out_adv = model(x_adv)
-            y_pred_adv = out_adv.argmax(dim=-1)
-            y_pred = out.argmax(dim=-1)
-            # adapt metrics counting for reference or standard attack
-            is_identity_atk = atk.__class__.__name__.replace("Attack", "").lower() == "identitybaseline"
-            #TODO: add mask again
-            if True:
-                y_pred = label
+            ### PREPARE EXECUTION
+            if verbose:
+                progress_bar = enumerate(tqdm(dataloader, desc=f"Attack {atk.name} for model {model.name}"))
             else:
-                mask = torch.eq(label, y_pred)
-                label = label[mask]
-                x_adv = x_adv[mask]
-                batch = batch[mask]
-                out = out[mask]
-                out_adv = out_adv[mask]
-                y_pred = y_pred[mask]
-                y_pred_adv = y_pred_adv[mask]
-            input_stat = {
-                'x_adv': x_adv.detach(),
-                'x': batch.detach(),
-                'y': label,
-                'out': out,
-                'out_adv': out_adv,
-                'y_pred': y_pred,
-                'y_pred_adv': y_pred_adv 
-            }
-            statistics_composer.update(**input_stat)
+                progress_bar = enumerate(dataloader)
 
-        statistics_results = statistics_composer.compute()
-        statistics_states = statistics_composer.get_raw_state()
-        statistics_composer.reset()
-        print("PING")
-        torch.cuda.empty_cache()
-        if tracker:
-            tracker.update_progress.remote(f"{atk_id}_{benchmark_id}", status="completed", progress=100, message=f"Completed attack {atk_id}")
-        return {"statistics": statistics_results, "statistics_states":statistics_states}
+            #tracker.create_task.remote(f"{atk_id}_{benchmark_id}","attack", benchmark_id = benchmark_id, num_tasks=num_tasks)
+            for idx, (batch, label, element_info) in progress_bar:
+                if tracker:
+                    tracker.update_progress.remote(f"{atk_id}_{benchmark_id}", 
+                                                status="in_progress", 
+                                                progress=int((idx / len(dataloader)) * 100), 
+                                                message=f"Processing batch {idx+1}/{len(dataloader)}")
+                batch = batch.to(device)
+                label = label.to(device)
+                y_one_hot = torch.nn.functional.one_hot(label, num_classes=num_classes)
+                x_adv = atk.generate(
+                    x=batch,
+                    y=y_one_hot
+                ).detach()
+
+                with torch.no_grad():
+                    out = model(batch)
+                    out_adv = model(x_adv)
+                y_pred_adv = out_adv.argmax(dim=-1)
+                y_pred = out.argmax(dim=-1)
+                # adapt metrics counting for reference or standard attack
+                is_identity_atk = atk.__class__.__name__.replace("Attack", "").lower() == "identitybaseline"
+                #TODO: add mask again
+                if True:
+                    y_pred = label
+                else:
+                    mask = torch.eq(label, y_pred)
+                    label = label[mask]
+                    x_adv = x_adv[mask]
+                    batch = batch[mask]
+                    out = out[mask]
+                    out_adv = out_adv[mask]
+                    y_pred = y_pred[mask]
+                    y_pred_adv = y_pred_adv[mask]
+                input_stat = {
+                    'x_adv': x_adv.detach(),
+                    'x': batch.detach(),
+                    'y': label,
+                    'out': out,
+                    'out_adv': out_adv,
+                    'y_pred': y_pred,
+                    'y_pred_adv': y_pred_adv 
+                }
+                statistics_composer.update(**input_stat)
+
+            statistics_results = statistics_composer.compute()
+            statistics_states = statistics_composer.get_raw_state()
+            statistics_composer.reset()
+            torch.cuda.empty_cache()
+            if tracker:
+                tracker.update_progress.remote(f"{atk_id}_{benchmark_id}", status="completed", progress=100, message=f"Completed attack {atk_id}")
+            return {"statistics": statistics_results, "statistics_states":statistics_states}
+        except Exception as e:
+            logging.error(f"Error during evaluation of attack {attack_config.get('name','unknown')} : {e}")
+            traceback.print_exc()
+            if tracker:
+                tracker.update_progress.remote(f"{atk_id}_{benchmark_id}", status="completed", progress=0, message=f"Failed attack {atk_id} with error {e}")
+            raise e
 
     def get_model_dataset_info(self) -> dict:
         batch, _, _ = next(iter(self.config.dataloader))
