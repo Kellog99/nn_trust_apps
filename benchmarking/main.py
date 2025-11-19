@@ -6,8 +6,9 @@ import traceback
 from datetime import datetime
 import pathlib
 import base64
+from typing import Optional, Tuple
 from nn_trust.attack.evaluation.composer import ConfigStatisticComposer, StatisticComposer
-
+import time
 try:
     from benchmark_utils import (
         read_config_file,
@@ -44,6 +45,8 @@ except ModuleNotFoundError:
     )
     from .benchmark_utils.pdf_report import AdversarialReportGenerator
 
+SERIAL_TIME = None
+PARALLEL_TIME = None
 
 # --- Bencharking functions --- #
 def benchmark_single_node_serial(config: dict):
@@ -57,7 +60,8 @@ def benchmark_single_node_serial(config: dict):
         for model_id, model_config in enumerate(config["models"]):
             try:
                 evaluator = Evaluator.from_config(config=config, dataset=dataset, model_config=model_config)
-                results = evaluator.evaluate_attacks()
+                evaluator.evaluate_attacks()
+                evaluator.save_results_to_disk(output_path=output_path)
                 logging.warning(f"Evaluation results for {dataset["name"]}/{model_config["name"]} are saved to {output_path}")
             except Exception as e:
                 logging.warning(f"\n\U0001F975 Evaluation of Model {model_config['name']} on Dataset {dataset['name']} failed with exception '{e}' +++\n")
@@ -70,7 +74,7 @@ def benchmark_single_node_serial(config: dict):
         json.dump(config, f)
     return str(output_path)
 
-def benchmark_multi_node_parallel(config: dict, executor : Executor, num_gpus_per_worker: int = None):
+def benchmark_multi_node_parallel(config: dict, executor : Executor):
     plans = []
     output_path = Path(config["options"]["output_path"])
     benchmark_id = datetime.now().strftime("%Y%m%dT%H%M%S")
@@ -86,8 +90,6 @@ def benchmark_multi_node_parallel(config: dict, executor : Executor, num_gpus_pe
             try:
                 evaluator = Evaluator.from_config(config=config, dataset=dataset, model_config=model_config)
                 plan = evaluator.plan_attacks_evaluation()
-                if num_gpus_per_worker is not None:
-                    os.environ["FRACTION_FOR_GPU_ACTOR"]=str(num_gpus_per_worker)
                 plans.append(plan)
                 logging.warning(f"Evaluation results for {dataset["name"]}/{model_config["name"]} are saved to {output_path}")
             except Exception as e:
@@ -105,7 +107,9 @@ def benchmark_multi_node_parallel(config: dict, executor : Executor, num_gpus_pe
         json.dump(config, f)
     return str(output_path)
 
-def benchmark_single_node_parallel(config: dict,  executor : Executor, num_gpus_per_worker: int = None):
+def benchmark_single_node_parallel(config: dict,  executor : Executor):
+    global SERIAL_TIME
+    global PARALLEL_TIME
     plans = []
     output_path = Path(config["options"]["output_path"])
     benchmark_id = datetime.now().strftime("%Y%m%dT%H%M%S")
@@ -121,14 +125,49 @@ def benchmark_single_node_parallel(config: dict,  executor : Executor, num_gpus_
             try:
                 evaluator = Evaluator.from_config(config=config, dataset=dataset, model_config=model_config)
                 plan = evaluator.plan_attacks_evaluation()
-                if num_gpus_per_worker is not None:
-                    os.environ["FRACTION_FOR_GPU_ACTOR"]=str(num_gpus_per_worker)
                 plans.append(plan)
                 logging.warning(f"Evaluation results for {dataset["name"]}/{model_config["name"]} are saved to {output_path}")
             except Exception as e:
                 logging.warning(f"\n\U0001F975 Evaluation of Model {model_config['name']} on Dataset {dataset['name']} failed with exception '{e}' +++\n")
                 traceback.print_exc()
+
+    if executor.num_actors>1:
+        parallel_start = time.time()
+    else:
+        start = time.time()
     executor.execute_plan(plans, benchmark_id)
+    if executor.num_actors>1 and SERIAL_TIME is not None:
+        parallel_end = time.time()
+        if SERIAL_TIME:
+            PARALLEL_TIME = parallel_end - parallel_start
+            print("----- Parallel Benchmark Timing Report -----")
+            print("---------------------------------------------")
+            print("|                                           |")
+            print("|                                           |")
+            print("|                                           |")
+            print("|                                           |")
+            print(f"Total time for benchmark parallel execution with {executor.num_actors} workers: {PARALLEL_TIME} seconds")
+            print(f"Speedup over serial execution: {SERIAL_TIME / PARALLEL_TIME}")
+            print("|                                           |")
+            print("|                                           |")
+            print("|                                           |")
+            print("|                                           |")
+            print("--------------------------------------------")
+    else:
+        end = time.time()
+        SERIAL_TIME = end - start
+        print("----- Serial Benchmark Timing Report -----")
+        print("---------------------------------------------")
+        print("|                                           |")
+        print("|                                           |")
+        print("|                                           |")
+        print("|                                           |")
+        print(f"Total time for benchmark serial execution: {SERIAL_TIME} seconds")
+        print("|                                           |")
+        print("|                                           |")
+        print("|                                           |")
+        print("|                                           |")
+        print("--------------------------------------------")
     structure = get_structure(output_path)
     with open(output_path / "structure.json", "w") as f:
         json.dump(structure, f)
@@ -165,7 +204,6 @@ def benchmark_from_attack_server(config: dict, executor : Executor):
     with open(output_path / "configuration.json", "w") as f:
         json.dump(config, f)
     return benchmark_id
-
 
 # --- Aggregation and pdf report --- #
 def postprocess_benchmark_run_results(benchmark_run_dir: str | pathlib.Path, verbose=True):
@@ -262,23 +300,22 @@ def create_benchmark_report(benchmark_run_dir: str | pathlib.Path,
             pdf_bytes = pdf_file.read()
             return base64.b64encode(pdf_bytes).decode('utf-8')
 
-
 def benchmark(config: dict, executor: Executor):
     return benchmark_from_attack_server(config, executor=executor)
 
-def benchmark_from_main(config: dict, mode : str, executor : Executor, num_gpus_per_worker: int = None):
+def benchmark_from_main(config: dict, mode : str, executor : Executor):
     if mode=="single_node_serial": 
         return benchmark_single_node_serial(config)
     elif mode=="single_node_parallel":
-        return benchmark_single_node_parallel(config, executor=executor, num_gpus_per_worker=num_gpus_per_worker)
+        return benchmark_single_node_parallel(config, executor=executor)
     elif mode=="multi_node_parallel":
-        return benchmark_multi_node_parallel(config, executor=executor, num_gpus_per_worker=num_gpus_per_worker)
+        return benchmark_multi_node_parallel(config, executor=executor)
     else:
         raise ValueError(f"Benchmark mode {mode} not supported.")
 
-def executors_factory(executor_type:str, num_workers: int = 1) -> Executor:
+def executors_factory(executor_type:str, num_workers: int = 1, num_gpus_per_worker: float = None) -> Executor:
     if executor_type=="ray":
-        return RayActorPoolExecutor(num_actors=num_workers)
+        return RayActorPoolExecutor(num_actors=num_workers, num_gpus_per_actor=num_gpus_per_worker)
     else:
         raise ValueError(f"Executor type {executor_type} not supported.")
 
@@ -292,17 +329,49 @@ def main():
 
     # --- TO ADD IN THE CONFIG --- #
     mode = "single_node_parallel"
-    num_workers = 1
-    num_gpus_per_worker = 1
+    num_workers = 4
+    num_gpus_per_worker = 0.25
     executor_type = "ray"
-    executor = executors_factory(executor_type=executor_type, num_workers=num_workers)
+    executor = executors_factory(executor_type=executor_type, num_workers=num_workers, num_gpus_per_worker=num_gpus_per_worker)
     executor.use_event_loop = False
     # ------------------------------------- #
 
     benchmark_from_main(config.model_dump(), 
                         mode=mode, 
-                        executor=executor, 
-                        num_gpus_per_worker=num_gpus_per_worker)
+                        executor=executor)
+    
+def time_benchmark():
+    handler = logging.StreamHandler()
+    handler.addFilter(lambda record: record.name == "root")
+    logging.basicConfig(level=logging.WARN, handlers=[handler])
+    selected_config_path = config_file_path_selector(Path(__file__).parent / "config")
+    config = read_config_file(config_filename=str(selected_config_path))
+    config = BenchmarkConfig(**config)
+
+    # --- TO ADD IN THE CONFIG --- #
+    mode = "single_node_parallel"
+    num_workers = 1
+    num_gpus_per_worker = 1
+    executor_type = "ray"
+    executor = executors_factory(executor_type=executor_type, num_workers=num_workers, num_gpus_per_worker=num_gpus_per_worker)
+    executor.use_event_loop = False
+    # ------------------------------------- #
+
+    benchmark_from_main(config.model_dump(), 
+                        mode=mode, 
+                        executor=executor)
+    
+    mode = "single_node_parallel"
+    num_workers = 2
+    num_gpus_per_worker = 1
+    executor_type = "ray"
+    executor = executors_factory(executor_type=executor_type, num_workers=num_workers, num_gpus_per_worker=num_gpus_per_worker)
+    executor.use_event_loop = False
+    # ------------------------------------- #
+
+    benchmark_from_main(config.model_dump(), 
+                        mode=mode, 
+                        executor=executor)
    
 def save():
     postprocess_benchmark_run_results("/home/cristiano-carta/Desktop/output/20251117T114235")
@@ -312,10 +381,10 @@ def save():
                             output_path="/home/cristiano-carta/Desktop/output",
                             pdf_report=True)
 
-
 if __name__ == "__main__":
     #main()
-    save()
+    #save()
+    time_benchmark()
 
 
 

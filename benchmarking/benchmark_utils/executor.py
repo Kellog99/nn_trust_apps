@@ -189,7 +189,7 @@ class ProgressTracker:
         """Execute a callable with the wrapper."""
         return self.wrapper(func, *args, **kwargs)
 
-@ray.remote(num_gpus=float(os.environ.get("FRACTION_FOR_GPU_ACTOR",1)))
+@ray.remote
 class GPUActor:
     def __init__(self):
         try:
@@ -231,6 +231,7 @@ class GPUActor:
 class RayActorPoolExecutor(Executor):
     def __init__(self,
                  num_actors: Optional[int] = None,
+                 num_gpus_per_actor : float = 1.0,
                 ):
         os.environ["RAY_OVERRIDE_ENVIRONMENT_VARIABLES_ALLOWLIST"] = "*"
         modules = os.environ.get("RAY_PY_MODULES", None)
@@ -239,6 +240,7 @@ class RayActorPoolExecutor(Executor):
                 "py_modules": [modules]
             })
         self.num_actors = num_actors
+        self.num_gpus_per_actor = num_gpus_per_actor
         self.use_event_loop = True
         self.actors = []
         self.pool = None
@@ -252,7 +254,7 @@ class RayActorPoolExecutor(Executor):
     def _create_actors(self, n: int) -> List[Any]:
         actors = []
         for _ in range(n):
-            actor_handle = GPUActor.remote()
+            actor_handle = GPUActor.options(num_gpus=self.num_gpus_per_actor).remote()
             actors.append(actor_handle)
         self.actors = actors
         self.pool = ActorPool(actors)
