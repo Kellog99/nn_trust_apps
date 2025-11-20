@@ -7,6 +7,7 @@ from datetime import datetime
 import pathlib
 
 from nn_trust.attack.evaluation.composer import ConfigStatisticComposer, StatisticComposer
+
 try:
     from benchmark_utils import (
         read_config_file,
@@ -15,8 +16,9 @@ try:
         get_structure,
         config_file_path_selector
     )
+    from benchmark_utils.pdf_report import create_benchmark_report
 except ModuleNotFoundError:
-    # when used from attack.server it need to import as if working as a module
+    # when used from attack.server it needs to import as if working as a module
     from .benchmark_utils import (
         read_config_file,
         BenchmarkConfig,
@@ -24,6 +26,7 @@ except ModuleNotFoundError:
         get_structure,
         config_file_path_selector
     )
+    from .benchmark_utils.pdf_report import create_benchmark_report
 
 def benchmark_(config: dict):
     output_path = Path(config["options"]["output_path"])
@@ -83,7 +86,6 @@ def postprocess_benchmark_run_results(benchmark_run_dir: str | pathlib.Path, ver
                     print(e)
                     traceback.print_exc()
 
-
 def benchmark(config: dict):
     output_path = benchmark_(config)
     postprocess_benchmark_run_results(output_path)
@@ -99,12 +101,20 @@ def main():
     config = BenchmarkConfig(**config)
 
     output_path = benchmark_(config.model_dump())
-    #print(f"Results saved to {output_path}")
-    #postprocess_benchmark_run_results(output_path)
+    print(f"Results saved to {output_path}")
+    postprocess_benchmark_run_results(output_path)
+    model_name = config.model_dump()["models"][0]['name']
+    dataset_name = config.model_dump()["datasets"][0]["name"]
+    create_benchmark_report(
+        benchmark_run_dir=output_path,
+        model_name=model_name,
+        dataset_name=dataset_name,
+        filename=Path(output_path) / dataset_name / model_name / "report.pdf",
+        generated_by="Leonardo S.p.A."
+    )
 
 if __name__ == "__main__":
     main()
-
 
 
 
