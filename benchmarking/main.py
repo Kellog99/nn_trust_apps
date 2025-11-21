@@ -103,15 +103,21 @@ def main():
     output_path = benchmark_(config.model_dump())
     print(f"Results saved to {output_path}")
     postprocess_benchmark_run_results(output_path)
-    model_name = config.model_dump()["models"][0]['name']
-    dataset_name = config.model_dump()["datasets"][0]["name"]
-    create_benchmark_report(
-        benchmark_run_dir=output_path,
-        model_name=model_name,
-        dataset_name=dataset_name,
-        filename=Path(output_path) / dataset_name / model_name / "report.pdf",
-        generated_by="Leonardo S.p.A."
-    )
+
+    models = config.model_dump()["models"]
+    datasets = config.model_dump()["datasets"]
+    for dataset in datasets:
+        dataset_name = dataset["name"]
+        for model in models:
+            model_name = model["name"]
+            print(f"Generating report for {dataset_name} - {model_name}")
+            create_benchmark_report(
+                benchmark_run_dir=output_path,
+                model_name=model_name,
+                dataset_name=dataset_name,
+                filename=Path(output_path) / dataset_name / model_name / "report.pdf",
+                generated_by="Leonardo S.p.A."
+            )
 
 if __name__ == "__main__":
     main()
