@@ -41,7 +41,7 @@ if not hasattr(router.state, "attacks"):
 
 # Setting up number of actors and executor
 num_actors = int(os.environ.get("RAY_NUM_ACTORS",1))
-num_gpu_per_actors = int(os.environ.get("FRACTION_FOR_GPU_ACTOR",1))
+num_gpu_per_actors = float(os.environ.get("FRACTION_FOR_GPU_ACTOR",1))
 modules = os.environ.get("RAY_PY_MODULES",None)      
 if modules:
     ray.init(ignore_reinit_error=True,runtime_env={
@@ -195,19 +195,19 @@ def get_jobs_results(id: str = Query(None),
                     status_code=404,
                     content=Error(code=404, message=f"Benchmark {benchmark_id} not found").model_dump_json())
         
-        completed_tasks = []
-        for _,v in tasks.items():
-            num_tasks = v["num_tasks"]
-            if v["benchmark_id"]==benchmark_id and v["status"]=="completed" and v["progress"]==100:
-                completed_tasks.append(v)
+        #completed_tasks = []
+        #for _,v in tasks.items():
+        #    num_tasks = v["num_tasks"]
+        #    if v["benchmark_id"]==benchmark_id and v["status"]=="completed" and v["progress"]==100:
+        #        completed_tasks.append(v)
     
-        if len(completed_tasks)==0 or len(completed_tasks)<num_tasks:
-            logging.error(f"Benchmark {benchmark_id} not finished yet")
-            return Response(
-                    status_code=409,
-                    content=Error(code=409, message=f"Benchmark {benchmark_id} not finished yet").model_dump_json())
+        #if len(completed_tasks)==0 or len(completed_tasks)<num_tasks:
+        #    logging.error(f"Benchmark {benchmark_id} not finished yet")
+        #    return Response(
+        #            status_code=409,
+        #            content=Error(code=409, message=f"Benchmark {benchmark_id} not finished yet").model_dump_json())
         
-        if os.path.exists(os.path.join(task_dir,"report.json")):
+        if False:
             with open(os.path.join(task_dir,"report.json"), 'r', encoding='utf-8') as f:
                 report_data = json.load(f)  
             prototype=None
@@ -302,21 +302,21 @@ def get_jobs_results(dataset : str = Query(...), task : str = Query(None), id : 
                     status_code=404,
                     content=Error(code=404, message=f"No benchmarks found").model_dump_json())
         
-        completed_tasks = []
+        #completed_tasks = []
 
-        for _,v in tasks.items():
-            num_tasks = v["num_tasks"]
-            if v["status"]=="completed" and v["progress"]==100:
-                completed_tasks.append(v)
-                task_dir = os.path.join(os.environ.get("BENCHMARK_OUTPUT_DIR"),v["benchmark_id"])
-                if not has_aggregate(task_dir,dataset):
-                    benchmarking.postprocess_benchmark_run_results(task_dir)
+        #for _,v in tasks.items():
+        #    num_tasks = v["num_tasks"]
+        #    if v["status"]=="completed" and v["progress"]==100:
+        #        completed_tasks.append(v)
+        #        task_dir = os.path.join(os.environ.get("BENCHMARK_OUTPUT_DIR"),v["benchmark_id"])
+        #        if not has_aggregate(task_dir,dataset):
+        #            benchmarking.postprocess_benchmark_run_results(task_dir)
 
-        if len(completed_tasks)==0 or len(completed_tasks)<num_tasks:
-            logging.error(f"No benchmark is finished yet")
-            return Response(
-                    status_code=409,
-                    content=Error(code=409, message=f"No benchmark is finished yet").model_dump_json())
+        #if len(completed_tasks)==0 or len(completed_tasks)<num_tasks:
+        #    logging.error(f"No benchmark is finished yet")
+        #    return Response(
+        #            status_code=409,
+        #            content=Error(code=409, message=f"No benchmark is finished yet").model_dump_json())
         
         results = benchmarking.collect_dataset_aggregates_with_info(
             base_dir=os.environ.get("BENCHMARK_OUTPUT_DIR"),

@@ -381,7 +381,7 @@ class Evaluator:
             logging.error(f"Error during evaluation of attack {attack_config.get('name','unknown')} : {e}")
             traceback.print_exc()
             if tracker:
-                tracker.update_progress.remote(f"{atk_id}_{benchmark_id}", status="completed", progress=0, message=f"Failed attack {atk_id} with error {e}")
+                tracker.update_progress.remote(f"{atk_id}_{benchmark_id}", status="completed", progress=50, message=f"Failed attack {atk_id} with error {e}")
             raise e
 
     def get_model_dataset_info(self) -> dict:

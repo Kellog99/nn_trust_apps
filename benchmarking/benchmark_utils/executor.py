@@ -16,6 +16,7 @@ from ray.util import ActorPool
 from datetime import datetime
 from typing import Union
 import asyncio
+import logging
 from ray.util.scheduling_strategies import NodeAffinitySchedulingStrategy
 
 class Executor(ABC):
@@ -222,10 +223,11 @@ class GPUActor:
         
         worker_conf["dataloader"] = self.dataloader
         worker_conf["model"] = self.model
-         
-        return worker_action(**worker_conf)
-
-
+        try: 
+            return worker_action(**worker_conf)
+        except Exception as e:
+            logging.error(f"Error during worker execution: {e}")
+            return None
 
 
 class RayActorPoolExecutor(Executor):
