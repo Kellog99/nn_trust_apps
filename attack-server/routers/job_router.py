@@ -272,10 +272,20 @@ def get_jobs_results(id: str = Query(None),
 
 
         if pdf_report and bool(pdf_report)==True:
-            generator = benchmarking.AdversarialReportGenerator(logo_path='./resources/logo_leonardo.png')
-            report_file = './resources/adversarial_report.pdf'
-            generator.generate(report_data, report_file)
-            with open(report_file, 'rb') as pdf_file:
+            #generator = benchmarking.AdversarialReportGenerator(logo_path='./resources/logo_leonardo.png')
+            #report_file = './resources/adversarial_report.pdf'
+            #generator.generate(report_data, report_file)
+            model_name = str(model_dir).split(os.sep)[-1]
+            dataset_name = str(model_dir).split(os.sep)[-2]
+            filename = Path(task_dir) / dataset_name / model_name / "report.pdf"
+            benchmarking.create_benchmark_report(
+                benchmark_run_dir=task_dir,
+                model_name=model_name,
+                dataset_name=dataset_name,
+                filename=filename,
+                generated_by="Leonardo S.p.A."
+            )
+            with open(filename, 'rb') as pdf_file:
                 pdf_bytes = pdf_file.read()
                 return base64.b64encode(pdf_bytes).decode('utf-8')
         else:

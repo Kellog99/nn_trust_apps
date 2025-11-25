@@ -9,6 +9,7 @@ import base64
 from typing import Optional, Tuple
 from nn_trust.attack.evaluation.composer import ConfigStatisticComposer, StatisticComposer
 import time
+import numpy as np
 try:
     from benchmark_utils import (
         read_config_file,
@@ -19,15 +20,9 @@ try:
     )
     from benchmark_utils.executor import RayActorPoolExecutor, Executor
     from benchmark_utils.utils import resolve_path
-    from benchmark_utils.report_functions import (
-    collect_dataset_aggregates_with_info, 
-    enrich_with_ranks, extract_rank_metrics, 
-    get_attacks_info, 
-    transform_to_benchmark
-    )
-    from benchmark_utils.pdf_report import AdversarialReportGenerator
+    from benchmark_utils.pdf_report import create_benchmark_report
 except ModuleNotFoundError:
-    # when used from attack.server it need to import as if working as a module
+    # when used from attack.server it needs to import as if working as a module
     from .benchmark_utils import (
         read_config_file,
         BenchmarkConfig,
@@ -37,14 +32,7 @@ except ModuleNotFoundError:
     )
     from .benchmark_utils.executor import RayActorPoolExecutor, Executor
     from .benchmark_utils.utils import resolve_path
-    from .benchmark_utils.report_functions import (
-    collect_dataset_aggregates_with_info, 
-    enrich_with_ranks, extract_rank_metrics, 
-    get_attacks_info, 
-    transform_to_benchmark
-    )
-    from .benchmark_utils.pdf_report import AdversarialReportGenerator
-import numpy as np
+    from .benchmark_utils.pdf_report import create_benchmark_report
 
 # --- Timing --- #
 SERIAL_TIME = None
@@ -290,69 +278,11 @@ def postprocess_benchmark_run_results(benchmark_run_dir: str | pathlib.Path, ver
                     print(e)
                     traceback.print_exc()
 
-def create_benchmark_report(benchmark_run_dir: str | pathlib.Path, 
-                            model_name : str, 
-                            dataset_name : str, 
-                            output_path : str = os.getcwd(),
-                            pdf_report: bool = False):
+#def benchmark(config: dict):
+#    output_path = benchmark_(config)
+#    postprocess_benchmark_run_results(output_path)
+
     
-    model_dir = os.path.join(benchmark_run_dir, dataset_name, model_name)
-
-    with open(os.path.join(model_dir,'info.json'), "r", encoding="utf-8") as f:
-                info = json.load(f)
-
-    parts = benchmark_run_dir.split(os.sep)
-    parent_benchmark_dir = os.sep.join(parts[:-1])  
-    with open(os.path.join(model_dir,'aggregate_statistics.json'), "r", encoding="utf-8") as f:
-        aggregate = json.load(f)
-        aggregate["params"] = info["parameters"]
-        results = collect_dataset_aggregates_with_info( #TODO: adapt this
-            base_dir=parent_benchmark_dir,
-            dataset=dataset_name,
-            keep_latest_only=False,
-        )
-
-        out = transform_to_benchmark(results,task="classification") #TODO: adapt this
-        out = enrich_with_ranks(out) #TODO: adapt this
-        out = extract_rank_metrics(out,model_name) #TODO: adapt this
-        num_b = len(results)
-        out["total benchmarks"] = num_b
-        aggregate = aggregate | out   
-
-    statistics = {}
-    for entry in os.listdir(model_dir):
-        entry_path = os.path.join(model_dir, entry)
-        if os.path.isdir(entry_path):
-            stat_file = os.path.join(entry_path, "statistics.json")
-            if os.path.exists(stat_file) and os.path.isfile(stat_file):
-                try:
-                    with open(stat_file, "r", encoding="utf-8") as sf:
-                        sf_data = json.load(sf)
-                        sf_data["name"] = get_attacks_info()[entry.lower()].name
-                        sf_data["risk"] = 0.5
-                        sf_data["num_queries"] = 1
-                        sf_data["power"] = 0.5
-                        statistics[entry.upper()] = sf_data
-                except Exception as e:
-                    logging.warning(f"Could not load statistics.json in '{entry_path}': {e}")
-    
-    report_data = {
-        "info":info,
-        "metrics": aggregate,
-        "attacks": statistics
-    }
-    
-    report_data["tool"] = "nntrust"
-    report_data["dataset"] = dataset_name
-    with open(os.path.join(output_path,"report.json"), "w", encoding="utf-8") as f:
-                json.dump(report_data, f)
-    if pdf_report==True:
-        generator = AdversarialReportGenerator(logo_path='./resources/logo_leonardo.png')
-        report_file = os.path.join(output_path,f"{dataset_name}_{model_name}.pdf")
-        generator.generate(report_data, report_file)
-        with open(report_file, 'rb') as pdf_file:
-            pdf_bytes = pdf_file.read()
-            return base64.b64encode(pdf_bytes).decode('utf-8')
 
 # --- Main functions --- #
 def benchmark(config: dict, executor: Executor):
@@ -390,9 +320,27 @@ def main():
     executor = executors_factory(executor_type=executor_type, num_workers=num_workers, num_gpus_per_worker=num_gpus_per_worker)
     executor.use_event_loop = False
 
-    benchmark_from_main(config.model_dump(), 
+    output_path = benchmark_from_main(config.model_dump(), 
                         mode=mode, 
                         executor=executor)
+    
+    print(f"Results saved to {output_path}")
+    postprocess_benchmark_run_results(output_path)
+
+    models = config.model_dump()["models"]
+    datasets = config.model_dump()["datasets"]
+    for dataset in datasets:
+        dataset_name = dataset["name"]
+        for model in models:
+            model_name = model["name"]
+            print(f"Generating report for {dataset_name} - {model_name}")
+            create_benchmark_report(
+                benchmark_run_dir=output_path,
+                model_name=model_name,
+                dataset_name=dataset_name,
+                filename=Path(output_path) / dataset_name / model_name / "report.pdf",
+                generated_by="Leonardo S.p.A."
+            )
     
 def time_benchmark():
     handler = logging.StreamHandler()
@@ -435,34 +383,11 @@ def time_benchmark():
         benchmark_from_main(parallel_config.model_dump(), 
                             mode=mode, 
                             executor=executor)
-        
-        print("=========================================")
-        print("|                                       |")
-        print("|                                       |")
-        print("|                                       |")
-        print("|                                       |")
-        print("Number of runs: ", len(SERIAL_TIMES))
-        print("Mean over serial times: ", np.mean(SERIAL_TIMES))
-        print("Mean over parallel times: ", np.mean(PARALLEL_TIMES))
-        print("|                                       |")
-        print("|                                       |")
-        print("|                                       |")
-        print("|                                       |")
-        print("=========================================")
    
-def save():
-    postprocess_benchmark_run_results("/home/cristiano-carta/Desktop/output/20251117T114235")
-    create_benchmark_report(benchmark_run_dir="/home/cristiano-carta/Desktop/output/20251117T114235",
-                            dataset_name="landanimals",
-                            model_name="convnext_base.clip_laion2b_augreg_ft_in12k_in1k",
-                            output_path="/home/cristiano-carta/Desktop/output",
-                            pdf_report=True)
 
 if __name__ == "__main__":
     main()
-    #save()
     #time_benchmark()
-
 
 
 

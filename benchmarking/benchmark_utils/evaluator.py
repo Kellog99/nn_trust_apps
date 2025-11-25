@@ -325,7 +325,6 @@ class Evaluator:
             else:
                 progress_bar = enumerate(dataloader)
 
-            #tracker.create_task.remote(f"{atk_id}_{benchmark_id}","attack", benchmark_id = benchmark_id, num_tasks=num_tasks)
             for idx, (batch, label, element_info) in progress_bar:
                 if tracker:
                     tracker.update_progress.remote(f"{atk_id}_{benchmark_id}", 
@@ -346,19 +345,21 @@ class Evaluator:
                 y_pred_adv = out_adv.argmax(dim=-1)
                 y_pred = out.argmax(dim=-1)
                 # adapt metrics counting for reference or standard attack
-                is_identity_atk = atk.__class__.__name__.replace("Attack", "").lower() == "identitybaseline"
-                #TODO: add mask again
+                is_reference = atk_id == "reference"
+                correct_mask = torch.eq(label, y_pred)
                 if True:
                     y_pred = label
+                elif torch.any(correct_mask):
+                    if not torch.all(correct_mask):
+                        label = label[correct_mask]
+                        x_adv = x_adv[correct_mask]
+                        batch = batch[correct_mask]
+                        out = out[correct_mask]
+                        out_adv = out_adv[correct_mask]
+                        y_pred = y_pred[correct_mask]
+                        y_pred_adv = y_pred_adv[correct_mask]
                 else:
-                    mask = torch.eq(label, y_pred)
-                    label = label[mask]
-                    x_adv = x_adv[mask]
-                    batch = batch[mask]
-                    out = out[mask]
-                    out_adv = out_adv[mask]
-                    y_pred = y_pred[mask]
-                    y_pred_adv = y_pred_adv[mask]
+                    continue  # skip iteration, no statistic update for this batch
                 input_stat = {
                     'x_adv': x_adv.detach(),
                     'x': batch.detach(),
@@ -370,13 +371,12 @@ class Evaluator:
                 }
                 statistics_composer.update(**input_stat)
 
-            statistics_results = statistics_composer.compute()
-            statistics_states = statistics_composer.get_raw_state()
-            statistics_composer.reset()
-            torch.cuda.empty_cache()
             if tracker:
                 tracker.update_progress.remote(f"{atk_id}_{benchmark_id}", status="completed", progress=100, message=f"Completed attack {atk_id}")
-            return {"statistics": statistics_results, "statistics_states":statistics_states}
+            return {
+                "statistics": statistics_composer.compute(),
+                "statistics_states":statistics_composer.get_raw_state()
+            }
         except Exception as e:
             logging.error(f"Error during evaluation of attack {attack_config.get('name','unknown')} : {e}")
             traceback.print_exc()
