@@ -369,19 +369,19 @@ async def start_benchmark_job(body: ExecutionConfig = Body(...)) -> Union[str,Er
         dataset_name = body.dataset
         model_name = body.model
         m_response = get_models()
-        d_response = get_datasets()
+        #d_response = get_datasets()
         model_response = json.loads(m_response.body.decode('utf-8'))["models"]
 
-        if m_response.status_code!=200 or d_response.status_code!=200:
-            logging.error("Model or Dataset repository is empty. Check repository.")
-            return Response(
-                status_code=404,
-                content=Error(code=404, 
-                            message="Model or Dataset repository is empty. Check repository.").model_dump_json())
+        #if m_response.status_code!=200 or d_response.status_code!=200:
+        #    logging.error("Model or Dataset repository is empty. Check repository.")
+        #    return Response(
+        #        status_code=404,
+        #        content=Error(code=404, 
+        #                    message="Model or Dataset repository is empty. Check repository.").model_dump_json())
 
         model = [m["name"] for m in model_response if m["name"]==model_name]
         model_type = [m["type"] for m in model_response if m["name"]==model_name]
-        dataset = [d for d in json.loads(d_response.body.decode('utf-8'))["names"] if d==dataset_name]
+        #dataset = [d for d in json.loads(d_response.body.decode('utf-8'))["names"] if d==dataset_name]
 
         if len(model)>1 or len(model_type)>1:
             logging.error(f"The provided model string {model_name} has had more than one match. Check model repository")
@@ -397,19 +397,19 @@ async def start_benchmark_job(body: ExecutionConfig = Body(...)) -> Union[str,Er
                 content=Error(code=404, 
                               message=f"No model found: {model_name}").model_dump_json())
         
-        if len(dataset)>1:
-            logging.error(f"The provided dataset string {dataset_name} has had more than one match. Check dataset repository")
-            return Response(
-                status_code=409,
-                content=Error(code=409, 
-                              message=f"The provided dataset string {dataset_name} has had more than one match. Check dataset repository").model_dump_json())
+        #if len(dataset)>1:
+        #    logging.error(f"The provided dataset string {dataset_name} has had more than one match. Check dataset repository")
+        #    return Response(
+        #        status_code=409,
+        #        content=Error(code=409, 
+        #                      message=f"The provided dataset string {dataset_name} has had more than one match. Check dataset repository").model_dump_json())
         
-        if len(dataset)==0:
-            logging.error(f"No dataset found: {dataset_name}")
-            return Response(
-                status_code=404,
-                content=Error(code=404, 
-                              message=f"No dataset found: {dataset_name}").model_dump_json())
+        #if len(dataset)==0:
+        #    logging.error(f"No dataset found: {dataset_name}")
+        #    return Response(
+        #        status_code=404,
+        #        content=Error(code=404, 
+        #                      message=f"No dataset found: {dataset_name}").model_dump_json())
         
         file_path = os.path.join(os.environ.get('INTERNAL_MODEL_STORAGE'),f"{model_name}.json")
 
