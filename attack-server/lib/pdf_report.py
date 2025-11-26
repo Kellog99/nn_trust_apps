@@ -3,18 +3,18 @@ Corporate Adversarial Attack Report Generator
 A modular ReportLab-based PDF report generator for model robustness analysis
 """
 
-import json
 from datetime import datetime
+
 from reportlab.lib import colors
+from reportlab.lib.enums import TA_LEFT, TA_CENTER, TA_RIGHT, TA_JUSTIFY
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import mm, inch
+from reportlab.pdfgen import canvas
 from reportlab.platypus import (
     SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle,
     PageBreak, Image, KeepTogether
 )
-from reportlab.lib.enums import TA_LEFT, TA_CENTER, TA_RIGHT, TA_JUSTIFY
-from reportlab.pdfgen import canvas
 
 
 class CorporateColors:

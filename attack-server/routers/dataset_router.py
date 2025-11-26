@@ -2,40 +2,37 @@ import logging
 import os
 import shutil
 import zipfile
-from typing import Optional
 
 from fastapi import APIRouter, UploadFile, Response
 
-from lib.models import Datasets, Error
+from lib.model import Error, DatasetInfo
 
 router = APIRouter(prefix="/dataset", tags=["datasets and models"])
 
 
-@router.get("/getDatasets", response_model=Datasets, responses={
+@router.get("/getDatasets", response_model=list[DatasetInfo], responses={
     '400': {'model': Error},
     '404': {'model': Error},
     '500': {'model': Error},
 })
-def get_datasets() -> Response:
+def get_datasets():
     """
     Get all datasets of the TITANN backend.
     """
     try:
         datasets = []
         dataset_root_dir = os.environ.get("INTERNAL_DS_STORAGE")
+        print("get dataset")
         for item in os.listdir(dataset_root_dir):
+            print(item)
             item_path = os.path.join(dataset_root_dir, item)
             if os.path.isdir(item_path):
                 logging.info(f"Found a dataset: {item_path}")
-                datasets.append(item)
+                datasets.append(DatasetInfo(**item_path))
+
         if len(datasets) == 0:
             logging.error("No datasets found.")
-            return Response(status_code=404,
-                            content=Error(code=404, message="No datasets found.").model_dump_json())
-
-        datasets = Datasets(names=datasets)
-        return Response(status_code=200,
-                        content=datasets.model_dump_json())
+        return datasets
 
     except Exception as e:
         logging.error(f"An error occurred during datasets reading from disk: {e}")
@@ -49,7 +46,7 @@ def get_datasets() -> Response:
     '409': {'model': Error},
     '500': {'model': Error},
 })
-def upload_dataset(file: UploadFile) -> Optional[Error]:
+def upload_dataset(file: UploadFile):
     """
     Upload a dataset to the TITANN backend.
     """

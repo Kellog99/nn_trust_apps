@@ -1,19 +1,36 @@
 {
-    "timm_models":[
-        {"name":"resnet50",
-         "type": "timm",
-        "pretrained": true,
-        "num_classes": 90,
-        "task": "classification"
-        },
-        {
-        "name":"resnet18",
-        "type":"timm",
-        "pretrained":true,
-        "num_classes":90,
-        "task":"classification"
-        }
-    ],
-    "max_model_size": 5000
+  "timm_models": [
+    {
+      "id": "resnet50",
+      "name": "resnet50",
+      "type": "timm",
+      "pretrained": true,
+      "num_classes": 90,
+      "task": "Classification",
+      "domain": "RGB",
+      "weights": "0.9",
+      "input_dimensionality": [
+        3,
+        244,
+        244
+      ]
+    },
+    {
+      "id": "resnet18",
+      "name": "resnet18",
+      "type": "timm",
+      "pretrained": true,
+      "num_classes": 90,
+      "task": "Classification",
+      "domain": "RGB",
+      "weights": "0.9",
+      "input_dimensionality": [
+        3,
+        244,
+        244
+      ]
+    }
+  ],
+  "max_model_size": 5000
 }
  

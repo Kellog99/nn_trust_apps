@@ -12,13 +12,13 @@ from fastapi import APIRouter, Response, Query
 from fastapi import UploadFile, HTTPException
 from fastapi.responses import JSONResponse
 
-from lib.models import Models, Error
+from lib.model import Error, ModelInfo
 from lib.validator import json_safety_check
 
 router = APIRouter(prefix="/model", tags=["datasets and models"])
 
 
-@router.get("/getModels", response_model=Models, responses={
+@router.get("/getModels", response_model=list[ModelInfo], responses={
     '400': {'model': Error},
     '404': {'model': Error},
     '500': {'model': Error},
@@ -27,20 +27,22 @@ def get_models():
     """
     Get all the models of the TITANN backend.
     """
+    out = []
     try:
         with open(os.environ.get("TIMM_MODELS_JSON_PATH")) as f:
             config = json.load(f)
             MODELS = config["timm_models"]
-            for n in MODELS:
-                n["type"] = "timm"
+            for model in MODELS:
+                out.append(ModelInfo(**model))
+
     except Exception as e:
         # Handle unexpected errors
         logging.error(f"Unexpected error during config import: {str(e)}")
         return Response(
             status_code=500,
             content=Error(code=500, message=f"Internal server error during config import.").model_dump_json())
+
     try:
-        models = []
         models_root_dir = os.environ.get("INTERNAL_MODEL_STORAGE")
         for item in os.listdir(models_root_dir):
             item_path = os.path.join(models_root_dir, item)
@@ -61,26 +63,18 @@ def get_models():
                 # Create model entry with base info and extend with JSON data
                 model_entry = {"name": Path(item).stem, "type": "saved_model"}
                 merged_model_info = model_info | model_entry
-                models.append(merged_model_info)
+                out.append(ModelInfo(**merged_model_info))
 
-        if len(models) == 0:
+        if len(out) == 0:
             logging.info("No uploaded models found.")
 
-        models.extend(MODELS)
-        if len(models) == 0:
-            logging.info("No models found.")
-            return Response(status_code=404,
-                            content=Error(code=404, message="No models found.").model_dump_json())
-
-        models = Models(models=models)
-        return Response(status_code=200,
-                        content=models.model_dump_json())
+        return out
 
     except Exception as e:
         logging.error(f"An error occurred during models reading from disk: {e}")
-        return Response(status_code=500,
-                        content=Error(code=500,
-                                      message=f"An error occurred durign models reading from disk.").model_dump_json())
+        return Response(
+            status_code=500,
+            content=Error(code=500, message=f"An error occurred during models reading from disk.").model_dump_json())
 
 
 # --- Model Upload (Check Phase) ---

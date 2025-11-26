@@ -7,7 +7,7 @@ from nn_trust.evaluation.statistic_factory import StatisticsFactory as SF
 from pydantic.fields import FieldInfo
 from pydantic_core import PydanticUndefined
 
-from lib.models import ParametersProps
+from lib.model import ParametersProps
 
 
 def get_parameter_prop(id: str, param_info: FieldInfo) -> ParametersProps:

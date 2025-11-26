@@ -8,15 +8,32 @@ from typing import List, Optional, Dict, Any
 from typing import Literal
 
 from nn_trust.core import AttackType, Knowledge
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 
 
-class Datasets(BaseModel):
-    names: Optional[List[str]] = None
+class Info(BaseModel):
+    id: str  # id for the file identification.
+    name: str  # File's name, ex. "Resnet50" or "Imagenette".
+    image: Optional[str] = None  # an image that represents the file.
+    task: str  # task associated with, i.e. classification, detection, etc.
+    domain: str  # Domain where the input belongs
+    classes: Optional[int] = None  # number of classes in the output.
+    weights: Optional[float] = None  # Size of the file.
+    input_dimensionality: List[int]  # dimensionality of each input or domain's dimensionality.
+    description: Optional[str] = None  # description of the file.
+
+    model_config = ConfigDict(extra='allow')
 
 
-class Models(BaseModel):
-    models: Optional[List[Dict]] = None
+# Dataset's information
+class DatasetInfo(Info):
+    num_sample: int  # Number of samples, i.e. length of the dataset
+
+
+# Model's information
+class ModelInfo(Info):
+    dataset: Optional[str] = None  # Dataset where the model had been optimized on
+    parameters: Optional[int] = None  # Number of the models' parameters
 
 
 class Metric(BaseModel):

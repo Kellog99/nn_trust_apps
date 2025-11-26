@@ -5,7 +5,7 @@ from nn_trust.attack.attack_factory import EvasionAttackFactory as EAF, AttackIn
 from nn_trust.core import Task
 from nn_trust.evaluation.statistic_factory import StatisticsFactory as SF
 
-from lib.models import RegisteredObject
+from lib.model import RegisteredObject
 from .utils import get_parameter_prop
 
 router = APIRouter(prefix="/info")
