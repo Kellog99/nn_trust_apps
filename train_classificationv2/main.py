@@ -1,12 +1,12 @@
 from utils import *
 
 MODELS = [
-    "timm/tf_efficientnet_b7.ap_in1k",  # Efficientnet trained with adversarial
-    "timm/tf_efficientnet_b7.aa_in1k",
-    "timm/convnextv2_base.fcmae_ft_in1k",
+    # "timm/tf_efficientnet_b7.ap_in1k",  # Efficientnet trained with adversarial
+    # "timm/tf_efficientnet_b7.aa_in1k",
+    # "timm/convnextv2_base.fcmae_ft_in1k",
     "timm/convnextv2_huge.fcmae_ft_in1k",
-    "timm/vit_base_patch16_224.augreg2_in21k_ft_in1k",
-    "timm/davit_base.msft_in1k"
+    #"timm/vit_base_patch16_224.augreg2_in21k_ft_in1k",
+    #"timm/davit_base.msft_in1k"
 ]
 
 
@@ -62,7 +62,7 @@ def train_one(model: str):
         "lr": 1e-4,
         "weight_decay": 1e-6,
         "batch_size": 32,
-        "epochs": 30,
+        "epochs": 100,
         "data_dir": "/home/papab/data/aircraft-dataset/clean-aircraft-crop",  # earlier loaded
     })
 

@@ -5,3 +5,6 @@
 *.db
 *.log
 __pycache__
+mlruns
+lightning_logs
+.venv
