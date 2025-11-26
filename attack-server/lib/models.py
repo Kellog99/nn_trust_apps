@@ -5,12 +5,11 @@
 from __future__ import annotations
 
 from typing import List, Optional, Dict, Any
-
-from pydantic import BaseModel, Field
-
 from typing import Literal
 
 from nn_trust.core import AttackType, Knowledge
+from pydantic import BaseModel, Field
+
 
 class Datasets(BaseModel):
     names: Optional[List[str]] = None
@@ -26,47 +25,55 @@ class Metric(BaseModel):
 
 class Progress(BaseModel):
     progress: Optional[float] = Field(None, example=0.82)
-    is_over : bool = Field(None, example=False)
+    is_over: bool = Field(None, example=False)
 
 
 class JobConfig(BaseModel):
     dataset: str = Field(..., example='cifar')
     model: str = Field(..., example='resnet50')
 
+
 class AttackConfig(BaseModel):
     image: str
-    model_name : str
-    attack : Any
+    model_name: str
+    attack: Any
+
 
 class Error(BaseModel):
     code: int
     message: str
 
+
 class Result(BaseModel):
     metrics: Optional[List[Metric]] = None
 
+
 class BenchmarkJob(BaseModel):
-    id: str 
-    progress : float
-    current_attack : str | None
-    computing_global : bool = Field(default=False)
-    attack_progress : float | None
-    dataset : str
-    model : str
-    all_attacks : List[str]
+    id: str
+    progress: float
+    current_attack: str | None
+    computing_global: bool = Field(default=False)
+    attack_progress: float | None
+    dataset: str
+    model: str
+    all_attacks: List[str]
+
 
 class AttackJob(BaseModel):
-    id: str 
-    progress : float
-    is_over : bool = Field(default=False)
+    id: str
+    progress: float
+    is_over: bool = Field(default=False)
+
 
 class ModelConfig(BaseModel):
     name: str
     type: Optional[str] = None
     pretrained: bool
     num_classes: int
-    task: Literal["classification"] 
+    task: Literal["classification"]
 
+
+########################### Register Object ###########################
 class ParametersProps(BaseModel):
     name: str
     label: str
@@ -76,22 +83,27 @@ class ParametersProps(BaseModel):
     default: float
     description: str
 
-class AttackProps(BaseModel):
+
+class RegisteredObject(BaseModel):
     id: str
     name: str
-    description: str
+    description: Optional[str] = None
+    parameters: list[ParametersProps]
+    task: str
     knowledge: Optional[str] = None
-    task: Optional[str] = None
-    parameters: Optional[List[ParametersProps]] = None
 
+
+#######################################################################
 class MetricProps(BaseModel):
     name: str
+
 
 class ExecutionConfig(BaseModel):
     dataset: str
     model: str
     attacks: Any
     metrics: Any
+
 
 class ReportProps(BaseModel):
     info: ReportInfoProps
@@ -121,6 +133,7 @@ class ReportAttacksProps(BaseModel):
     robustness: Optional[List[float]] = None
     confusion_matrix: Optional[List[List[int]]] = None
 
+
 class ReportInfoProps(BaseModel):
     id: str
     name: str
@@ -128,12 +141,14 @@ class ReportInfoProps(BaseModel):
     classes: int
     dimensionality: List[int]
 
+
 class BenchmarkModelProps(BaseModel):
     name: str
     param: int
     task: str
-    benchmark_id : str
+    benchmark_id: str
     metrics: Dict[str, float | int]
+
 
 class SingleAttackProps(BaseModel):
     x: str
@@ -145,5 +160,3 @@ class SingleAttackProps(BaseModel):
     confidence: tuple[list[float], list[float]]
     # Container of all the possible metrics that can be useful
     advance_metrics: dict[str, float]
-
-

@@ -1,9 +1,11 @@
-import sys
-import os
-from pathlib import Path
-import logging
 import argparse
+import logging
+import os
+import sys
+from pathlib import Path
+
 import ray
+
 # Importing other nn_trust apps scope
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -134,7 +136,7 @@ if __name__ == "__main__":
     except Exception as e:
         logging.error(f"Failed to initialize Ray: {e}")
         raise
-    
+    print((args.host, args.port))
     uvicorn.run(
         "app:app",
         host=args.host,
