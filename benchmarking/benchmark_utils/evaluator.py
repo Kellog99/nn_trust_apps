@@ -72,8 +72,8 @@ class BenchmarkOptionConfig(BaseModel):
     executor_type : Literal["ray"]
 
 class BenchmarkDatasetTransformConfig(BaseModel):
-    size: int
-    crop: int
+    size: int | None = None
+    crop: int | None = None
     transform_id: str
     mean: List[float]
     std: List[float]
@@ -95,6 +95,7 @@ class BenchmarkModelsConfig(BaseModel):
     pretrained: bool
     num_classes: int
     task: str
+    weights_path: str | None = None
 
 
 class BenchmarkAttackConfig(BaseModel):
@@ -221,7 +222,7 @@ class Evaluator:
         """
         transform, inverse_transform = get_data_transformation_config(
             transform_id=dataset["transform_config"]["transform_id"],
-            size=dataset["transform_config"]["size"],
+            size=dataset["transform_config"].get("size"),
             crop=dataset["transform_config"].get("crop"),
             mean=dataset["transform_config"].get("mean"),
             std=dataset["transform_config"].get("std"),
@@ -238,6 +239,7 @@ class Evaluator:
         )
 
         model = get_model(
+            num_labels=model_config.get("num_classes"),
             model_name=model_config.get("name"),
             model_type=model_config.get("type"),
             model_weights_path=model_config.get("weights_path", None),

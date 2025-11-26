@@ -72,7 +72,7 @@ def read_config_file(config_filename: str) -> dict:
 
 def get_data_transformation_config(
     transform_id: str,
-    size: int,
+    size: int|None = None,
     crop: Optional[int] = None,
     mean: Optional[list[float]] = None,
     std: Optional[list[float]] = None
@@ -89,6 +89,13 @@ def get_data_transformation_config(
                 torchvision.transforms.Resize(size=(size, size)),
                 torchvision.transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5]),
                 # torchvision.transforms.Normalize(mean=[0.5074, 0.5308, 0.5306], std=[0.2639, 0.2518, 0.2521])
+            ]
+        )
+    elif transform_id == "normalize_only":
+        transform = torchvision.transforms.Compose(
+            [
+                torchvision.transforms.ToTensor(),
+                torchvision.transforms.Normalize(mean=mean, std=std),
             ]
         )
     elif transform_id == "imagenet_like_crop":
