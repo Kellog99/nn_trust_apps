@@ -36,7 +36,7 @@ datasets:
 models:
 
   - name: 'timm/tf_efficientnet_b7.ap_in1k'
-    weights_path: '/home/bru/Documents/models_checkpoints/lightning_logs/304_model_training/model_timm/tf_efficientnet_b7.ap_in1k_lr_0.0001_1e-06_bs_32/last.ckpt'
+    weights_path: '/home/cartac/models/model_timm/tf_efficientnet_b7.ap_in1k_lr_0.0001_1e-06_bs_32/last.ckpt'
     type: 'hf'
     pretrained: true
     num_classes: 36
