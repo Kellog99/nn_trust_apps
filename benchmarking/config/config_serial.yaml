@@ -18,7 +18,7 @@ options:
   output_format: "report"                             # "report" or "test"
   mode : "single_node_parallel"
   num_workers : 1
-  num_gpus_per_worker : 0.5
+  num_gpus_per_worker : 1
   executor_type : "ray"
 
 datasets:

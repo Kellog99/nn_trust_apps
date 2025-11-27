@@ -561,6 +561,8 @@ class Evaluator:
         atk_res = atk_result
         attack_result_path = model_result_path / atk_id
         os.makedirs(attack_result_path, exist_ok=True)
+        with open(attack_result_path / "time.json", 'w') as f:
+            json.dump({"time": atk_res["time"]}, f)
         with open(attack_result_path / "statistics.json", 'w') as f:
             json.dump(atk_res["statistics"], f)
         with open(attack_result_path / "statistics_states.pkl", 'wb') as f:
@@ -602,11 +604,14 @@ class Evaluator:
                 atk_params["benchmark_id"] = benchmark_id
             if num_tasks:
                 atk_params["num_tasks"] = num_tasks
+            start = time.time()
             atk_result = Evaluator.evaluate_attack(**atk_params)
+            end = time.time()
             sig = signature(Evaluator.save_attack_result_to_disk)
             accepted_params = sig.parameters
             save_params = {k: v for k, v in kwargs.items() if k in accepted_params}
             if tracker:
+                atk_result["time"] = end-start
                 tracker.execute.remote(Evaluator.save_attack_result_to_disk, atk_result, **save_params)
             else:
                 Evaluator.save_attack_result_to_disk(atk_result, **save_params)

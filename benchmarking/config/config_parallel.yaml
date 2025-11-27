@@ -16,9 +16,9 @@ options:
   gpu: true
   output_path: "/home/cristiano-carta/Desktop/output" # Path to the output folder
   output_format: "report"                             # "report" or "test"
-  mode : "multi_node_parallel"
-  num_workers : 1
-  num_gpus_per_worker : 1
+  mode : "single_node_parallel"
+  num_workers : 2
+  num_gpus_per_worker : 0.5
   executor_type : "ray"
 
 datasets:
@@ -28,7 +28,7 @@ datasets:
     batch: 20
     type_dataset: 2
     num_workers: 2
-    source_path: "animals/data"
+    source_path: "/home/cristiano-carta/Desktop/datasets/animals/data"
     transform_config:
       size: 256
       crop: 224

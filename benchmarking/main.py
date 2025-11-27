@@ -35,7 +35,7 @@ except ModuleNotFoundError:
     from .benchmark_utils.pdf_report import create_benchmark_report
 
 # --- Timing --- #
-SERIAL_TIME = None
+SERIAL_TIME = 1.0
 PARALLEL_TIME = None
 SERIAL_TIMES = []
 PARALLEL_TIMES = []
@@ -373,10 +373,10 @@ def time_benchmark():
                             mode=mode, 
                             executor=executor)
         
-        mode = parallel_config.mode
-        num_workers = parallel_config.num_workers
-        num_gpus_per_worker = parallel_config.num_gpus_per_worker
-        executor_type = parallel_config.executor_type
+        mode = parallel_config.options.mode
+        num_workers = parallel_config.options.num_workers
+        num_gpus_per_worker = parallel_config.options.num_gpus_per_worker
+        executor_type = parallel_config.options.executor_type
         executor = executors_factory(executor_type=executor_type, num_workers=num_workers, num_gpus_per_worker=num_gpus_per_worker)
         executor.use_event_loop = False
 
