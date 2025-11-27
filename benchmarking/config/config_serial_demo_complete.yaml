@@ -73,9 +73,9 @@ models:
 attacks:
   - name: 'banditprior'
     max_iters: 100
-  - name: 'binary'
+  - name: 'signopt'
     max_iters: 5
-  - name: 'dag'
+  - name: 'fuap'
     max_iters: 30
   - name: 'deepfool'
     max_iters: 5
@@ -83,4 +83,3 @@ attacks:
     max_iters: 30
   - name: 'pgd'
     max_iters: 30
-  - name: 'priorgd'
