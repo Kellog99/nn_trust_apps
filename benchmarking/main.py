@@ -317,6 +317,7 @@ def executors_factory(executor_type:str, num_workers: int = 1, num_gpus_per_work
         raise ValueError(f"Executor type {executor_type} not supported.")
 
 def main():
+    global SERIAL_TIME
     handler = logging.StreamHandler()
     handler.addFilter(lambda record: record.name == "root")
     logging.basicConfig(level=logging.WARN, handlers=[handler])
@@ -336,6 +337,7 @@ def main():
                         mode=mode, 
                         executor=executor)
 
+    print("Serial time:", SERIAL_TIME)
     print(f"Results saved to {output_path}")
     postprocess_benchmark_run_results(output_path)
     models = config.model_dump()["models"]
@@ -343,7 +345,7 @@ def main():
     for dataset in datasets:
         dataset_name = dataset["name"]
         for model in models:
-            model_name = model["name"]
+            model_name = model["name"] if "timm/" not in model["name"] else model["name"].replace("timm/","")
             print(f"Generating report for {dataset_name} - {model_name}")
             create_benchmark_report(
                 benchmark_run_dir=output_path,

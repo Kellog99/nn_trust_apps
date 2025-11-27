@@ -3,14 +3,14 @@
         {"name":"resnet50",
          "type": "timm",
         "pretrained": true,
-        "num_classes": 90,
+        "num_classes": 36,
         "task": "classification"
         },
         {
         "name":"resnet18",
         "type":"timm",
         "pretrained":true,
-        "num_classes":90,
+        "num_classes":36,
         "task":"classification"
         }
     ],

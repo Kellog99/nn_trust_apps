@@ -23,11 +23,11 @@ options:
 datasets:
   - name: "clean-aircraft-crop"
     num_classes: 36
-    subset: 100
+    subset: 20
     batch: 20
     type_dataset: 2
     num_workers: 2
-    source_path: "/home/papab/data/aircraft-dataset/clean-aircraft-crop"  # NOTE: set dataset path
+    source_path: "/home/cartac/data/clean-aircraft-crop"  # NOTE: set dataset path
     transform_config:
       transform_id: "normalize_only"
       mean: [0.485, 0.456, 0.406]
@@ -43,28 +43,28 @@ models:
     task: "classification"
 
   - name: 'timm/tf_efficientnet_b7.aa_in1k'
-    weights_path: '/home/bru/Documents/models_checkpoints/lightning_logs/304_model_training/model_timm/tf_efficientnet_b7.aa_in1k_lr_0.0001_1e-06_bs_32/last.ckpt'
+    weights_path: '/home/cartac/models/model_timm/tf_efficientnet_b7.aa_in1k_lr_0.0001_1e-06_bs_32/last.ckpt'
     type: 'hf'
     pretrained: true
     num_classes: 36
     task: "classification"
 
   - name: 'timm/convnextv2_base.fcmae_ft_in1k'
-    weights_path: '/home/bru/Documents/models_checkpoints/lightning_logs/304_model_training/model_timm/convnextv2_base.fcmae_ft_in1k_lr_0.0001_1e-06_bs_32/last.ckpt'
+    weights_path: '/home/cartac/models/model_timm/convnextv2_base.fcmae_ft_in1k_lr_0.0001_1e-06_bs_32/last.ckpt'
     type: 'hf'
     pretrained: true
     num_classes: 36
     task: "classification"
 
   - name: 'timm/vit_base_patch16_224.augreg2_in21k_ft_in1k'
-    weights_path: '/home/bru/Documents/models_checkpoints/lightning_logs/304_model_training/model_timm/vit_base_patch16_224.augreg2_in21k_ft_in1k_lr_0.0001_1e-06_bs_32/last.ckpt'
+    weights_path: '/home/cartac/models/model_timm/vit_base_patch16_224.augreg2_in21k_ft_in1k_lr_0.0001_1e-06_bs_32/last.ckpt'
     type: 'hf'
     pretrained: true
     num_classes: 36
     task: "classification"
 
   - name: 'timm/davit_base.msft_in1k'
-    weights_path: '/home/bru/Documents/models_checkpoints/lightning_logs/304_model_training/model_timm/davit_base.msft_in1k_lr_0.0001_1e-06_bs_32/last.ckpt'
+    weights_path: '/home/cartac/models/model_timm/davit_base.msft_in1k_lr_0.0001_1e-06_bs_32/last.ckpt'
     type: 'hf'
     pretrained: true
     num_classes: 36

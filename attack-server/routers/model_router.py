@@ -62,6 +62,25 @@ def get_models() -> Union[Models, Error]:
                 merged_model_info = model_info | model_entry
                 models.append(merged_model_info)
 
+            if os.path.isfile(item_path) and item_path.endswith(".ckpt"):
+                logging.info(f"Found a model: {item_path}")
+
+                # Construct the corresponding JSON file path
+                json_path = item_path.replace(".ckpt", ".json")
+                
+                # Check if JSON file exists
+                if not os.path.isfile(json_path):
+                    raise FileNotFoundError(f"JSON file not found for model: {item}. Expected: {json_path}")
+                
+                # Read the JSON file
+                with open(json_path, 'r') as json_file:
+                    model_info = json.load(json_file)
+                
+                # Create model entry with base info and extend with JSON data
+                model_entry = {"name": Path(item).stem, "type": "hf"}
+                merged_model_info = model_info | model_entry
+                models.append(merged_model_info)
+
         if len(models)==0:
             logging.info("No uploaded models found.")
 

@@ -435,6 +435,19 @@ async def start_benchmark_job(body: ExecutionConfig = Body(...)) -> Union[str,Er
                     status_code=404,
                     content=Error(code=404, 
                                 message=f"Can't find model metadata in the repository for model:{model_name}").model_dump_json())
+        if model_type[0]=="hf":
+            if os.path.exists(file_path) and os.path.isfile(file_path):
+                with open(file_path, "r", encoding="utf-8") as f:
+                    config_models = json.load(f)  # load into dict
+                    config_models["type"]="hf"
+                logging.info("Loaded JSON metadata")
+            else:
+                logging.error(f"Can't find model metadata in the repository for model:{model_name}")
+                return Response(
+                    status_code=404,
+                    content=Error(code=404, 
+                                message=f"Can't find model metadata in the repository for model:{model_name}").model_dump_json())
+            
         elif model_type[0]=="timm":
             model_metadata = None
             for m in model_response:
@@ -477,6 +490,11 @@ async def start_benchmark_job(body: ExecutionConfig = Body(...)) -> Union[str,Er
 
         if model_type[0]=="saved_model":
             config_models["weights_path"] = os.path.join(os.environ.get('INTERNAL_MODEL_STORAGE'),f"{model_name}.pth")
+
+        if model_type[0]=="hf":
+            #TODO:fix
+            config_models["name"] = f"timm/{model_name}"
+            config_models["weights_path"] = os.path.join(os.environ.get('INTERNAL_MODEL_STORAGE'),f"{model_name}.ckpt")
 
         config_dataset["source_path"] = os.path.join(dataset_name,"data")
 
@@ -557,6 +575,19 @@ async def start_singleattack_job(body : models.AttackConfig = Body(...)) -> Opti
                     status_code=404,
                     content=Error(code=404, 
                                 message=f"Can't find model metadata in the repository for model:{model_name}").model_dump_json())
+        if model_type[0]=="hf":
+            if os.path.exists(file_path) and os.path.isfile(file_path):
+                with open(file_path, "r", encoding="utf-8") as f:
+                    config_models = json.load(f)  # load into dict
+                    config_models["type"]="hf"
+                logging.info("Loaded JSON metadata")
+            else:
+                logging.error(f"Can't find model metadata in the repository for model:{model_name}")
+                return Response(
+                    status_code=404,
+                    content=Error(code=404, 
+                                message=f"Can't find model metadata in the repository for model:{model_name}").model_dump_json())
+            
         elif model_type[0]=="timm":
             model_metadata = None
             for m in model_response:
@@ -573,8 +604,14 @@ async def start_singleattack_job(body : models.AttackConfig = Body(...)) -> Opti
         
         if model_type[0]=="saved_model":
             config_models["weights_path"] = os.path.join(os.environ.get('INTERNAL_MODEL_STORAGE'),f"{model_name}.pth")
+        
+        if model_type[0]=="hf":
+            #TODO:fix
+            config_models["name"] = f"timm/{model_name}"
+            config_models["weights_path"] = os.path.join(os.environ.get('INTERNAL_MODEL_STORAGE'),f"{model_name}.ckpt")
 
         model_ad = benchmarking.get_model(
+            num_labels=config_models.get("num_classes"),
             model_name=config_models.get("name"),
             model_type=config_models.get("type"),
             model_weights_path=config_models.get("weights_path", None),
@@ -605,7 +642,7 @@ async def start_singleattack_job(body : models.AttackConfig = Body(...)) -> Opti
             
             atk = EvasionAttackFactory.create_attack(attack_type=attack_name, config=cnf)
             labels = model_ad(img).argmax(1)
-            labels_ohe = torch.nn.functional.one_hot(labels, num_classes=1000)
+            labels_ohe = torch.nn.functional.one_hot(labels, num_classes=36)
             start = time.time()
             x_adv = atk.generate(x=img, y=labels_ohe)
             end = time.time()
@@ -659,7 +696,7 @@ async def start_singleattack_job(body : models.AttackConfig = Body(...)) -> Opti
 
     except Exception as e:
         logging.error(f"Unexpected error during attack: {str(e)}")
-        
+        #raise e
         return Response(
                 status_code=500,
                 content=Error(code=500, message=f"Unexpected error during attack").model_dump_json())
