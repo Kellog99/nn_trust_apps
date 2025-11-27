@@ -52,7 +52,7 @@ class JobConfig(BaseModel):
 
 class AttackConfig(BaseModel):
     image: str
-    model_name: str
+    id_model: str
     attack: Any
 
 

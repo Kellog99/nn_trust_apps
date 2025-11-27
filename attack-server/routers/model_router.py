@@ -14,6 +14,7 @@ from fastapi.responses import JSONResponse
 
 from lib.model import Error, ModelInfo
 from lib.validator import json_safety_check
+from routers.utils import get_model_info
 
 router = APIRouter(prefix="/model", tags=["datasets and models"])
 
@@ -43,27 +44,13 @@ def get_models():
             content=Error(code=500, message=f"Internal server error during config import.").model_dump_json())
 
     try:
-        models_root_dir = os.environ.get("INTERNAL_MODEL_STORAGE")
-        for item in os.listdir(models_root_dir):
-            item_path = os.path.join(models_root_dir, item)
-            if os.path.isfile(item_path) and item_path.endswith(".pth"):
-                logging.info(f"Found a model: {item_path}")
+        # this represents the folder where all the models are stored.
+        models_root_dir = Path(os.environ.get("INTERNAL_MODEL_STORAGE"))
+        for item in models_root_dir.iterdir():
+            # This path refers to a specific model's folder
+            item_path: Path = models_root_dir / item
+            out.append(get_model_info(path=item_path))
 
-                # Construct the corresponding JSON file path
-                json_path = item_path.replace(".pth", ".json")
-
-                # Check if JSON file exists
-                if not os.path.isfile(json_path):
-                    raise FileNotFoundError(f"JSON file not found for model: {item}. Expected: {json_path}")
-
-                # Read the JSON file
-                with open(json_path, 'r') as json_file:
-                    model_info = json.load(json_file)
-
-                # Create model entry with base info and extend with JSON data
-                model_entry = {"name": Path(item).stem, "type": "saved_model"}
-                merged_model_info = model_info | model_entry
-                out.append(ModelInfo(**merged_model_info))
 
         if len(out) == 0:
             logging.info("No uploaded models found.")
