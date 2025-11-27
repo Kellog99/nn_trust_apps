@@ -16,7 +16,7 @@ options:
   gpu: true
   output_path: "./output" # Path to the output folder
   output_format: "report"                             # "report" or "test"
-  mode : "single_node_parallel"
+  mode : "single_node_serial"
   num_workers : 4
   num_gpus_per_worker : 1
   executor_type : "ray"
@@ -24,11 +24,11 @@ options:
 datasets:
   - name: "clean-aircraft-crop"             # Dataset name
     num_classes: 36
-    subset: 100
+    subset: 20
     batch: 20
     type_dataset: 2
     num_workers: 2
-    source_path: "/home/papab/data/aircraft-dataset/clean-aircraft-crop"
+    source_path: "/home/bru/Documents/codes/data/aircraft-dataset/clean-aircraft-crop"
     transform_config:
       transform_id: "normalize_only"
       mean: [0.485, 0.456, 0.406]
@@ -58,7 +58,7 @@ models:
 
 
   - name: 'timm/convnextv2_base.fcmae_ft_in1k'
-    weights_path: '/home/papab/codes/nn_trust_apps/train_classificationv2/lightning_logs/304_model_training/model_timm/convnextv2_base.fcmae_ft_in1k_lr_0.0001_1e-06_bs_32/last.ckpt'
+    weights_path: '/home/bru/Documents/models_checkpoints/lightning_logs/304_model_training/model_timm/convnextv2_base.fcmae_ft_in1k_lr_0.0001_1e-06_bs_32/last.ckpt'
     type: 'hf'
     pretrained: true
     num_classes: 36
@@ -73,7 +73,7 @@ models:
 
 attacks:
 #  - name: 'autozoom'
-  - name: 'banditprior'
+#  - name: 'banditprior'
 #  - name: 'binary'
 #  - name: 'blackboxtransfer'
 #  - name: 'boundary'
@@ -97,4 +97,4 @@ attacks:
 #  - name: 'signopt'
 #   - name: 'simba'
 #  - name: 'uniformbaseline'
-  - name: 'zoo'
+#  - name: 'zoo'

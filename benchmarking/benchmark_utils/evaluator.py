@@ -3,11 +3,7 @@ import pathlib
 from pathlib import Path
 from typing import Union, Annotated, Literal, List, Optional
 import logging
-import time
 from tqdm.auto import tqdm
-import yaml
-import glob
-import re
 import os
 import traceback
 import pickle
@@ -20,12 +16,12 @@ from torch.utils.data import DataLoader
 from inspect import signature
 from nn_trust.attack import EvasionAttackFactory
 from nn_trust.attack._evasion import EvasionAttack
-from nn_trust.attack.evaluation._statistics import StatisticsFactory
-from nn_trust.attack.evaluation.composer import ConfigStatisticComposer, StatisticComposer
+from nn_trust.evaluation.statistic_factory import StatisticsFactory
+from nn_trust.evaluation.composer import ConfigStatisticComposer, StatisticComposer
 from nn_trust.attack.utils._utils import enumerated_list, get_min
 from nn_trust.attack.utils.logger import TensorboardLogger
-from nn_trust.attack.utils.loss._loss import LossFactory
-from nn_trust.attack.utils.loss.loss_composer import ConfigLossComposer, LossComposer
+from nn_trust.loss.loss_factory import LossFactory
+from nn_trust.loss.loss_composer import ConfigLossComposer, LossComposer
 from nn_trust.core import Task, ModelAdapter
 from .config import get_data_transformation_config
 from .utils import get_dataloader, get_model
@@ -175,7 +171,7 @@ class EvaluatorConfig(BaseModel):
     @classmethod
     def validate_attacks(cls, v, info:ValidationInfo):
         field_name = info.field_name
-        complete_list = EvasionAttackFactory.list_attacks()
+        complete_list = EvasionAttackFactory.get_list_classes()
         return [atk for atk in v if atk.name in complete_list]
 
 
@@ -308,7 +304,7 @@ class Evaluator:
                     p=attack_config.get('p', 2.0),
                     loss_weights=attack_config.get('loss_weights', [1.0] * len(attack_config['losses'])),
                 ))
-            atk = EvasionAttackFactory.create_attack(
+            atk = EvasionAttackFactory.create(
                 atk_name,
                 model=model,
                 device=device,
@@ -317,7 +313,7 @@ class Evaluator:
                 **attack_config
             )
             atk.name = atk_id
-            if model.task not in atk.TASKS:
+            if model.task not in atk.task:
                 raise ValueError(
                     f"\U0001F928 Attack {atk_name} does not support Model {model.name} task {model.task}.")
 
