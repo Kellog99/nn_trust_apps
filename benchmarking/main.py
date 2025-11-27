@@ -317,42 +317,41 @@ def executors_factory(executor_type:str, num_workers: int = 1, num_gpus_per_work
         raise ValueError(f"Executor type {executor_type} not supported.")
 
 def main():
-    #handler = logging.StreamHandler()
-    #handler.addFilter(lambda record: record.name == "root")
-    #logging.basicConfig(level=logging.WARN, handlers=[handler])
-    #selected_config_path = config_file_path_selector(Path(__file__).parent / "config")
-    #config = read_config_file(config_filename=str(selected_config_path))
-    #config = BenchmarkConfig(**config)
-#
-   #
-    #mode = config.options.mode
-    #num_workers = config.options.num_workers
-    #num_gpus_per_worker = config.options.num_gpus_per_worker
-    #executor_type = config.options.executor_type
-    #executor = executors_factory(executor_type=executor_type, num_workers=num_workers, num_gpus_per_worker=num_gpus_per_worker)
-    #executor.use_event_loop = False
-#
-    #output_path = benchmark_from_main(config.model_dump(), 
-    #                    mode=mode, 
-    #                    executor=executor)
-    
-    #print(f"Results saved to {output_path}")
-    postprocess_benchmark_run_results("/home/cristiano-carta/Desktop/output/20251127T125012")
+    handler = logging.StreamHandler()
+    handler.addFilter(lambda record: record.name == "root")
+    logging.basicConfig(level=logging.WARN, handlers=[handler])
+    selected_config_path = config_file_path_selector(Path(__file__).parent / "config")
+    config = read_config_file(config_filename=str(selected_config_path))
+    config = BenchmarkConfig(**config)
 
-    #models = config.model_dump()["models"]
-    #datasets = config.model_dump()["datasets"]
-    #for dataset in datasets:
-    #    dataset_name = dataset["name"]
-    #    for model in models:
-    #        model_name = model["name"]
-    #        print(f"Generating report for {dataset_name} - {model_name}")
-    #        create_benchmark_report(
-    #            benchmark_run_dir=output_path,
-    #            model_name=model_name,
-    #            dataset_name=dataset_name,
-    #            filename=Path(output_path) / dataset_name / model_name / "report.pdf",
-    #            generated_by="Leonardo S.p.A."
-    #        )
+   
+    mode = config.options.mode
+    num_workers = config.options.num_workers
+    num_gpus_per_worker = config.options.num_gpus_per_worker
+    executor_type = config.options.executor_type
+    executor = executors_factory(executor_type=executor_type, num_workers=num_workers, num_gpus_per_worker=num_gpus_per_worker)
+    executor.use_event_loop = False
+
+    output_path = benchmark_from_main(config.model_dump(), 
+                        mode=mode, 
+                        executor=executor)
+
+    print(f"Results saved to {output_path}")
+    postprocess_benchmark_run_results(output_path)
+    models = config.model_dump()["models"]
+    datasets = config.model_dump()["datasets"]
+    for dataset in datasets:
+        dataset_name = dataset["name"]
+        for model in models:
+            model_name = model["name"]
+            print(f"Generating report for {dataset_name} - {model_name}")
+            create_benchmark_report(
+                benchmark_run_dir=output_path,
+                model_name=model_name,
+                dataset_name=dataset_name,
+                filename=Path(output_path) / dataset_name / model_name / "report.pdf",
+                generated_by="Leonardo S.p.A."
+            )
     
 def time_benchmark():
     handler = logging.StreamHandler()
