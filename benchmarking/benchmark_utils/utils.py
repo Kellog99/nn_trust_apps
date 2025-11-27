@@ -14,6 +14,7 @@ from torchvision.models import resnet50
 from nn_trust.core import ModelAdapter
 from .imagenet2012_loader import ImageNetTrainDataset
 from .model_library import models_library
+from nn_trust.models.hf_model import HFModel
 
 def resolve_path(path: str) -> str:
     """
@@ -125,6 +126,7 @@ def get_dataloader(
 
 def get_model(
     model: ModelAdapter | torch.nn.Module = None,
+    num_labels: int = None,
     model_name: str = None,
     model_type: str = None,
     model_task: str = None,
@@ -147,18 +149,15 @@ def get_model(
     elif model_name and model_type == "timm":
         model = ModelAdapter(model=timm.create_model(model_name, pretrained=True), name=model_name, transform=tt, task=model_task)
     elif model_name and model_type == "saved_model":
-        print("*****************************")
-        original = os.getcwd()
-        print("---------------------", original)
-        os.chdir('..')
         model = ModelAdapter(model=torch.load(model_weights_path, weights_only=False), name=model_name, transform=tt, task=model_task)
-        os.chdir(original)
     elif model_name and model_type == "saved_weights":
         # model = ResNet50Dirichlet()
         model = models_library[model_name]()
         state_dict = torch.load(model_weights_path, map_location="cpu")
         model.load_state_dict(state_dict)
         model = ModelAdapter(model=model, name=model_name, transform=tt, task=model_task)
+    elif model_type == "hf" and model_name:
+        model = HFModel(model_name=model_name, checkpoint_path=model_weights_path, device="cpu", task=model_task, num_labels=num_labels)
     else:
         raise ValueError("You must provide a model or a model name and type.")
 
