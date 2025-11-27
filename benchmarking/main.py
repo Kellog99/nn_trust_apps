@@ -248,35 +248,47 @@ def benchmark_from_attack_server(config: dict, executor : Executor):
     return benchmark_id
 
 # --- Aggregation and pdf report --- #
-def postprocess_benchmark_run_results(benchmark_run_dir: str | pathlib.Path, verbose=True):
-    """Iterate over different datasets and models, and where possible apply statistics aggregation"""
+from pathlib import Path
+import json
+import traceback
+
+def postprocess_benchmark_run_results(benchmark_run_dir: str | Path, verbose=True):
     benchmark_run_dir = Path(benchmark_run_dir)
     with open(benchmark_run_dir / "configuration.json", "r") as fconfiguration:
         config = json.load(fconfiguration)
-    datasets_dir = [dataset_dir for dataset_dir in benchmark_run_dir.iterdir() if dataset_dir.is_dir()]
-    for dataset_dir in datasets_dir:
-        models_dir = [model_dir for model_dir in dataset_dir.iterdir() if model_dir.is_dir()]
-        for model_dir in models_dir:
-            try:
-                with open(model_dir / "info.json", "r") as finfo:
-                    info = json.load(finfo)
-                statistics_composer = StatisticComposer(config=ConfigStatisticComposer(
-                    statistics=config["evaluation"]["statistics"],
-                    num_classes=info["classes"],
-                ))
-                statistics_composer.aggregator()
-                results = Evaluator.read_results_from_disk(model_dir)
-                aggregate_statistics = Evaluator.aggregate_attacks_statistics(
-                    statistics_composer=statistics_composer,
-                    results=results
-                )
-                with open(model_dir / "aggregate_statistics.json", "w") as fagg_statistics:
-                    json.dump(aggregate_statistics, fagg_statistics)
-            except Exception as e:
-                if verbose:
-                    print(f"Failed postprocessing on {dataset_dir.name}/{model_dir.name}")
-                    print(e)
-                    traceback.print_exc()
+
+    # Find all directories that contain info.json (these are our model directories).
+    model_dirs = set()
+    for info_path in benchmark_run_dir.rglob("info.json"):
+        model_dirs.add(info_path.parent)   # info.json sits in the model directory
+
+    for model_dir in sorted(model_dirs):
+        try:
+            with open(model_dir / "info.json", "r") as finfo:
+                info = json.load(finfo)
+
+            statistics_composer = StatisticComposer(config=ConfigStatisticComposer(
+                statistics=config["evaluation"]["statistics"],
+                num_classes=info["classes"],
+            ))
+            statistics_composer.aggregator()
+
+            results = Evaluator.read_results_from_disk(model_dir)
+            aggregate_statistics = Evaluator.aggregate_attacks_statistics(
+                statistics_composer=statistics_composer,
+                results=results
+            )
+            with open(model_dir / "aggregate_statistics.json", "w") as fagg_statistics:
+                json.dump(aggregate_statistics, fagg_statistics)
+
+            if verbose:
+                print(f"Postprocessed {model_dir.relative_to(benchmark_run_dir)}")
+        except Exception as e:
+            if verbose:
+                print(f"Failed postprocessing on {model_dir.relative_to(benchmark_run_dir)}")
+                print(e)
+                traceback.print_exc()
+
 
 #def benchmark(config: dict):
 #    output_path = benchmark_(config)
@@ -305,42 +317,42 @@ def executors_factory(executor_type:str, num_workers: int = 1, num_gpus_per_work
         raise ValueError(f"Executor type {executor_type} not supported.")
 
 def main():
-    handler = logging.StreamHandler()
-    handler.addFilter(lambda record: record.name == "root")
-    logging.basicConfig(level=logging.WARN, handlers=[handler])
-    selected_config_path = config_file_path_selector(Path(__file__).parent / "config")
-    config = read_config_file(config_filename=str(selected_config_path))
-    config = BenchmarkConfig(**config)
-
-   
-    mode = config.options.mode
-    num_workers = config.options.num_workers
-    num_gpus_per_worker = config.options.num_gpus_per_worker
-    executor_type = config.options.executor_type
-    executor = executors_factory(executor_type=executor_type, num_workers=num_workers, num_gpus_per_worker=num_gpus_per_worker)
-    executor.use_event_loop = False
-
-    output_path = benchmark_from_main(config.model_dump(), 
-                        mode=mode, 
-                        executor=executor)
+    #handler = logging.StreamHandler()
+    #handler.addFilter(lambda record: record.name == "root")
+    #logging.basicConfig(level=logging.WARN, handlers=[handler])
+    #selected_config_path = config_file_path_selector(Path(__file__).parent / "config")
+    #config = read_config_file(config_filename=str(selected_config_path))
+    #config = BenchmarkConfig(**config)
+#
+   #
+    #mode = config.options.mode
+    #num_workers = config.options.num_workers
+    #num_gpus_per_worker = config.options.num_gpus_per_worker
+    #executor_type = config.options.executor_type
+    #executor = executors_factory(executor_type=executor_type, num_workers=num_workers, num_gpus_per_worker=num_gpus_per_worker)
+    #executor.use_event_loop = False
+#
+    #output_path = benchmark_from_main(config.model_dump(), 
+    #                    mode=mode, 
+    #                    executor=executor)
     
-    print(f"Results saved to {output_path}")
-    postprocess_benchmark_run_results(output_path)
+    #print(f"Results saved to {output_path}")
+    postprocess_benchmark_run_results("/home/cristiano-carta/Desktop/output/20251127T125012")
 
-    models = config.model_dump()["models"]
-    datasets = config.model_dump()["datasets"]
-    for dataset in datasets:
-        dataset_name = dataset["name"]
-        for model in models:
-            model_name = model["name"]
-            print(f"Generating report for {dataset_name} - {model_name}")
-            create_benchmark_report(
-                benchmark_run_dir=output_path,
-                model_name=model_name,
-                dataset_name=dataset_name,
-                filename=Path(output_path) / dataset_name / model_name / "report.pdf",
-                generated_by="Leonardo S.p.A."
-            )
+    #models = config.model_dump()["models"]
+    #datasets = config.model_dump()["datasets"]
+    #for dataset in datasets:
+    #    dataset_name = dataset["name"]
+    #    for model in models:
+    #        model_name = model["name"]
+    #        print(f"Generating report for {dataset_name} - {model_name}")
+    #        create_benchmark_report(
+    #            benchmark_run_dir=output_path,
+    #            model_name=model_name,
+    #            dataset_name=dataset_name,
+    #            filename=Path(output_path) / dataset_name / model_name / "report.pdf",
+    #            generated_by="Leonardo S.p.A."
+    #        )
     
 def time_benchmark():
     handler = logging.StreamHandler()
