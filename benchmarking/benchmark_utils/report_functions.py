@@ -54,12 +54,15 @@ def get_attacks_info():
             0: "Physical",
             1: "Digital"
         }
-        for atk in EAF.list_attacks(name=False):
-            if hasattr(atk, "_name"):
-                atk_id = atk.__name__.removesuffix("Attack").lower()
+        for atk in EAF.get_list_classes(name=False):
+            #if hasattr(atk, "_name"):
+                #atk_id = atk.__name__.removesuffix("Attack").lower()
                 # collecting all the parameters for displaying the configuration
+                atk_id = atk
+                atk = EAF.get_information(atk_id)
                 parameters = []
-                for param_name, param_info in EAF.list_config_param(atk_id, (int, float)):
+                for param_name, param_info in EAF.get_config_param(atk_id, (int, float)):
+                    
                     max_value = 1000
                     min_value = 1
                     if len(param_info.metadata) > 0:
@@ -98,15 +101,14 @@ def get_attacks_info():
 
                 out[atk_id] = AttackProps(
                     id=atk_id,
-                    name=atk._name,
-                    knowledge=knowledge[atk.ATTACK_KNOWLEDGE.value],
-                    description=atk._description if hasattr(atk,
-                                                            "_description") else "this should be a description about this particular attack. However we have not being able to add that.",
-                    type=type[atk.ATTACK_TYPE.value],
+                    name=atk["name"],
+                    knowledge=atk["knowledge"].name,
+                    description=atk["description"],
+                    type=atk["type"].name,
                     parameters=parameters
                 )
-            else:
-                pass
+            #else:
+            #    pass
         return out
     except Exception as e:
         logging.error(f"Unexpected error during get result: {str(e)}")

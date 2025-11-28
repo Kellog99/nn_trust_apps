@@ -410,7 +410,13 @@ async def start_benchmark_job(body: ExecutionConfig = Body(...)) -> Union[str, E
             for attack in body.attacks
         ]
         benchmark_config['evaluation'] = {}
-        benchmark_config["evaluation"]["statistics"] = body.metrics
+        benchmark_config["evaluation"]["statistics"] = [
+            {
+                "name": metric["id"],
+                **{param["label"]: param["default"] for param in metric.get("parameters", [])}
+            }
+            for metric in body.metrics
+        ]
         print(benchmark_config['attacks'])
         task_id = benchmarking.benchmark(benchmark_config, executor)
         return JSONResponse(status_code=200, content=task_id)
