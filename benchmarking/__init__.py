@@ -17,3 +17,4 @@ from .benchmark_utils.report_functions import (transform_to_benchmark,
                                               AttackProps,
                                               ParametersProps)
 from .benchmark_utils.pdf_report import AdversarialReportGenerator
+from .benchmark_utils.utils import get_dataloader

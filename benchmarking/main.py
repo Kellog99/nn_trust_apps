@@ -7,7 +7,7 @@ from datetime import datetime
 import pathlib
 import base64
 from typing import Optional, Tuple
-from nn_trust.attack.evaluation.composer import ConfigStatisticComposer, StatisticComposer
+from nn_trust.evaluation.composer import ConfigStatisticComposer, StatisticComposer
 import time
 try:
     from benchmark_utils import (
