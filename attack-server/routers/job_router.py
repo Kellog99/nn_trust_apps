@@ -302,19 +302,18 @@ async def start_benchmark_job(body: ExecutionConfig = Body(...)) -> Union[str, E
         model_name = body.model
         m_response = get_models()
         d_response = get_datasets()
-        model_response = json.loads(m_response.body.decode('utf-8'))["models"]
+        model_response = m_response
 
-        if m_response.status_code != 200 or d_response.status_code != 200:
-            logging.error("Model or Dataset repository is empty. Check repository.")
-            return Response(
-                status_code=404,
-                content=Error(code=404,
-                              message="Model or Dataset repository is empty. Check repository.").model_dump_json())
-
+        #if m_response.status_code != 200 or d_response.status_code != 200:
+        #    logging.error("Model or Dataset repository is empty. Check repository.")
+        #    return Response(
+        #        status_code=404,
+        #        content=Error(code=404,
+        #                      message="Model or Dataset repository is empty. Check repository.").model_dump_json())
         model = [m["name"] for m in model_response if m["name"] == model_name]
         model_type = [m["type"] for m in model_response if m["name"] == model_name]
-        dataset = [d for d in json.loads(d_response.body.decode('utf-8'))["names"] if d == dataset_name]
-
+        dataset = [d["name"] for d in d_response if d["name"] == dataset_name]
+        
         if len(model) > 1 or len(model_type) > 1:
             logging.error(f"The provided model string {model_name} has had more than one match. Check model repository")
             return Response(
@@ -418,6 +417,7 @@ async def start_benchmark_job(body: ExecutionConfig = Body(...)) -> Union[str, E
 
     except Exception as e:
         logging.error(f"Unexpected error during job start: {str(e)}")
+        #raise e
         return Response(
             status_code=500,
             content=Error(code=500, message=f"Unexpected error during job start").model_dump_json())
