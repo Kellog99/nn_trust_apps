@@ -80,8 +80,8 @@ contain the actual model and its information. The structure is given by
 ```
 model_repository/
 ├── model_1/                        # Folder containing the model 1
-    ├── model_1.pth                 # actual model
-    ├── model_1.json                # Json containing the model's information
+    ├── model.pth                   # actual model
+    ├── info.json                   # Json containing the model's information
 └── ...                             
 ```
 

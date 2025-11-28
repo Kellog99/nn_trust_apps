@@ -14,7 +14,6 @@ from fastapi.responses import JSONResponse
 
 from lib.model import Error, ModelInfo
 from lib.validator import json_safety_check
-from routers.utils import get_model_info
 
 router = APIRouter(prefix="/model", tags=["datasets and models"])
 
@@ -30,30 +29,15 @@ def get_models():
     """
     out = []
     try:
-        with open(os.environ.get("TIMM_MODELS_JSON_PATH")) as f:
-            config = json.load(f)
-            MODELS = config["timm_models"]
-            for model in MODELS:
-                out.append(ModelInfo(**model))
-
-    except Exception as e:
-        # Handle unexpected errors
-        logging.error(f"Unexpected error during config import: {str(e)}")
-        return Response(
-            status_code=500,
-            content=Error(code=500, message=f"Internal server error during config import.").model_dump_json())
-
-    try:
         # this represents the folder where all the models are stored.
         models_root_dir = Path(os.environ.get("INTERNAL_MODEL_STORAGE"))
-        for item in models_root_dir.iterdir():
+        for model_folder in models_root_dir.iterdir():
             # This path refers to a specific model's folder
-            item_path: Path = models_root_dir / item
-            out.append(get_model_info(path=item_path))
-
-
-        if len(out) == 0:
-            logging.info("No uploaded models found.")
+            item_path: Path = models_root_dir / model_folder / "info.json"
+            if item_path.exists():
+                with open(item_path, 'r') as json_file:
+                    json_file = json.load(json_file)
+                out.append(ModelInfo(**json_file))
 
         return out
 

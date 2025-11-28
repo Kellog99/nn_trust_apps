@@ -14,6 +14,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from routers import api_router
 import uvicorn
+from routers.info_router import router
 
 app = FastAPI(
     title='TITANN backend',
@@ -27,6 +28,10 @@ app = FastAPI(
     #    version='1.0.12',
     servers=[{'url': 'https://titann.swagger.io/api/v3'}],
 )
+app.include_router(router)
+# After app.include_router(router)
+for route in app.routes:
+    print(f"{route.methods} {route.path}")
 
 app.add_middleware(
     CORSMiddleware,
@@ -60,7 +65,7 @@ def parse_arguments():
     parser.add_argument(
         "--model_storage", "-ms",
         type=str,
-        default="~/Desktop/models",
+        default="/home/andrea/Desktop/models",
         help="Path to internal storage directory (models)"
     )
     parser.add_argument(

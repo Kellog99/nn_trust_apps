@@ -35,31 +35,18 @@ class DatasetInfo(Info):
 class ModelInfo(Info):
     dataset: Optional[str] = None  # Dataset where the model had been optimized on
     parameters: Optional[int] = None  # Number of the models' parameters
+    api: Optional[str] = None
 
 
 ###################################################################
-
-class Metric(BaseModel):
-    values: Optional[float] = Field(None, example=0.8)
-
-
-class Progress(BaseModel):
-    progress: Optional[float] = Field(None, example=0.82)
-    is_over: bool = Field(None, example=False)
-
-
-class JobConfig(BaseModel):
-    dataset: str = Field(..., example='cifar')
-    model: str = Field(..., example='resnet50')
-
 
 class Error(BaseModel):
     code: int
     message: str
 
 
-class Result(BaseModel):
-    metrics: Optional[List[Metric]] = None
+class Metric(BaseModel):
+    values: Optional[float] = Field(None, example=0.8)
 
 
 class BenchmarkJob(BaseModel):
@@ -73,12 +60,6 @@ class BenchmarkJob(BaseModel):
     all_attacks: List[str]
 
 
-class AttackJob(BaseModel):
-    id: str
-    progress: float
-    is_over: bool = Field(default=False)
-
-
 class ModelConfig(BaseModel):
     name: str
     type: Optional[str] = None
@@ -89,8 +70,8 @@ class ModelConfig(BaseModel):
 
 ########################### Register Object ###########################
 class ParametersProps(BaseModel):
+    id: str
     name: str
-    label: str
     min: float
     max: float
     step: float
@@ -120,9 +101,7 @@ class SingleAttackOutput(BaseModel):
     adv_perturbation: str
     original_prediction: str
     adversarial_prediction: str
-    # the first is the confidence of the original class while the second is the confidence of the most probable class during each iteration
-    confidence: tuple[list[float], list[float]]
-    # Container of all the possible metrics that can be useful
+    confidence: dict[str, list[float]]
     advance_metrics: dict[str, float]
 
 

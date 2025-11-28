@@ -1,4 +1,3 @@
-import json
 import math
 import os
 from pathlib import Path
@@ -11,7 +10,7 @@ from nn_trust.evaluation.statistic_factory import StatisticsFactory as SF
 from pydantic.fields import FieldInfo
 from pydantic_core import PydanticUndefined
 
-from lib.model import ParametersProps, ModelInfo
+from lib.model import ParametersProps
 
 
 def get_parameter_prop(id: str, param_info: FieldInfo) -> ParametersProps:
@@ -59,32 +58,14 @@ def get_parameter_prop(id: str, param_info: FieldInfo) -> ParametersProps:
 
     name = getattr(param_info, "title") if hasattr(param_info, "title") and getattr(param_info, "title") != None else id
     return ParametersProps(
+        id=id,
         name=name,
-        label=id,
         min=float(min_value),
         max=float(max_value),
         step=float(step),
         default=float(default),
         description=param_info.description
     )
-
-
-###################### Model Information ######################
-def get_model_info(path: Path) -> ModelInfo| None:
-    """
-    Retrieve the Model information for a specific path
-    """
-    json_file = None
-    for file in path.iterdir():
-        if file.suffix.endswith(".json"):
-            # Read the JSON file
-            with open(path / file, 'r') as json_file:
-                json_file = json.load(json_file)
-    if json_file:
-        try:
-            return ModelInfo(**json_file)
-        except Exception as e:
-            print(f"Unable to load the json file, Error {e}")
 
 
 # ------------------ JOBS utility --------------------------
