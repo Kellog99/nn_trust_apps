@@ -70,7 +70,7 @@ def get_parameter_prop(id: str, param_info: FieldInfo) -> ParametersProps:
 
 
 ###################### Model Information ######################
-def get_model_info(path: Path) -> ModelInfo:
+def get_model_info(path: Path) -> ModelInfo| None:
     """
     Retrieve the Model information for a specific path
     """

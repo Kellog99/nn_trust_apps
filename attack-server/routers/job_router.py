@@ -7,7 +7,7 @@ import logging
 import os
 import time
 from pathlib import Path
-from typing import Union, Optional
+from typing import Union
 
 import PIL
 import ray
@@ -22,10 +22,10 @@ from torchmetrics.image import StructuralSimilarityIndexMeasure
 from torchvision import transforms
 
 from lib.disk_reader import find_model_and_task_dir
-from lib.model import Error, ExecutionConfig, SingleAttackProps, AttackConfig, ReportProps
+from lib.model import Error, ExecutionConfig, SingleAttackOutput, SingleAttackProps, ReportProps
 from routers.dataset_router import get_datasets
 from routers.model_router import get_models
-from routers.utils import find_image, get_model_info
+from routers.utils import find_image
 
 benchmarking = importlib.import_module("benchmarking")
 
@@ -425,26 +425,38 @@ async def start_benchmark_job(body: ExecutionConfig = Body(...)) -> Union[str, E
 
 # --- Single attack --- #
 @router.post("/attack")
-async def start_singleattack_job(body: AttackConfig = Body(...)) -> Response:
+async def start_singleattack_job(body: SingleAttackProps = Body(...)) -> Response:
     """
     Start a new TITANN attack on single image job.
     """
     try:
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+        ###################### Input ######################
         # Decode base64 image string and convert to torch tensor
         image_bytes = base64.b64decode(body.image)
         image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
 
-        # Get the model
-        id_model = body.id_model
+        x: torch.Tensor = transforms.ToTensor()(image).unsqueeze(0).to(device)
 
+        ###################### Extracting the Model ######################
+        model = None
+        # Folder where all the models are stored.
         models_root_dir = Path(os.environ.get("INTERNAL_MODEL_STORAGE"))
         for item in models_root_dir.iterdir():
-            model_info = get_model_info(path=models_root_dir / item)
-            if model_info.id == id_model:
-                return model_info
+            file_path = os.path.join(models_root_dir, item, "info.json")
+            with open(file_path, 'r') as json_file:
+                json_file = json.load(json_file)
 
-        #return Response()
+            if json_file["id"] == body.id_model:
+                model = "something"
+                break
+
+        if model is None:
+            return Response(status_code=404,
+                            content=Error(code=404,
+                                          message=f"The model {body.id_model} has not been found"))
+        ##################################################################
 
         m_response = get_models()
         model_response = json.loads(m_response.body.decode('utf-8'))["models"]
@@ -566,7 +578,7 @@ async def start_singleattack_job(body: AttackConfig = Body(...)) -> Response:
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         # Execute the attack and get results
         ssim = StructuralSimilarityIndexMeasure().to(device)
-        out = SingleAttackProps(
+        out = SingleAttackOutput(
             x=body.image,
             adv_perturbation=pert_image_base64,
             x_adv=adv_img_base64,

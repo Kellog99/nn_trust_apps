@@ -6,11 +6,9 @@
   <component name="ChangeListManager">
     <list default="true" id="22d92992-d96d-425b-81b7-4e977d138887" name="Changes" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/app.py" beforeDir="false" afterPath="$PROJECT_DIR$/app.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/lib/model.py" beforeDir="false" afterPath="$PROJECT_DIR$/lib/model.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/resources/TITANN.postman_collection.json" beforeDir="false" afterPath="$PROJECT_DIR$/resources/TITANN.postman_collection.json" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/routers/job_router.py" beforeDir="false" afterPath="$PROJECT_DIR$/routers/job_router.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/routers/model_router.py" beforeDir="false" afterPath="$PROJECT_DIR$/routers/model_router.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/routers/utils.py" beforeDir="false" afterPath="$PROJECT_DIR$/routers/utils.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/../benchmarking/main.py" beforeDir="false" afterPath="$PROJECT_DIR$/../benchmarking/main.py" afterDir="false" />
     </list>
@@ -38,14 +36,14 @@
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent"><![CDATA[{
-  "keyToString": {
-    "ModuleVcsDetector.initialDetectionPerformed": "true",
-    "RunOnceActivity.ShowReadmeOnStart": "true",
-    "git-widget-placeholder": "dev/update__back",
-    "last_opened_file_path": "/home/andrea/Desktop/lavoro/nn_trust_apps"
+  <component name="PropertiesComponent">{
+  &quot;keyToString&quot;: {
+    &quot;ModuleVcsDetector.initialDetectionPerformed&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
+    &quot;git-widget-placeholder&quot;: &quot;dev/update__back&quot;,
+    &quot;last_opened_file_path&quot;: &quot;/home/andrea/Desktop/lavoro/nn_trust_apps&quot;
   }
-}]]></component>
+}</component>
   <component name="SharedIndexes">
     <attachedChunks>
       <set>

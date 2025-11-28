@@ -60,7 +60,7 @@ def parse_arguments():
     parser.add_argument(
         "--model_storage", "-ms",
         type=str,
-        default="models_repo",
+        default="~/Desktop/models",
         help="Path to internal storage directory (models)"
     )
     parser.add_argument(

@@ -11,6 +11,7 @@ from nn_trust.core import AttackType, Knowledge
 from pydantic import BaseModel, Field, ConfigDict
 
 
+####################### Basic configuration #######################
 class Info(BaseModel):
     id: str  # id for the file identification.
     name: str  # File's name, ex. "Resnet50" or "Imagenette".
@@ -36,6 +37,8 @@ class ModelInfo(Info):
     parameters: Optional[int] = None  # Number of the models' parameters
 
 
+###################################################################
+
 class Metric(BaseModel):
     values: Optional[float] = Field(None, example=0.8)
 
@@ -48,12 +51,6 @@ class Progress(BaseModel):
 class JobConfig(BaseModel):
     dataset: str = Field(..., example='cifar')
     model: str = Field(..., example='resnet50')
-
-
-class AttackConfig(BaseModel):
-    image: str
-    id_model: str
-    attack: Any
 
 
 class Error(BaseModel):
@@ -108,6 +105,25 @@ class RegisteredObject(BaseModel):
     parameters: list[ParametersProps]
     task: str
     knowledge: Optional[str] = None
+
+
+###################### Single Attack ######################
+class SingleAttackProps(BaseModel):
+    image: str
+    id_model: str
+    attack: RegisteredObject
+
+
+class SingleAttackOutput(BaseModel):
+    x: str
+    x_adv: str
+    adv_perturbation: str
+    original_prediction: str
+    adversarial_prediction: str
+    # the first is the confidence of the original class while the second is the confidence of the most probable class during each iteration
+    confidence: tuple[list[float], list[float]]
+    # Container of all the possible metrics that can be useful
+    advance_metrics: dict[str, float]
 
 
 #######################################################################
@@ -165,15 +181,3 @@ class BenchmarkModelProps(BaseModel):
     task: str
     benchmark_id: str
     metrics: Dict[str, float | int]
-
-
-class SingleAttackProps(BaseModel):
-    x: str
-    x_adv: str
-    adv_perturbation: str
-    original_prediction: str
-    adversarial_prediction: str
-    # the first is the confidence of the original class while the second is the confidence of the most probable class during each iteration
-    confidence: tuple[list[float], list[float]]
-    # Container of all the possible metrics that can be useful
-    advance_metrics: dict[str, float]
