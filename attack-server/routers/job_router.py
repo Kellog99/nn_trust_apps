@@ -618,7 +618,7 @@ async def start_singleattack_job(body : models.AttackConfig = Body(...)) -> Opti
             model_task=config_models.get("task")
         )
 
-        def run_attack(model_ad, img: PIL.Image, attack_name: str, config: dict):
+        def run_attack(model_ad, img: PIL.Image, attack_name: str, config: dict, num_classes : int):
             device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
             logging.info(f"Running attack on {device}")
 
@@ -642,7 +642,7 @@ async def start_singleattack_job(body : models.AttackConfig = Body(...)) -> Opti
             
             atk = EvasionAttackFactory.create_attack(attack_type=attack_name, config=cnf)
             labels = model_ad(img).argmax(1)
-            labels_ohe = torch.nn.functional.one_hot(labels, num_classes=36)
+            labels_ohe = torch.nn.functional.one_hot(labels, num_classes=num_classes)
             start = time.time()
             x_adv = atk.generate(x=img, y=labels_ohe)
             end = time.time()
@@ -657,7 +657,8 @@ async def start_singleattack_job(body : models.AttackConfig = Body(...)) -> Opti
             model_ad=model_ad,
             img=image,
             attack_name=body.attack["id"],
-            config=params
+            config=params,
+            num_classes=config_models.get("num_classes") if config_models.get("type")!="timm" else 1000
         )
         
         # Prepare image data to return
@@ -696,7 +697,7 @@ async def start_singleattack_job(body : models.AttackConfig = Body(...)) -> Opti
 
     except Exception as e:
         logging.error(f"Unexpected error during attack: {str(e)}")
-        #raise e
+        raise e
         return Response(
                 status_code=500,
                 content=Error(code=500, message=f"Unexpected error during attack").model_dump_json())

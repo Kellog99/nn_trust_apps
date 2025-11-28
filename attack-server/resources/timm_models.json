@@ -5,13 +5,6 @@
         "pretrained": true,
         "num_classes": 36,
         "task": "classification"
-        },
-        {
-        "name":"resnet18",
-        "type":"timm",
-        "pretrained":true,
-        "num_classes":36,
-        "task":"classification"
         }
     ],
     "max_model_size": 5000
