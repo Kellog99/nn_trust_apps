@@ -5,8 +5,8 @@ from typing import List, Dict, Any, Optional, Iterable
 from annotated_types import Gt, Ge, Le, Lt
 from pydantic_core import PydanticUndefined
 from pydantic import BaseModel
-from nn_trust.attack._evasion import EvasionAttackFactory as EAF
-from nn_trust.attack.evaluation._statistics import StatisticsFactory as SF
+from nn_trust.attack.attack_factory import EvasionAttackFactory as EAF
+from nn_trust.evaluation.statistic_factory import StatisticsFactory as SF
 from nn_trust.core import Task
 import logging
 import os
