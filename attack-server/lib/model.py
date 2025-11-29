@@ -91,7 +91,7 @@ class RegisteredObject(BaseModel):
 ###################### Single Attack ######################
 class SingleAttackProps(BaseModel):
     image: str
-    id_model: str
+    model_name: str
     attack: RegisteredObject
 
 

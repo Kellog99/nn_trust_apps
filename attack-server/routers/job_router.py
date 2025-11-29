@@ -1,5 +1,4 @@
 import base64
-import copy
 import importlib
 import io
 import json
@@ -12,14 +11,33 @@ from typing import Union
 import timm
 import torch
 from PIL import Image
-from fastapi import APIRouter
-from fastapi import Body
+from fastapi import APIRouter, Response, Request, HTTPException
+from fastapi.responses import JSONResponse
+from fastapi import Body, Query
 from nn_trust.attack.attack_factory import EvasionAttackFactory as EAF
 from nn_trust.core import Task, ModelAdapter
 from torchmetrics.image import StructuralSimilarityIndexMeasure
 from torchvision import transforms
-
 from lib.model import SingleAttackOutput, SingleAttackProps, ModelInfo, Error
+import base64
+import copy
+import importlib
+import io
+import json
+import logging
+import os
+import time
+from pathlib import Path
+from typing import Union
+import ray
+from lib.disk_reader import find_model_and_task_dir
+from lib.model import Error, ExecutionConfig, SingleAttackOutput, SingleAttackProps, ReportProps
+from routers.dataset_router import get_datasets
+from routers.model_router import get_models
+from routers.utils import find_image
+
+benchmarking = importlib.import_module("benchmarking")
+
 
 router = APIRouter(prefix="/job", tags=["jobs management", "jobs utils"])
 
@@ -239,26 +257,26 @@ def get_jobs_results(
             content=Error(code=500, message=f"Unexpected error during get result").model_dump_json())
 
 
-@router.get("/report/getReports")
-def get_reports() -> list[ReportProps]:
-    """
-        Recursively searches for all 'report.json' files under the given root folder
-        and returns a list of their parsed JSON contents (as dictionaries).
-
-        Returns:
-            list[dict]: A list of dictionaries loaded from each report.json file.
-        """
-    reports = []
-    for dirpath, dirnames, filenames in os.walk(os.enviroos.walkn.get("BENCHMARK_OUTPUT_DIR")):
-        if "report.json" in filenames:
-            report_path = os.path.join(dirpath, "report.json")
-            try:
-                with open(report_path, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-                    reports.append(ReportProps(**data))
-            except (json.JSONDecodeError, OSError) as e:
-                print(f"⚠️ Could not read {report_path}: {e}")
-    return reports
+#@router.get("/report/getReports")
+#def get_reports() -> list[ReportProps]:
+#    """
+#        Recursively searches for all 'report.json' files under the given root folder
+#        and returns a list of their parsed JSON contents (as dictionaries).
+#
+#        Returns:
+#            list[dict]: A list of dictionaries loaded from each report.json file.
+#        """
+#    reports = []
+#    for dirpath, dirnames, filenames in os.walk(os.enviroos.walkn.get("BENCHMARK_OUTPUT_DIR")):
+#        if "report.json" in filenames:
+#            report_path = os.path.join(dirpath, "report.json")
+#            try:
+#                with open(report_path, "r", encoding="utf-8") as f:
+#                    data = json.load(f)
+#                    reports.append(ReportProps(**data))
+#            except (json.JSONDecodeError, OSError) as e:
+#                print(f"⚠️ Could not read {report_path}: {e}")
+#    return reports
 
 
 ################################### POST ###################################
@@ -349,6 +367,20 @@ async def start_benchmark_job(body: ExecutionConfig = Body(...)) -> Union[str, E
                     status_code=404,
                     content=Error(code=404,
                                   message=f"Can't find model metadata in the repository for model:{model_name}").model_dump_json())
+
+        if model_type[0]=="hf":
+            if os.path.exists(file_path) and os.path.isfile(file_path):
+                with open(file_path, "r", encoding="utf-8") as f:
+                    config_models = json.load(f)  # load into dict
+                    config_models["type"]="hf"
+                logging.info("Loaded JSON metadata")
+            else:
+                logging.error(f"Can't find model metadata in the repository for model:{model_name}")
+                return Response(
+                    status_code=404,
+                    content=Error(code=404, 
+                                message=f"Can't find model metadata in the repository for model:{model_name}").model_dump_json())    
+        
         elif model_type[0] == "timm":
             model_metadata = None
             for m in model_response:
@@ -390,6 +422,11 @@ async def start_benchmark_job(body: ExecutionConfig = Body(...)) -> Union[str, E
         if model_type[0] == "saved_model":
             config_models["weights_path"] = os.path.join(os.environ.get('INTERNAL_MODEL_STORAGE'), f"{model_name}.pth")
 
+        if model_type[0]=="hf":
+            #TODO:fix
+            config_models["name"] = f"timm/{model_name}"
+            config_models["weights_path"] = os.path.join(os.environ.get('INTERNAL_MODEL_STORAGE'),f"{model_name}.ckpt")
+
         config_dataset["source_path"] = os.path.join(dataset_name, "data")
 
         benchmark_config['datasets'] = [config_dataset]
@@ -397,7 +434,7 @@ async def start_benchmark_job(body: ExecutionConfig = Body(...)) -> Union[str, E
         benchmark_config['attacks'] = [
             {
                 "name": attack["id"],
-                **{param["label"]: param["default"] for param in attack.get("parameters", [])}
+                **{param["id"]: param["default"] for param in attack.get("parameters", [])}
             }
             for attack in body.attacks
         ]
@@ -405,7 +442,7 @@ async def start_benchmark_job(body: ExecutionConfig = Body(...)) -> Union[str, E
         benchmark_config["evaluation"]["statistics"] = [
             {
                 "name": metric["id"],
-                **{param["label"]: param["default"] for param in metric.get("parameters", [])}
+                **{param["id"]: param["default"] for param in metric.get("parameters", [])}
             }
             for metric in body.metrics
         ]
@@ -415,7 +452,6 @@ async def start_benchmark_job(body: ExecutionConfig = Body(...)) -> Union[str, E
 
     except Exception as e:
         logging.error(f"Unexpected error during job start: {str(e)}")
-        #raise e
         return Response(
             status_code=500,
             content=Error(code=500, message=f"Unexpected error during job start").model_dump_json())
@@ -437,40 +473,75 @@ async def startSingleAttack(body: SingleAttackProps = Body(...)) -> SingleAttack
 
         x: torch.Tensor = transforms.ToTensor()(image).unsqueeze(0).to(device)
 
-        ###################### Extracting the Model ######################
-        model: ModelAdapter | None = None
-        model_info: ModelInfo | None = None
-        # Folder where all the models are stored.
-        models_root_dir = Path(os.environ.get("INTERNAL_MODEL_STORAGE"))
-        for item in models_root_dir.iterdir():
-            file_path = models_root_dir / item / "info.json"
-            model_path = models_root_dir / item / "model.pth"
-            with open(file_path, 'r') as json_file:
-                json_file = json.load(json_file)
-            model_info = ModelInfo(**json_file)
+        ############## Extracting the model 2.0 (or as it was before?...) ###########
+        # Get the model
+        model_name = body.model_name
+        model_response = get_models()
+        model = [m["name"] for m in model_response if m["name"]==model_name]
+        model_type = [m["type"] for m in model_response if m["name"]==model_name]
+        file_path = os.path.join(os.environ.get('INTERNAL_MODEL_STORAGE'),f"{model_name}.json")
 
-            if model_info.id == body.id_model:
-                # At this moment the assumption is that if there is not a model
-                # then it is a Timm model
-                if model_path.exists():
-                    # check whether it exists a Pytorch model
-                    with open(json_file, "r") as f:
-                        tmp = torch.load(model_path)
-                else:
-                    tmp = timm.create_model(model_info.id, pretrained=True)
-                model = ModelAdapter(tmp, task=Task.Classification).to(device)
-                model.eval()
-                break
+        if model_type[0]=="saved_model":
+            if os.path.exists(file_path) and os.path.isfile(file_path):
+                with open(file_path, "r", encoding="utf-8") as f:
+                    config_models = json.load(f)  # load into dict
+                    config_models["type"]="saved_model"
+                logging.info("Loaded JSON metadata")
+            else:
+                logging.error(f"Can't find model metadata in the repository for model:{model_name}")
+                return Response(
+                    status_code=404,
+                    content=Error(code=404, 
+                                message=f"Can't find model metadata in the repository for model:{model_name}").model_dump_json())
+            
+        elif model_type[0]=="hf":
+            if os.path.exists(file_path) and os.path.isfile(file_path):
+                with open(file_path, "r", encoding="utf-8") as f:
+                    config_models = json.load(f)  # load into dict
+                    config_models["type"]="hf"
+                logging.info("Loaded JSON metadata")
+            else:
+                logging.error(f"Can't find model metadata in the repository for model:{model_name}")
+                return Response(
+                    status_code=404,
+                    content=Error(code=404, 
+                                message=f"Can't find model metadata in the repository for model:{model_name}").model_dump_json())
+            
+        elif model_type[0]=="timm":
+            model_metadata = None
+            for m in model_response:
+                if m["name"]==model_name:
+                    model_metadata = m
+            if model_metadata:
+                config_models = model_metadata
+            else:
+                logging.error("An error has occurred for timm model metadata retrieval")
+                return Response(
+                    status_code=404,
+                    content=Error(code=404, 
+                                message="An error has occurred for timm model metadata retrieval").model_dump_json())
+        
+        if model_type[0]=="saved_model":
+            config_models["weights_path"] = os.path.join(os.environ.get('INTERNAL_MODEL_STORAGE'),f"{model_name}.pth")
+        
+        if model_type[0]=="hf":
+            #TODO:fix
+            config_models["name"] = f"timm/{model_name}"
+            config_models["weights_path"] = os.path.join(os.environ.get('INTERNAL_MODEL_STORAGE'),f"{model_name}.ckpt")
 
-        if model is None or model_info is None:
-            return Error(code=404,
-                         message=f"The model {body.id_model} has not been found")
-        ###################### Input ######################
+        model = benchmarking.get_model(
+            num_labels=config_models.get("num_classes"),
+            model_name=config_models.get("name"),
+            model_type=config_models.get("type"),
+            model_weights_path=config_models.get("weights_path", None),
+            model_task=config_models.get("task")
+        )
+
         # Decode base64 image string and convert to torch tensor
         image_bytes = base64.b64decode(body.image)
         image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
         transformation = transforms.Compose([
-            transforms.Resize(model_info.input_dimensionality[1:]),  # Resize BEFORE converting to tensor
+            transforms.Resize(config_models.get("input_dimensionality")[1:]),  # Resize BEFORE converting to tensor
             transforms.ToTensor(),  # Convert to tensor AFTER resizing
         ])
 

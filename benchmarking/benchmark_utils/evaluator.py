@@ -552,7 +552,12 @@ class Evaluator:
         Save single attack results from static method -evaluate_attack- to a JSON file
         """
         
-        model_result_path = Path(output_path) / dataset_name / model_name
+        safe_model_name = (
+            model_name.replace("timm/", "")
+            if "timm/" in model_name
+            else model_name
+        )
+        model_result_path = Path(output_path) / dataset_name / safe_model_name
         os.makedirs(model_result_path, exist_ok=True)
         atk_res = atk_result
         attack_result_path = model_result_path / atk_id
@@ -574,7 +579,12 @@ class Evaluator:
         """
         
         
-        model_result_path = Path(output_path) / dataset_name / model_name
+        safe_model_name = (
+            model_name.replace("timm/", "")
+            if "timm/" in model_name
+            else model_name
+        )
+        model_result_path = Path(output_path) / dataset_name / safe_model_name
         os.makedirs(model_result_path, exist_ok=True)
         with open(model_result_path / "info.json", 'w') as f:
             json.dump(results_info, f)
