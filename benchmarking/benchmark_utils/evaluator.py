@@ -21,7 +21,7 @@ from nn_trust.evaluation.composer import ConfigStatisticComposer, StatisticCompo
 from nn_trust.attack.utils._utils import enumerated_list, get_min
 from nn_trust.attack.utils.logger import TensorboardLogger
 from nn_trust.loss.loss_factory import LossFactory
-from nn_trust.loss.loss_composer import ConfigLossComposer, LossComposer
+from nn_trust.loss.loss_composer import LossComposer
 from nn_trust.core import Task, ModelAdapter
 from .config import get_data_transformation_config
 from .utils import get_dataloader, get_model
@@ -299,11 +299,10 @@ class Evaluator:
             atk_id = attack_config.pop("id", atk_name)
             if "losses" in attack_config:
                 # If losses are specified, convert them to Loss objects
-                attack_config['loss'] = LossComposer(ConfigLossComposer(
-                    loss=attack_config['losses'],
-                    p=attack_config.get('p', 2.0),
-                    loss_weights=attack_config.get('loss_weights', [1.0] * len(attack_config['losses'])),
-                ))
+                attack_config['loss'] = LossComposer(
+                    losses=attack_config['losses'],
+                    weights=attack_config.get('loss_weights', [1.0] * len(attack_config['losses'])),
+                )
             atk = EvasionAttackFactory.create(
                 atk_name,
                 model=model,
