@@ -1,43 +1,29 @@
 import base64
-import importlib
 import io
 import json
 import logging
 import os
 import time
-from pathlib import Path
 from typing import Union
 
-import timm
+import ray
 import torch
 from PIL import Image
 from fastapi import APIRouter, Response, Request, HTTPException
-from fastapi.responses import JSONResponse
 from fastapi import Body, Query
+from fastapi.responses import JSONResponse
 from nn_trust.attack.attack_factory import EvasionAttackFactory as EAF
 from nn_trust.core import Task, ModelAdapter
 from torchmetrics.image import StructuralSimilarityIndexMeasure
 from torchvision import transforms
-from lib.model import SingleAttackOutput, SingleAttackProps, ModelInfo, Error
-import base64
-import copy
-import importlib
-import io
-import json
-import logging
-import os
-import time
-from pathlib import Path
-from typing import Union
-import ray
+
 from lib.disk_reader import find_model_and_task_dir
-from lib.model import Error, ExecutionConfig, SingleAttackOutput, SingleAttackProps, ReportProps
+from lib.model import Error, ExecutionConfig, SingleAttackOutput, SingleAttackProps
 from routers.dataset_router import get_datasets
 from routers.model_router import get_models
 from routers.utils import find_image
 
-benchmarking = importlib.import_module("benchmarking")
-
+benchmarking = ""  # importlib.import_module("benchmarking")
 
 router = APIRouter(prefix="/job", tags=["jobs management", "jobs utils"])
 
@@ -222,22 +208,6 @@ def get_jobs_results(
                 status_code=404,
                 content=Error(code=404, message=f"No benchmarks found").model_dump_json())
 
-        # completed_tasks = []
-
-        # for _,v in tasks.items():
-        #    num_tasks = v["num_tasks"]
-        #    if v["status"]=="completed" and v["progress"]==100:
-        #        completed_tasks.append(v)
-        #        task_dir = os.path.join(os.environ.get("BENCHMARK_OUTPUT_DIR"),v["benchmark_id"])
-        #        if not has_aggregate(task_dir,dataset):
-        #            benchmarking.postprocess_benchmark_run_results(task_dir)
-
-        # if len(completed_tasks)==0 or len(completed_tasks)<num_tasks:
-        #    logging.error(f"No benchmark is finished yet")
-        #    return Response(
-        #            status_code=409,
-        #            content=Error(code=409, message=f"No benchmark is finished yet").model_dump_json())
-
         results = benchmarking.collect_dataset_aggregates_with_info(
             base_dir=os.environ.get("BENCHMARK_OUTPUT_DIR"),
             dataset=dataset,
@@ -257,8 +227,8 @@ def get_jobs_results(
             content=Error(code=500, message=f"Unexpected error during get result").model_dump_json())
 
 
-#@router.get("/report/getReports")
-#def get_reports() -> list[ReportProps]:
+# @router.get("/report/getReports")
+# def get_reports() -> list[ReportProps]:
 #    """
 #        Recursively searches for all 'report.json' files under the given root folder
 #        and returns a list of their parsed JSON contents (as dictionaries).
@@ -314,7 +284,7 @@ async def start_benchmark_job(body: ExecutionConfig = Body(...)) -> Union[str, E
         d_response = get_datasets()
         model_response = m_response
 
-        #if m_response.status_code != 200 or d_response.status_code != 200:
+        # if m_response.status_code != 200 or d_response.status_code != 200:
         #    logging.error("Model or Dataset repository is empty. Check repository.")
         #    return Response(
         #        status_code=404,
@@ -368,19 +338,19 @@ async def start_benchmark_job(body: ExecutionConfig = Body(...)) -> Union[str, E
                     content=Error(code=404,
                                   message=f"Can't find model metadata in the repository for model:{model_name}").model_dump_json())
 
-        if model_type[0]=="hf":
+        if model_type[0] == "hf":
             if os.path.exists(file_path) and os.path.isfile(file_path):
                 with open(file_path, "r", encoding="utf-8") as f:
                     config_models = json.load(f)  # load into dict
-                    config_models["type"]="hf"
+                    config_models["type"] = "hf"
                 logging.info("Loaded JSON metadata")
             else:
                 logging.error(f"Can't find model metadata in the repository for model:{model_name}")
                 return Response(
                     status_code=404,
-                    content=Error(code=404, 
-                                message=f"Can't find model metadata in the repository for model:{model_name}").model_dump_json())    
-        
+                    content=Error(code=404,
+                                  message=f"Can't find model metadata in the repository for model:{model_name}").model_dump_json())
+
         elif model_type[0] == "timm":
             model_metadata = None
             for m in model_response:
@@ -422,10 +392,10 @@ async def start_benchmark_job(body: ExecutionConfig = Body(...)) -> Union[str, E
         if model_type[0] == "saved_model":
             config_models["weights_path"] = os.path.join(os.environ.get('INTERNAL_MODEL_STORAGE'), f"{model_name}.pth")
 
-        if model_type[0]=="hf":
-            #TODO:fix
+        if model_type[0] == "hf":
+            # TODO:fix
             config_models["name"] = f"timm/{model_name}"
-            config_models["weights_path"] = os.path.join(os.environ.get('INTERNAL_MODEL_STORAGE'),f"{model_name}.ckpt")
+            config_models["weights_path"] = os.path.join(os.environ.get('INTERNAL_MODEL_STORAGE'), f"{model_name}.ckpt")
 
         config_dataset["source_path"] = os.path.join(dataset_name, "data")
 
@@ -477,40 +447,40 @@ async def startSingleAttack(body: SingleAttackProps = Body(...)) -> SingleAttack
         # Get the model
         model_name = body.model_name
         model_response = get_models()
-        model = [m["name"] for m in model_response if m["name"]==model_name]
-        model_type = [m["type"] for m in model_response if m["name"]==model_name]
-        file_path = os.path.join(os.environ.get('INTERNAL_MODEL_STORAGE'),f"{model_name}.json")
+        model = [m["name"] for m in model_response if m["name"] == model_name]
+        model_type = [m["type"] for m in model_response if m["name"] == model_name]
+        file_path = os.path.join(os.environ.get('INTERNAL_MODEL_STORAGE'), f"{model_name}.json")
 
-        if model_type[0]=="saved_model":
+        if model_type[0] == "saved_model":
             if os.path.exists(file_path) and os.path.isfile(file_path):
                 with open(file_path, "r", encoding="utf-8") as f:
                     config_models = json.load(f)  # load into dict
-                    config_models["type"]="saved_model"
+                    config_models["type"] = "saved_model"
                 logging.info("Loaded JSON metadata")
             else:
                 logging.error(f"Can't find model metadata in the repository for model:{model_name}")
                 return Response(
                     status_code=404,
-                    content=Error(code=404, 
-                                message=f"Can't find model metadata in the repository for model:{model_name}").model_dump_json())
-            
-        elif model_type[0]=="hf":
+                    content=Error(code=404,
+                                  message=f"Can't find model metadata in the repository for model:{model_name}").model_dump_json())
+
+        elif model_type[0] == "hf":
             if os.path.exists(file_path) and os.path.isfile(file_path):
                 with open(file_path, "r", encoding="utf-8") as f:
                     config_models = json.load(f)  # load into dict
-                    config_models["type"]="hf"
+                    config_models["type"] = "hf"
                 logging.info("Loaded JSON metadata")
             else:
                 logging.error(f"Can't find model metadata in the repository for model:{model_name}")
                 return Response(
                     status_code=404,
-                    content=Error(code=404, 
-                                message=f"Can't find model metadata in the repository for model:{model_name}").model_dump_json())
-            
-        elif model_type[0]=="timm":
+                    content=Error(code=404,
+                                  message=f"Can't find model metadata in the repository for model:{model_name}").model_dump_json())
+
+        elif model_type[0] == "timm":
             model_metadata = None
             for m in model_response:
-                if m["name"]==model_name:
+                if m["name"] == model_name:
                     model_metadata = m
             if model_metadata:
                 config_models = model_metadata
@@ -518,16 +488,16 @@ async def startSingleAttack(body: SingleAttackProps = Body(...)) -> SingleAttack
                 logging.error("An error has occurred for timm model metadata retrieval")
                 return Response(
                     status_code=404,
-                    content=Error(code=404, 
-                                message="An error has occurred for timm model metadata retrieval").model_dump_json())
-        
-        if model_type[0]=="saved_model":
-            config_models["weights_path"] = os.path.join(os.environ.get('INTERNAL_MODEL_STORAGE'),f"{model_name}.pth")
-        
-        if model_type[0]=="hf":
-            #TODO:fix
+                    content=Error(code=404,
+                                  message="An error has occurred for timm model metadata retrieval").model_dump_json())
+
+        if model_type[0] == "saved_model":
+            config_models["weights_path"] = os.path.join(os.environ.get('INTERNAL_MODEL_STORAGE'), f"{model_name}.pth")
+
+        if model_type[0] == "hf":
+            # TODO:fix
             config_models["name"] = f"timm/{model_name}"
-            config_models["weights_path"] = os.path.join(os.environ.get('INTERNAL_MODEL_STORAGE'),f"{model_name}.ckpt")
+            config_models["weights_path"] = os.path.join(os.environ.get('INTERNAL_MODEL_STORAGE'), f"{model_name}.ckpt")
 
         model = benchmarking.get_model(
             num_labels=config_models.get("num_classes"),

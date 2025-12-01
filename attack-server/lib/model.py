@@ -117,10 +117,27 @@ class ExecutionConfig(BaseModel):
     metrics: Any
 
 
+################################### Report ###################################
 class ReportProps(BaseModel):
+    model_config = ConfigDict(extra='allow')
+
+
+############# Dataset #############
+class ReportDatasetProps(ReportProps):
+    pass
+
+
+############## Model ##############
+class ModelReportProps(ReportProps):
     info: ReportInfoProps
     metrics: ReportMetricsProps
     attacks: Dict[str, ReportAttacksProps]
+
+
+class UploadReportModel(BaseModel):
+    info: dict
+    metrics: dict
+    attacks: dict
 
 
 class ReportMetricsProps(BaseModel):
@@ -128,7 +145,7 @@ class ReportMetricsProps(BaseModel):
     accuracy: Optional[float] = None
     precision: Optional[float] = None
     f1score: Optional[float] = None
-    confusion_matrix: Optional[List[List[int]]] = None
+    confusion_matrix: Optional[List[List[int | float]]] = None
     robustness: Optional[float] = None
     wobbliness: Optional[float] = None
 

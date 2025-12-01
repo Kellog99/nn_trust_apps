@@ -1,11 +1,15 @@
+import json
 import logging
+import os
 
 from fastapi import APIRouter, HTTPException
+from fastapi.params import Query
 from nn_trust.attack.attack_factory import EvasionAttackFactory as EAF, AttackInfo
 from nn_trust.core import Task
 from nn_trust.evaluation.statistic_factory import StatisticsFactory as SF
 
-from lib.model import RegisteredObject
+from lib.model import RegisteredObject, ReportProps, ModelReportProps, ReportInfoProps, ReportMetricsProps, \
+    ReportAttacksProps, ReportDatasetProps
 from .utils import get_parameter_prop
 
 router = APIRouter(prefix="/info")
@@ -75,3 +79,5 @@ def get_statistics_info() -> dict[str, RegisteredObject]:
     except Exception as e:
         logging.error(f"Unexpected error during get result: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Unexpected error during get result {str(e)}")
+
+

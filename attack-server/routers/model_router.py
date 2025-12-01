@@ -12,7 +12,7 @@ from fastapi import APIRouter, Response, Query
 from fastapi import UploadFile, HTTPException
 from fastapi.responses import JSONResponse
 
-from lib.model import Error, ModelInfo
+from lib.model import Error
 from lib.validator import json_safety_check
 
 router = APIRouter(prefix="/model", tags=["datasets and models"])
@@ -23,22 +23,22 @@ router = APIRouter(prefix="/model", tags=["datasets and models"])
     '404': {'model': Error},
     '500': {'model': Error},
 })
-def get_models() :
+def get_models():
     """
     Get all models of the TITANN backend.
     """
     try:
         with open(os.environ.get("TIMM_MODELS_JSON_PATH")) as f:
-                config = json.load(f)
-                MODELS = config["timm_models"]
-                for n in MODELS:
-                    n["type"]="timm"
+            config = json.load(f)
+            MODELS = config["timm_models"]
+            for n in MODELS:
+                n["type"] = "timm"
     except Exception as e:
         # Handle unexpected errors
         logging.error(f"Unexpected error during config import: {str(e)}")
         return Response(
-                    status_code=500,
-                    content=Error(code=500, message=f"Internal server error during config import.").model_dump_json())
+            status_code=500,
+            content=Error(code=500, message=f"Internal server error during config import.").model_dump_json())
     try:
         models = []
         models_root_dir = os.environ.get("INTERNAL_MODEL_STORAGE")
@@ -49,15 +49,15 @@ def get_models() :
 
                 # Construct the corresponding JSON file path
                 json_path = item_path.replace(".pth", ".json")
-                
+
                 # Check if JSON file exists
                 if not os.path.isfile(json_path):
                     raise FileNotFoundError(f"JSON file not found for model: {item}. Expected: {json_path}")
-                
+
                 # Read the JSON file
                 with open(json_path, 'r') as json_file:
                     model_info = json.load(json_file)
-                
+
                 # Create model entry with base info and extend with JSON data
                 model_entry = {"name": Path(item).stem, "type": "saved_model"}
                 merged_model_info = model_info | model_entry
@@ -68,35 +68,36 @@ def get_models() :
 
                 # Construct the corresponding JSON file path
                 json_path = item_path.replace(".ckpt", ".json")
-                
+
                 # Check if JSON file exists
                 if not os.path.isfile(json_path):
                     raise FileNotFoundError(f"JSON file not found for model: {item}. Expected: {json_path}")
-                
+
                 # Read the JSON file
                 with open(json_path, 'r') as json_file:
                     model_info = json.load(json_file)
-                
+
                 # Create model entry with base info and extend with JSON data
                 model_entry = {"name": Path(item).stem, "type": "hf"}
                 merged_model_info = model_info | model_entry
                 models.append(merged_model_info)
 
-        if len(models)==0:
+        if len(models) == 0:
             logging.info("No uploaded models found.")
 
         models.extend(MODELS)
-        if len(models)==0:
+        if len(models) == 0:
             logging.info("No models found.")
-            return Response(status_code=404, 
+            return Response(status_code=404,
                             content=Error(code=404, message="No models found.").model_dump_json())
 
         return models
 
     except Exception as e:
         logging.error(f"An error occurred during models reading from disk: {e}")
-        return Response(status_code=500, 
-                        content=Error(code=500, message=f"An error occurred durign models reading from disk.").model_dump_json())
+        return Response(status_code=500,
+                        content=Error(code=500,
+                                      message=f"An error occurred durign models reading from disk.").model_dump_json())
 
 
 # --- Model Upload (Check Phase) ---
@@ -295,7 +296,11 @@ async def upload_model_check(file: UploadFile):
     '500': {'model': Error},
 })
 async def upload_model_proceed(
-        model_name: str = Query(..., description="The name of the model (stem of the original ZIP file)")) -> Response:
+        model_name: str = Query(
+            default=...,
+            description="The name of the model (stem of the original ZIP file)"
+        )
+) -> Response:
     """
     Step 2: Proceed to upload the validated model. Moves the folder from tmp to permanent storage.
     """
