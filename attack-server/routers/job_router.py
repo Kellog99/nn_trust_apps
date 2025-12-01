@@ -183,7 +183,7 @@ def get_jobs_results(id: str = Query(None),
             report_data["tool"] = "nntrust"
             report_data["dataset"] = str(model_dir).split(os.sep)[-2]
 
-            with open(os.path.join(model_dir, "report.json"), "w", encoding="utf-8") as f:
+            with open(os.path.join(task_dir, "report.json"), "w", encoding="utf-8") as f:
                 json.dump(report_data, f)
 
         if pdf_report and bool(pdf_report) == True:

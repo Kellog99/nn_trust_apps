@@ -73,7 +73,7 @@ def get_datasets():
                     type_dataset = info_data.get("type_dataset")
                     task = info_data.get("mode")
                 datasetObject = benchmarking.get_dataloader(dataset=str(os.path.join(item_path,"data")), 
-                                                            subset=None, 
+                                                            subset=1, 
                                                             batch=1, 
                                                             type_dataset=type_dataset, 
                                                             transform = lambda x: x,
@@ -108,7 +108,11 @@ def get_datasets():
         return Response(status_code=500, 
                         content=Error(code=500, message=f"An error occurred during datasets reading from disk.").model_dump_json())
 
-@router.post("/upload")
+@router.post("/upload", response_model=None, responses={
+    '400': {'model': Error},
+    '409': {'model': Error},
+    '500': {'model': Error},
+})
 def upload_dataset(file: UploadFile):
     """
     Upload a dataset to the TITANN backend.
@@ -119,7 +123,7 @@ def upload_dataset(file: UploadFile):
             return Response(status_code=400,
                             content=Error(code=400, message="Only .zip files are allowed.").model_dump_json())
 
-        UPLOAD_DIRECTORY = os.environ.get('DATASETS_REPO')
+        UPLOAD_DIRECTORY = os.environ.get('INTERNAL_DS_STORAGE')
         if not UPLOAD_DIRECTORY:
             logging.error("Error: No internal dataset storage is specified in the environment.")
             return Response(status_code=500,
