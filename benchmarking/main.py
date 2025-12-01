@@ -1,14 +1,15 @@
+import base64
 import json
-from pathlib import Path
-import os
 import logging
+import os
+import pathlib
+import time
 import traceback
 from datetime import datetime
-import pathlib
-import base64
-from typing import Optional, Tuple
+from pathlib import Path
+
 from nn_trust.evaluation.composer import ConfigStatisticComposer, StatisticComposer
-import time
+
 try:
     from benchmark_utils import (
         read_config_file,
