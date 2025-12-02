@@ -191,43 +191,6 @@ def get_jobs_results(id: str = Query(None),
             content=Error(code=500, message=f"Unexpected error during get result").model_dump_json())
 
 
-@router.get("/benchmark/getResult")
-def get_jobs_results(
-        dataset: str = Query(...),
-        task: str = Query(None),
-        id: str = Query(None)
-):
-    """
-    Get a TITANN benchmark job result.
-    """
-    try:
-        tasks = ray.get(executor.tracker.list_tasks.remote())
-
-        if not tasks:
-            logging.error(f"No benchmarks found")
-            return Response(
-                status_code=404,
-                content=Error(code=404, message=f"No benchmarks found").model_dump_json())
-
-        results = benchmarking.collect_dataset_aggregates_with_info(
-            base_dir=os.environ.get("BENCHMARK_OUTPUT_DIR"),
-            dataset=dataset,
-            keep_latest_only=False
-        )
-
-        out = benchmarking.transform_to_benchmark(results, task="classification")
-        if id:
-            return [o for o in benchmarking.enrich_with_ranks(out) if o["benchmark_id"] != id]
-        else:
-            return benchmarking.enrich_with_ranks(out)
-
-    except Exception as e:
-        logging.error(f"Unexpected error during get result: {str(e)}")
-        return Response(
-            status_code=500,
-            content=Error(code=500, message=f"Unexpected error during get result").model_dump_json())
-
-
 # --- Start --- #
 @router.post("/start", response_model=str)
 async def start_benchmark_job(body: ExecutionConfig = Body(...)) -> Union[str, Error]:

@@ -141,7 +141,6 @@ class UploadReportModel(BaseModel):
 
 
 class ReportMetricsProps(BaseModel):
-    params: int
     accuracy: Optional[float] = None
     precision: Optional[float] = None
     f1score: Optional[float] = None
@@ -169,6 +168,8 @@ class ReportInfoProps(BaseModel):
     parameters: int
     classes: int
     dimensionality: List[int]
+    dataset: str
+    task: str
 
 
 class BenchmarkModelProps(BaseModel):

@@ -138,3 +138,4 @@ def find_image(start_dir: str):
             continue
 
     return None
+
