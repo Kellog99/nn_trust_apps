@@ -1,14 +1,21 @@
 import logging
-
 from fastapi import APIRouter, HTTPException
 from nn_trust.attack.attack_factory import EvasionAttackFactory as EAF, AttackInfo
 from nn_trust.core import Task
 from nn_trust.evaluation.statistic_factory import StatisticsFactory as SF
-
 from lib.model import RegisteredObject
 from .utils import get_parameter_prop
+import json 
 
 router = APIRouter(prefix="/info")
+
+if not hasattr(router,"excluded_attacks"):
+    with open('./resources/excluded_attacks.json', 'r') as f:
+        router.excluded_attacks = json.load(f)
+
+if not hasattr(router,"excluded_statistics"):
+    with open('./resources/excluded_statistics.json', 'r') as f:
+        router.excluded_statistics = json.load(f)
 
 
 @router.get("/attacks/getInfo")
@@ -19,7 +26,8 @@ def get_attacks_info() -> dict[str, RegisteredObject]:
 
     out: dict[str, RegisteredObject] = {}
     for atk in EAF.get_list_classes(task={Task.Classification}):
-
+        if atk in router.excluded_attacks:
+            continue
         atk_info: AttackInfo = EAF.get_information(id=atk, exclude={})
 
         # collecting all the parameters for displaying the configuration
@@ -48,7 +56,8 @@ def get_statistics_info() -> dict[str, RegisteredObject]:
     try:
         out: dict[str, RegisteredObject] = {}
         for stat in SF.get_list_classes(task={Task.Classification}):
-
+            if stat in router.excluded_statistics:
+                continue
             metric_info: AttackInfo = SF.get_information(id=stat, exclude={})
 
             # collecting all the parameters for displaying the configuration

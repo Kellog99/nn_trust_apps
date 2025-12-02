@@ -222,22 +222,6 @@ def get_jobs_results(
                 status_code=404,
                 content=Error(code=404, message=f"No benchmarks found").model_dump_json())
 
-        # completed_tasks = []
-
-        # for _,v in tasks.items():
-        #    num_tasks = v["num_tasks"]
-        #    if v["status"]=="completed" and v["progress"]==100:
-        #        completed_tasks.append(v)
-        #        task_dir = os.path.join(os.environ.get("BENCHMARK_OUTPUT_DIR"),v["benchmark_id"])
-        #        if not has_aggregate(task_dir,dataset):
-        #            benchmarking.postprocess_benchmark_run_results(task_dir)
-
-        # if len(completed_tasks)==0 or len(completed_tasks)<num_tasks:
-        #    logging.error(f"No benchmark is finished yet")
-        #    return Response(
-        #            status_code=409,
-        #            content=Error(code=409, message=f"No benchmark is finished yet").model_dump_json())
-
         results = benchmarking.collect_dataset_aggregates_with_info(
             base_dir=os.environ.get("BENCHMARK_OUTPUT_DIR"),
             dataset=dataset,
@@ -310,92 +294,8 @@ async def start_benchmark_job(body: ExecutionConfig = Body(...)) -> Union[str, E
     try:
         dataset_name = body.dataset
         model_name = body.model
-        m_response = get_models()
-        d_response = get_datasets()
-        model_response = m_response
+        file_path = os.path.join(os.environ.get('DATASETS_REPO'), dataset_name, f"{dataset_name}.json")
 
-        #if m_response.status_code != 200 or d_response.status_code != 200:
-        #    logging.error("Model or Dataset repository is empty. Check repository.")
-        #    return Response(
-        #        status_code=404,
-        #        content=Error(code=404,
-        #                      message="Model or Dataset repository is empty. Check repository.").model_dump_json())
-        model = [m["name"] for m in model_response if m["name"] == model_name]
-        model_type = [m["type"] for m in model_response if m["name"] == model_name]
-        dataset = [d["name"] for d in d_response if d["name"] == dataset_name]
-
-        if len(model) > 1 or len(model_type) > 1:
-            logging.error(f"The provided model string {model_name} has had more than one match. Check model repository")
-            return Response(
-                status_code=409,
-                content=Error(code=409,
-                              message=f"The provided model string {model_name} has had more than one match. Check model repository").model_dump_json())
-
-        if len(model) == 0 or len(model_type) == 0:
-            logging.error(f"No model found: {model_name}")
-            return Response(
-                status_code=404,
-                content=Error(code=404,
-                              message=f"No model found: {model_name}").model_dump_json())
-
-        if len(dataset) > 1:
-            logging.error(
-                f"The provided dataset string {dataset_name} has had more than one match. Check dataset repository")
-            return Response(
-                status_code=409,
-                content=Error(code=409,
-                              message=f"The provided dataset string {dataset_name} has had more than one match. Check dataset repository").model_dump_json())
-
-        if len(dataset) == 0:
-            logging.error(f"No dataset found: {dataset_name}")
-            return Response(
-                status_code=404,
-                content=Error(code=404,
-                              message=f"No dataset found: {dataset_name}").model_dump_json())
-
-        file_path = os.path.join(os.environ.get('INTERNAL_MODEL_STORAGE'), f"{model_name}.json")
-
-        if model_type[0] == "saved_model":
-            if os.path.exists(file_path) and os.path.isfile(file_path):
-                with open(file_path, "r", encoding="utf-8") as f:
-                    config_models = json.load(f)  # load into dict
-                    config_models["type"] = "saved_model"
-                logging.info("Loaded JSON metadata")
-            else:
-                logging.error(f"Can't find model metadata in the repository for model:{model_name}")
-                return Response(
-                    status_code=404,
-                    content=Error(code=404,
-                                  message=f"Can't find model metadata in the repository for model:{model_name}").model_dump_json())
-
-        if model_type[0]=="hf":
-            if os.path.exists(file_path) and os.path.isfile(file_path):
-                with open(file_path, "r", encoding="utf-8") as f:
-                    config_models = json.load(f)  # load into dict
-                    config_models["type"]="hf"
-                logging.info("Loaded JSON metadata")
-            else:
-                logging.error(f"Can't find model metadata in the repository for model:{model_name}")
-                return Response(
-                    status_code=404,
-                    content=Error(code=404, 
-                                message=f"Can't find model metadata in the repository for model:{model_name}").model_dump_json())    
-        
-        elif model_type[0] == "timm":
-            model_metadata = None
-            for m in model_response:
-                if m["name"] == model_name:
-                    model_metadata = m
-            if model_metadata:
-                config_models = model_metadata
-            else:
-                logging.error("An error has occurred for timm model metadata retrieval")
-                return Response(
-                    status_code=404,
-                    content=Error(code=404,
-                                  message="An error has occurred for timm model metadata retrieval").model_dump_json())
-
-        file_path = os.path.join(os.environ.get('INTERNAL_DS_STORAGE'), dataset_name, f"{dataset_name}.json")
         if os.path.exists(file_path) and os.path.isfile(file_path):
             with open(file_path, "r", encoding="utf-8") as f:
                 config_dataset = json.load(f)  # load into dict
@@ -419,13 +319,10 @@ async def start_benchmark_job(body: ExecutionConfig = Body(...)) -> Union[str, E
             "output_format": os.environ.get("BENCHMARK_OUTPUT_FORMAT", "report")
         }
 
-        if model_type[0] == "saved_model":
-            config_models["weights_path"] = os.path.join(os.environ.get('INTERNAL_MODEL_STORAGE'), f"{model_name}.pth")
-
-        if model_type[0]=="hf":
-            #TODO:fix
-            config_models["name"] = f"timm/{model_name}"
-            config_models["weights_path"] = os.path.join(os.environ.get('INTERNAL_MODEL_STORAGE'),f"{model_name}.ckpt")
+        model_file_path = os.path.join(os.environ.get('MODEL_REPO'), model_name)
+        config_models = {
+            "model_path":model_file_path
+        }
 
         config_dataset["source_path"] = os.path.join(dataset_name, "data")
 

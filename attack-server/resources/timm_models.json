@@ -1,7 +1,6 @@
 {
   "timm_models": [
     {
-      "id": "resnet50",
       "name": "resnet50",
       "type": "timm",
       "pretrained": true,
@@ -16,7 +15,6 @@
       ]
     },
     {
-      "id": "resnet18",
       "name": "resnet18",
       "type": "timm",
       "pretrained": true,
