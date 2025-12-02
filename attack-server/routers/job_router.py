@@ -294,8 +294,7 @@ async def startSingleAttack(body: SingleAttackProps = Body(...)) -> SingleAttack
         img=pil_image,
         num_classes=model.num_classes,
         attack_id=body.attack.id,
-        attack_params={param.id: param.default for param in body.attack.parameters},
-        device="cpu"
+        attack_params={param.id: param.default for param in body.attack.parameters}
     )
     adv_img_base64 = pilimage_to_b64str(atk_results["x_adv"])
     pert_img_base64 = pilimage_to_b64str(atk_results["pert"])

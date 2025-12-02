@@ -214,6 +214,7 @@ def execute_single_image_attack(
         device: str | None = None,
     ):
     device = torch.device(device) if device is not None else torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    model = model.to(device)
     if isinstance(model_input_size, int):
         model_input_size = (model_input_size, model_input_size)
 

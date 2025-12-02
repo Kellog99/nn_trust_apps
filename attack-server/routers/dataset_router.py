@@ -74,7 +74,7 @@ def get_datasets():
                     type_dataset = info_data.get("type_dataset")
                     task = info_data.get("mode")
                 datasetObject = benchmarking.get_dataloader(dataset=str(os.path.join(item_path,"data")), 
-                                                            subset=1, 
+                                                            subset=None, 
                                                             batch=1, 
                                                             type_dataset=type_dataset, 
                                                             transform = lambda x: x,
