@@ -29,9 +29,6 @@ app = FastAPI(
     servers=[{'url': 'https://titann.swagger.io/api/v3'}],
 )
 app.include_router(router)
-# After app.include_router(router)
-for route in app.routes:
-    print(f"{route.methods} {route.path}")
 
 app.add_middleware(
     CORSMiddleware,

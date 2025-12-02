@@ -98,7 +98,7 @@ def get_list_benchmarks(
 
 
 @router.post("/upload/model", response_model=ModelReportProps)
-def upload_reports(
+def upload_report(
         report: UploadReportModel = Body(...),
         report_path: str = Query(
             default=...,
