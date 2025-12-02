@@ -19,8 +19,10 @@ from nn_trust.attack.utils.logger import TensorboardLogger
 from nn_trust.core import Task, ModelAdapter
 from nn_trust.evaluation.composer import ConfigStatisticComposer, StatisticComposer
 from nn_trust.evaluation.statistic_factory import StatisticsFactory
-from nn_trust.loss.loss_composer import ConfigLossComposer, LossComposer
+from nn_trust.loss.loss_composer import LossComposer
 from nn_trust.loss.loss_factory import LossFactory
+from nn_trust.target import AvoidOnehotTarget
+from nn_trust.models.model_utils import load_model
 from pydantic import BaseModel, Field, field_validator, ValidationInfo
 from torch.utils.data import DataLoader
 from tqdm.auto import tqdm
@@ -91,12 +93,14 @@ class BenchmarkDatasetConfig(BaseModel):
 
 
 class BenchmarkModelsConfig(BaseModel):
-    name: str
-    type: str
-    pretrained: bool
-    num_classes: int
-    task: str
+    name: str | None = None
+    model_path: str | None = None
+    type: str | None = None
+    pretrained: bool | None = None
+    num_classes: int | None = None
+    task: str | None = None
     weights_path: str | None = None
+    input_size: int | None = None
 
 
 class BenchmarkAttackConfig(BaseModel):
@@ -241,23 +245,7 @@ class Evaluator:
             name=dataset["name"]
         )
 
-        model = get_model(
-            num_labels=model_config.get("num_classes"),
-            model_name=model_config.get("name"),
-            model_type=model_config.get("type"),
-            model_weights_path=model_config.get("weights_path", None),
-            mean=dataset["transform_config"].get("mean"),
-            std=dataset["transform_config"].get("std"),
-            model_task=model_config.get("task")
-        )
-
-        num_classes = (
-            model_config["num_classes"]
-            if model_config["num_classes"] > 0
-            else len(dataloader.dataset.dataset.classes)  # TODO: Manage both datasets and subsets
-        )
-
-        print(f"This is options configurations {config['options']}")
+        model = load_model(**model_config)
 
         return cls(
             config=EvaluatorConfig(
@@ -269,7 +257,7 @@ class Evaluator:
                 attacks=config["attacks"],
                 save_perturbation=config["options"]["save_perturbation"],
                 overwrite=config["options"]["overwrite"],
-                num_classes=num_classes,
+                num_classes=model.num_classes,
                 output_path=config["output_path"],
                 output_format=config["options"]["output_format"],
             )
@@ -306,11 +294,10 @@ class Evaluator:
             atk_id = attack_config.pop("id", atk_name)
             if "losses" in attack_config:
                 # If losses are specified, convert them to Loss objects
-                attack_config['loss'] = LossComposer(ConfigLossComposer(
+                attack_config['loss'] = LossComposer(
                     loss=attack_config['losses'],
-                    p=attack_config.get('p', 2.0),
                     loss_weights=attack_config.get('loss_weights', [1.0] * len(attack_config['losses'])),
-                ))
+                )
             atk = EvasionAttackFactory.create(
                 atk_name,
                 model=model,
@@ -340,9 +327,10 @@ class Evaluator:
                 batch = batch.to(device)
                 label = label.to(device)
                 y_one_hot = torch.nn.functional.one_hot(label, num_classes=num_classes)
+                target = AvoidOnehotTarget(num_classes=num_classes)(label.tolist())
                 x_adv = atk.generate(
                     x=batch,
-                    y=y_one_hot
+                    y=target
                 ).detach()
 
                 with torch.no_grad():

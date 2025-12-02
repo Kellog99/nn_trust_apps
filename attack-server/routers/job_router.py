@@ -1,32 +1,16 @@
-import base64
-import importlib
-import io
-import json
-import logging
-import os
-import time
-from pathlib import Path
-from typing import Union
-
 import timm
 import torch
-from PIL import Image
 from fastapi import APIRouter, Response, Request, HTTPException
 from fastapi.responses import JSONResponse
 from fastapi import Body, Query
 from nn_trust.attack.attack_factory import EvasionAttackFactory as EAF
 from nn_trust.core import Task, ModelAdapter
-from torchmetrics.image import StructuralSimilarityIndexMeasure
-from torchvision import transforms
 from lib.model import SingleAttackOutput, SingleAttackProps, ModelInfo, Error
 import base64
-import copy
 import importlib
-import io
 import json
 import logging
 import os
-import time
 from pathlib import Path
 from typing import Union
 import ray
@@ -35,6 +19,8 @@ from lib.model import Error, ExecutionConfig, SingleAttackOutput, SingleAttackPr
 from routers.dataset_router import get_datasets
 from routers.model_router import get_models
 from routers.utils import find_image
+from nn_trust.models.model_utils import load_model
+from .utils import b64str_to_pilimage, pilimage_to_b64str, execute_single_image_attack
 
 benchmarking = importlib.import_module("benchmarking")
 
@@ -300,7 +286,6 @@ async def upload_report(request: Request):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error saving JSON: {str(e)}")
 
-
 # --- Start --- #
 @router.post("/start", response_model=str)
 async def start_benchmark_job(body: ExecutionConfig = Body(...)) -> Union[str, Error]:
@@ -463,145 +448,37 @@ async def startSingleAttack(body: SingleAttackProps = Body(...)) -> SingleAttack
     """
     Start a new TITANN attack on single image job.
     """
-    try:
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    model_repo_path = Path(os.environ.get("MODEL_REPO"))
+    pil_image = b64str_to_pilimage(body.image)
+    model_name = body.model_name
+    model_path = model_repo_path / model_name
 
-        ###################### Input ######################
-        # Decode base64 image string and convert to torch tensor
-        image_bytes = base64.b64decode(body.image)
-        image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+    model = load_model(model_path=model_path)
 
-        x: torch.Tensor = transforms.ToTensor()(image).unsqueeze(0).to(device)
+    atk_results = execute_single_image_attack(
+        model=model,
+        model_input_size=model.input_size,
+        img=pil_image,
+        num_classes=model.num_classes,
+        attack_id=body.attack.id,
+        attack_params={param.id: param.default for param in body.attack.parameters},
+        device="cpu"
+    )
+    adv_img_base64 = pilimage_to_b64str(atk_results["x_adv"])
+    pert_img_base64 = pilimage_to_b64str(atk_results["pert"])
 
-        ############## Extracting the model 2.0 (or as it was before?...) ###########
-        # Get the model
-        model_name = body.model_name
-        model_response = get_models()
-        model = [m["name"] for m in model_response if m["name"]==model_name]
-        model_type = [m["type"] for m in model_response if m["name"]==model_name]
-        file_path = os.path.join(os.environ.get('INTERNAL_MODEL_STORAGE'),f"{model_name}.json")
-
-        if model_type[0]=="saved_model":
-            if os.path.exists(file_path) and os.path.isfile(file_path):
-                with open(file_path, "r", encoding="utf-8") as f:
-                    config_models = json.load(f)  # load into dict
-                    config_models["type"]="saved_model"
-                logging.info("Loaded JSON metadata")
-            else:
-                logging.error(f"Can't find model metadata in the repository for model:{model_name}")
-                return Response(
-                    status_code=404,
-                    content=Error(code=404, 
-                                message=f"Can't find model metadata in the repository for model:{model_name}").model_dump_json())
-            
-        elif model_type[0]=="hf":
-            if os.path.exists(file_path) and os.path.isfile(file_path):
-                with open(file_path, "r", encoding="utf-8") as f:
-                    config_models = json.load(f)  # load into dict
-                    config_models["type"]="hf"
-                logging.info("Loaded JSON metadata")
-            else:
-                logging.error(f"Can't find model metadata in the repository for model:{model_name}")
-                return Response(
-                    status_code=404,
-                    content=Error(code=404, 
-                                message=f"Can't find model metadata in the repository for model:{model_name}").model_dump_json())
-            
-        elif model_type[0]=="timm":
-            model_metadata = None
-            for m in model_response:
-                if m["name"]==model_name:
-                    model_metadata = m
-            if model_metadata:
-                config_models = model_metadata
-            else:
-                logging.error("An error has occurred for timm model metadata retrieval")
-                return Response(
-                    status_code=404,
-                    content=Error(code=404, 
-                                message="An error has occurred for timm model metadata retrieval").model_dump_json())
-        
-        if model_type[0]=="saved_model":
-            config_models["weights_path"] = os.path.join(os.environ.get('INTERNAL_MODEL_STORAGE'),f"{model_name}.pth")
-        
-        if model_type[0]=="hf":
-            #TODO:fix
-            config_models["name"] = f"timm/{model_name}"
-            config_models["weights_path"] = os.path.join(os.environ.get('INTERNAL_MODEL_STORAGE'),f"{model_name}.ckpt")
-
-        model = benchmarking.get_model(
-            num_labels=config_models.get("num_classes"),
-            model_name=config_models.get("name"),
-            model_type=config_models.get("type"),
-            model_weights_path=config_models.get("weights_path", None),
-            model_task=config_models.get("task")
-        )
-
-        # Decode base64 image string and convert to torch tensor
-        image_bytes = base64.b64decode(body.image)
-        image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
-        transformation = transforms.Compose([
-            transforms.Resize(config_models.get("input_dimensionality")[1:]),  # Resize BEFORE converting to tensor
-            transforms.ToTensor(),  # Convert to tensor AFTER resizing
-        ])
-
-        x: torch.Tensor = transformation(image).unsqueeze(0).to(device)
-        labels = model(x).argmax(1)
-        y: torch.Tensor = torch.nn.functional.one_hot(labels, num_classes=1000)
-        ###################### Attack ######################
-        parameters = {param.id: param.default for param in body.attack.parameters}
-        atk_cnf = EAF.get_config(
-            class_id=body.attack.id,
-            model=model,
-            task=Task.Classification,
-            device=device,
-            **parameters
-        )
-
-        atk = EAF.create(
-            body.attack.id,
-            atk_cnf
-        )
-
-        start = time.time()
-        x_adv = atk.generate(x=x, y=y).detach()
-        pert = x_adv - x
-        end = time.time()
-        y_adv = model(x_adv).argmax(-1)
-
-        ###################### Analysing the results ######################
-        # Prepare image data to return
-        buffered = io.BytesIO()
-        transforms.ToPILImage()(x_adv[0]).save(buffered, format="PNG")
-        adv_img_base64 = base64.b64encode(buffered.getvalue()).decode("utf-8")
-
-        buffered = io.BytesIO()
-        pert_image = transforms.ToPILImage()(pert[0])
-        pert_image.save(buffered, format="PNG")
-        pert_image_base64 = base64.b64encode(buffered.getvalue()).decode("utf-8")
-        # Execute the attack and get results
-        ssim = StructuralSimilarityIndexMeasure().to(device)
-
-        return SingleAttackOutput(
-            x=body.image,
-            adv_perturbation=pert_image_base64,
-            x_adv=adv_img_base64,
-            original_prediction=str(y.argmax(-1).item()),
-            adversarial_prediction=str(y_adv.item()),
-            confidence={
-                "adversarial": [],
-                "original": []
-            },
-            advance_metrics={
-                "ssim": ssim(x, x_adv).item(),
-                "distance": torch.norm(pert, p=1).item(),
-                "executionTime": end - start
-            })
-
-    except Exception as e:
-        logging.error(f"Unexpected error during attack: {str(e)}")
-
-        return Error(
-            code=500,
-            message=f"Unexpected error during attack"
-        )
+    return SingleAttackOutput(
+        x=body.image,
+        adv_perturbation=pert_img_base64,
+        x_adv=adv_img_base64,
+        original_prediction=atk_results["y"],
+        adversarial_prediction=atk_results["y_adv"],
+        confidence={
+            "adversarial": [],
+            "original": []
+        },
+        advance_metrics={
+            "ssim": atk_results["metrics"]["ssim"],
+            "distance": atk_results["metrics"]["distance"],
+            "executionTime": atk_results["metrics"]["execution_time"],
+        })

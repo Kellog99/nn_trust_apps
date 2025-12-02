@@ -2,6 +2,7 @@ import math
 import os
 from pathlib import Path
 
+import PIL
 from annotated_types import Gt, Ge, Le, Lt
 from nn_trust.attack import EvasionAttackConfig
 from nn_trust.attack.attack_factory import EvasionAttackFactory as EAF, AttackInfo
@@ -138,3 +139,86 @@ def find_image(start_dir: str):
             continue
 
     return None
+
+# logic related to single attack example
+import base64
+from typing import Tuple
+import PIL
+import io
+import time
+import torch
+from torchvision.transforms import v2 as T
+from nn_trust.core import ModelAdapter, Task
+from nn_trust.target import AvoidOnehotTarget
+from torchmetrics.image import StructuralSimilarityIndexMeasure
+from nn_trust.models.model_utils import load_model
+
+
+def b64str_to_pilimage(b64_image_str: str) -> PIL.Image:
+    image_bytes = base64.b64decode(b64_image_str)
+    image = PIL.Image.open(io.BytesIO(image_bytes)).convert("RGB")
+    return image
+
+def pilimage_to_b64str(pilimage: PIL.Image) -> str:
+    buffered = io.BytesIO()
+    pilimage.save(buffered, format="PNG")
+    adv_img_base64_str = base64.b64encode(buffered.getvalue()).decode("utf-8")
+    return adv_img_base64_str
+
+def execute_single_image_attack(
+        model: ModelAdapter,
+        model_input_size: int | Tuple[int, int],
+        img: PIL.Image,
+        num_classes: int,
+        attack_id: str,
+        attack_params: dict,
+        device: str | None = None,
+    ):
+    device = torch.device(device) if device is not None else torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    if isinstance(model_input_size, int):
+        model_input_size = (model_input_size, model_input_size)
+
+    transformations = T.Compose([
+        T.Resize(model_input_size),
+        T.ToImage(),
+        T.ToDtype(torch.float32, scale=True),
+    ])
+
+    x = transformations(img).to(device).unsqueeze(0)
+    labels = model(x).argmax(-1).tolist()
+    target = AvoidOnehotTarget(num_classes=num_classes)(labels)
+
+    atk_cnf = EAF.get_config(
+        class_id=attack_id,
+        model=model,
+        task=Task.Classification,
+        device=device,
+        **attack_params
+    )
+    atk = EAF.create(
+        class_id=attack_id,
+        config=atk_cnf
+    )
+    start = time.time()
+    x_adv = atk.generate(x=x, y=target).detach()
+    end = time.time()
+
+    pert = x_adv - x
+    y_adv = model(x_adv).argmax(-1)
+
+    x_adv_pil = T.ToPILImage()(x_adv.squeeze())
+    pert_pil = T.ToPILImage()(pert.squeeze())
+
+    ssim_metric = StructuralSimilarityIndexMeasure().to(device)
+    return {
+        "x": img,
+        "y": str(labels[0]),
+        "x_adv": x_adv_pil,
+        "y_adv": str(y_adv.argmax(-1).item()),
+        "pert": pert_pil,
+        "metrics":{
+            "ssim": ssim_metric(x, x_adv).item(),
+            "distance": torch.norm(pert, p=1).item(),
+            "execution_time": end - start,
+        }
+    }

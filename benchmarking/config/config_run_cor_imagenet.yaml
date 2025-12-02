@@ -23,30 +23,45 @@ options:
 
 
 datasets:
-  - name: "clean-aircraft-crop"             # Dataset name
-    num_classes: 36
-    subset: 60
-    batch: 20
-    type_dataset: 2
+  - name: "imagenet" # Name of the dataset
+    num_classes: 1000
+    subset: 20
+    batch: 5
+    type_dataset: 1
     num_workers: 2
-    source_path: "/home/bru/Documents/codes/data/aircraft-dataset/clean-aircraft-crop"
+    source_path: "/home/bru/Documents/codes/data/imagenet-1k/val_images"
     transform_config:
-      transform_id: "normalize_only"
-      mean: [0.485, 0.456, 0.406]
-      std: [0.229, 0.224, 0.225]
+      size: 256
+      crop: 224
+      transform_id: "imagenet_like_crop"
+      mean: [0.5074, 0.5308, 0.5306]
+      std: [0.2639, 0.2518, 0.2521]
+
 
 models:
 
-  - model_path: "/home/bru/Documents/codes/nn_trust_apps/attack-server/models_repo/timm@convnextv2_base.fcmae_ft_in1k"
+  - name: "timm/convnextv2_base.fcmae_ft_in1k"
+    type: "huggingface"
+    num_classes: 1000
+    task: "classification"
+    knowledge: "white"
+    input_size: 224
 
-  - model_path: "/home/bru/Documents/codes/nn_trust_apps/attack-server/models_repo/timm@vit_base_patch16_224.augreg2_in21k_ft_in1k"
+  - name: "timm/vit_base_patch16_224.augreg2_in21k_ft_in1k"
+    type: "huggingface"
+    num_classes: 1000
+    task: "classification"
+    knowledge: "white"
+    input_size: 224
+
+  - model_path: "/home/bru/Documents/codes/nn_trust_apps/attack-server/models_repo/hf1_test"
 
 attacks:
   - name: 'fgsm'
     max_iters: 20
   - name: 'banditprior'
     max_iters: 50
-  - name: 'dag'
+  - name: 'pgd'
     max_iters: 50
 
 
