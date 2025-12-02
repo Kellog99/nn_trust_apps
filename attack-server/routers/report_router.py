@@ -22,7 +22,6 @@ def get_reports(
     """
     This function has to take all the report from a certain path
     """
-    print(repo_path)
     if os.path.exists(repo_path):
         out = []
         for dirpath, dirnames, filenames in os.walk(repo_path):
@@ -41,7 +40,6 @@ def get_reports(
                     )
                 except (json.JSONDecodeError, OSError) as e:
                     print(f"⚠️ Could not read {report_path}: {e}")
-        print("THe output is ", out)
         return out
     return []
 
