@@ -1,33 +1,6 @@
 {
   "timm_models": [
-    {
-      "name": "resnet50",
-      "type": "timm",
-      "pretrained": true,
-      "num_classes": 1000,
-      "task": "Classification",
-      "domain": "RGB",
-      "weights": "0.9",
-      "input_dimensionality": [
-        3,
-        244,
-        244
-      ]
-    },
-    {
-      "name": "resnet18",
-      "type": "timm",
-      "pretrained": true,
-      "num_classes": 1000,
-      "task": "Classification",
-      "domain": "RGB",
-      "weights": "0.9",
-      "input_dimensionality": [
-        3,
-        244,
-        244
-      ]
-    }
+    
   ],
   "max_model_size": 5000
 }

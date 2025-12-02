@@ -1,3 +1,6 @@
+import base64
+import importlib
+import json
 import logging
 import os
 import shutil
@@ -5,10 +8,8 @@ import zipfile
 
 from fastapi import APIRouter, UploadFile, Response
 
-from lib.model import Error, DatasetInfo
-import importlib
-import json
-import base64
+from lib.model import Error
+
 benchmarking = importlib.import_module("benchmarking")
 router = APIRouter(prefix="/dataset", tags=["datasets and models"])
 

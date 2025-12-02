@@ -112,9 +112,9 @@ def benchmark_single_node_serial(config: dict):
                 evaluator = Evaluator.from_config(config=config, dataset=dataset, model_config=model_config)
                 evaluator.evaluate_attacks()
                 evaluator.save_results_to_disk(output_path=output_path)
-                logging.warning(f"Evaluation results for {dataset["name"]}/{model_config["name"]} are saved to {output_path}")
+                logging.warning(f"Evaluation results for {dataset["name"]}/{model_id} are saved to {output_path}")
             except Exception as e:
-                logging.warning(f"\n\U0001F975 Evaluation of Model {model_config['name']} on Dataset {dataset['name']} failed with exception '{e}' +++\n")
+                logging.warning(f"\n\U0001F975 Evaluation of Model {model_id} on Dataset {dataset['name']} failed with exception '{e}' +++\n")
                 traceback.print_exc()
                     # Saving the structure for the report
     structure = get_structure(output_path)
@@ -145,9 +145,9 @@ def benchmark_multi_node_parallel(config: dict, executor : Executor):
                 evaluator = Evaluator.from_config(config=config, dataset=dataset, model_config=model_config)
                 plan = evaluator.plan_attacks_evaluation()
                 plans.append(plan)
-                logging.warning(f"Evaluation results for {dataset["name"]}/{model_config["name"]} are saved to {output_path}")
+                logging.warning(f"Evaluation results for {dataset["name"]}/{model_id} are saved to {output_path}")
             except Exception as e:
-                logging.warning(f"\n\U0001F975 Evaluation of Model {model_config['name']} on Dataset {dataset['name']} failed with exception '{e}' +++\n")
+                logging.warning(f"\n\U0001F975 Evaluation of Model {model_id} on Dataset {dataset['name']} failed with exception '{e}' +++\n")
                 traceback.print_exc()
     
     if executor.num_actors>1:
@@ -198,9 +198,9 @@ def benchmark_single_node_parallel(config: dict,  executor : Executor):
                 evaluator = Evaluator.from_config(config=config, dataset=dataset, model_config=model_config)
                 plan = evaluator.plan_attacks_evaluation()
                 plans.append(plan)
-                logging.warning(f"Evaluation results for {dataset["name"]}/{model_config["name"]} are saved to {output_path}")
+                logging.warning(f"Evaluation results for {dataset["name"]}/{model_id} are saved to {output_path}")
             except Exception as e:
-                logging.warning(f"\n\U0001F975 Evaluation of Model {model_config['name']} on Dataset {dataset['name']} failed with exception '{e}' +++\n")
+                logging.warning(f"\n\U0001F975 Evaluation of Model {model_id} on Dataset {dataset['name']} failed with exception '{e}' +++\n")
                 traceback.print_exc()
 
     if executor.num_actors>1:
@@ -248,9 +248,9 @@ def benchmark_from_attack_server(config: dict, executor : Executor):
                 evaluator = Evaluator.from_config(config=config, dataset=dataset, model_config=model_config)
                 plan = evaluator.plan_attacks_evaluation()
                 plans.append(plan)
-                logging.warning(f"Evaluation results for {dataset["name"]}/{model_config["name"]} are saved to {output_path}")
+                logging.warning(f"Evaluation results for {dataset["name"]}/{model_id} are saved to {output_path}")
             except Exception as e:
-                logging.warning(f"\n\U0001F975 Evaluation of Model {model_config['name']} on Dataset {dataset['name']} failed with exception '{e}' +++\n")
+                logging.warning(f"\n\U0001F975 Evaluation of Model {model_id} on Dataset {dataset['name']} failed with exception '{e}' +++\n")
                 traceback.print_exc()
     benchmark_id = executor.execute_plan(plans, benchmark_id)
     structure = get_structure(output_path)

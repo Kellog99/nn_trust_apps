@@ -29,9 +29,6 @@ app = FastAPI(
     servers=[{'url': 'https://titann.swagger.io/api/v3'}],
 )
 app.include_router(router)
-# After app.include_router(router)
-for route in app.routes:
-    print(f"{route.methods} {route.path}")
 
 app.add_middleware(
     CORSMiddleware,
@@ -130,7 +127,6 @@ if __name__ == "__main__":
     os.environ['MAX_MODEL_SIZE_UPLOAD'] = str(args.max_model_size_upload)
     os.environ['MAX_MODEL_JSON_SIZE_UPLOAD'] = str(args.max_model_json_size_upload)
     os.environ['TIMM_MODELS_JSON_PATH'] = "resources/timm_models.json"
-
     load_dotenv()
 
     logging.info(f"Starting FastAPI app with internal storage: {args.ds_storage}, {args.model_storage}")

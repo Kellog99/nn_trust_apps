@@ -166,7 +166,8 @@ def load_models_metadata_from_repo():
         
         # Determine type based on data file content or extension if needed
         model_type = model_info.get("type", "timm")
-        
+        model_info.pop("name")
+        model_info.pop("type")
         # Merge info with base entry
         model_entry = {
             "name": model_name,

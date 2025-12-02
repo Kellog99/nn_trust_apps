@@ -2,10 +2,23 @@ import timm
 import torch
 from fastapi import APIRouter, Response, Request, HTTPException
 from fastapi.responses import JSONResponse
+import base64
+import importlib
+import io
+import json
+import logging
+import os
+import time
+from typing import Union
+import ray
+import torch
+from PIL import Image
+from fastapi import APIRouter, Response
 from fastapi import Body, Query
+from fastapi.responses import JSONResponse
 from nn_trust.attack.attack_factory import EvasionAttackFactory as EAF
 from nn_trust.core import Task, ModelAdapter
-from lib.model import SingleAttackOutput, SingleAttackProps, ModelInfo, Error
+from lib.model import SingleAttackOutput, SingleAttackProps, Error
 import base64
 import importlib
 import json
@@ -14,8 +27,10 @@ import os
 from pathlib import Path
 from typing import Union
 import ray
+from torchmetrics.image import StructuralSimilarityIndexMeasure
+from torchvision import transforms
 from lib.disk_reader import find_model_and_task_dir
-from lib.model import Error, ExecutionConfig, SingleAttackOutput, SingleAttackProps, ReportProps
+from lib.model import Error, ExecutionConfig, SingleAttackOutput, SingleAttackProps
 from routers.dataset_router import get_datasets
 from routers.model_router import get_models
 from routers.utils import find_image
@@ -23,7 +38,6 @@ from nn_trust.models.model_utils import load_model
 from .utils import b64str_to_pilimage, pilimage_to_b64str, execute_single_image_attack
 
 benchmarking = importlib.import_module("benchmarking")
-
 
 router = APIRouter(prefix="/job", tags=["jobs management", "jobs utils"])
 
@@ -115,6 +129,10 @@ def get_jobs_results(id: str = Query(None),
             benchmarking.postprocess_benchmark_run_results(task_dir)
             with open(os.path.join(model_dir, 'info.json'), "r", encoding="utf-8") as f:
                 info = json.load(f)
+            info["tool"] = "nntrust"
+            info["dataset"] = str(model_dir).split(os.sep)[-2]
+            info["id"] = benchmark_id
+            info["task"]="Classification"
 
             # ----# thumbnail
             try:
@@ -166,9 +184,7 @@ def get_jobs_results(id: str = Query(None),
             }
             if prototype:
                 report_data["prototype"] = prototype
-            report_data["tool"] = "nntrust"
-            report_data["dataset"] = str(model_dir).split(os.sep)[-2]
-
+            
             with open(os.path.join(task_dir, "report.json"), "w", encoding="utf-8") as f:
                 json.dump(report_data, f)
 
@@ -189,86 +205,6 @@ def get_jobs_results(id: str = Query(None),
             status_code=500,
             content=Error(code=500, message=f"Unexpected error during get result").model_dump_json())
 
-
-@router.get("/benchmark/getResult")
-def get_jobs_results(
-        dataset: str = Query(...),
-        task: str = Query(None),
-        id: str = Query(None)
-):
-    """
-    Get a TITANN benchmark job result.
-    """
-    try:
-        tasks = ray.get(executor.tracker.list_tasks.remote())
-
-        if not tasks:
-            logging.error(f"No benchmarks found")
-            return Response(
-                status_code=404,
-                content=Error(code=404, message=f"No benchmarks found").model_dump_json())
-
-        results = benchmarking.collect_dataset_aggregates_with_info(
-            base_dir=os.environ.get("BENCHMARK_OUTPUT_DIR"),
-            dataset=dataset,
-            keep_latest_only=False
-        )
-
-        out = benchmarking.transform_to_benchmark(results, task="classification")
-        if id:
-            return [o for o in benchmarking.enrich_with_ranks(out) if o["benchmark_id"] != id]
-        else:
-            return benchmarking.enrich_with_ranks(out)
-
-    except Exception as e:
-        logging.error(f"Unexpected error during get result: {str(e)}")
-        return Response(
-            status_code=500,
-            content=Error(code=500, message=f"Unexpected error during get result").model_dump_json())
-
-
-#@router.get("/report/getReports")
-#def get_reports() -> list[ReportProps]:
-#    """
-#        Recursively searches for all 'report.json' files under the given root folder
-#        and returns a list of their parsed JSON contents (as dictionaries).
-#
-#        Returns:
-#            list[dict]: A list of dictionaries loaded from each report.json file.
-#        """
-#    reports = []
-#    for dirpath, dirnames, filenames in os.walk(os.enviroos.walkn.get("BENCHMARK_OUTPUT_DIR")):
-#        if "report.json" in filenames:
-#            report_path = os.path.join(dirpath, "report.json")
-#            try:
-#                with open(report_path, "r", encoding="utf-8") as f:
-#                    data = json.load(f)
-#                    reports.append(ReportProps(**data))
-#            except (json.JSONDecodeError, OSError) as e:
-#                print(f"⚠️ Could not read {report_path}: {e}")
-#    return reports
-
-
-################################### POST ###################################
-@router.post("/report/upload")
-async def upload_report(request: Request):
-    try:
-        report = await request.json()
-        if "info" not in report:
-            raise Exception("Info not in the report.")
-        if "name" not in report["info"]:
-            raise Exception("Model name not in the report.")
-        if "dataset" not in report:
-            raise Exception("Dataset name not in the report.")
-
-        _, task_dir = find_model_and_task_dir(os.environ.get("BENCHMARK_OUTPUT_DIR"), report["dataset"],
-                                              report["info"]["name"], None)
-        with open(os.path.join(task_dir, "report.json"), 'w') as f:
-            json.dump(report, f, indent=2)
-        return Response()
-
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error saving JSON: {str(e)}")
 
 # --- Start --- #
 @router.post("/start", response_model=str)
@@ -328,12 +264,12 @@ async def start_benchmark_job(body: ExecutionConfig = Body(...)) -> Union[str, E
             }
             for metric in body.metrics
         ]
-        print(benchmark_config['attacks'])
         task_id = benchmarking.benchmark(benchmark_config, executor)
         return JSONResponse(status_code=200, content=task_id)
 
     except Exception as e:
         logging.error(f"Unexpected error during job start: {str(e)}")
+        raise e
         return Response(
             status_code=500,
             content=Error(code=500, message=f"Unexpected error during job start").model_dump_json())
