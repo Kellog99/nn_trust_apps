@@ -6,7 +6,7 @@ import shutil
 import tempfile
 import zipfile
 from pathlib import Path
-
+from routers.utils import load_models_metadata_from_repo
 import torch
 from fastapi import APIRouter, Response, Query
 from fastapi import UploadFile, HTTPException
@@ -40,51 +40,7 @@ def get_models() :
                     status_code=500,
                     content=Error(code=500, message=f"Internal server error during config import.").model_dump_json())
     try:
-        models = []
-        models_root_dir = os.environ.get("INTERNAL_MODEL_STORAGE")
-        for item in os.listdir(models_root_dir):
-            item_path = os.path.join(models_root_dir, item)
-            if os.path.isfile(item_path) and item_path.endswith(".pth"):
-                logging.info(f"Found a model: {item_path}")
-
-                # Construct the corresponding JSON file path
-                json_path = item_path.replace(".pth", ".json")
-                
-                # Check if JSON file exists
-                if not os.path.isfile(json_path):
-                    raise FileNotFoundError(f"JSON file not found for model: {item}. Expected: {json_path}")
-                
-                # Read the JSON file
-                with open(json_path, 'r') as json_file:
-                    model_info = json.load(json_file)
-                
-                # Create model entry with base info and extend with JSON data
-                model_entry = {"name": Path(item).stem, "type": "saved_model"}
-                merged_model_info = model_info | model_entry
-                models.append(merged_model_info)
-
-            if os.path.isfile(item_path) and item_path.endswith(".ckpt"):
-                logging.info(f"Found a model: {item_path}")
-
-                # Construct the corresponding JSON file path
-                json_path = item_path.replace(".ckpt", ".json")
-                
-                # Check if JSON file exists
-                if not os.path.isfile(json_path):
-                    raise FileNotFoundError(f"JSON file not found for model: {item}. Expected: {json_path}")
-                
-                # Read the JSON file
-                with open(json_path, 'r') as json_file:
-                    model_info = json.load(json_file)
-                
-                # Create model entry with base info and extend with JSON data
-                model_entry = {"name": Path(item).stem, "type": "hf"}
-                merged_model_info = model_info | model_entry
-                models.append(merged_model_info)
-
-        if len(models)==0:
-            logging.info("No uploaded models found.")
-
+        models = load_models_metadata_from_repo()
         models.extend(MODELS)
         if len(models)==0:
             logging.info("No models found.")

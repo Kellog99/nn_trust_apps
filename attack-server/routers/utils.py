@@ -10,7 +10,8 @@ from nn_trust.core import Task
 from nn_trust.evaluation.statistic_factory import StatisticsFactory as SF
 from pydantic.fields import FieldInfo
 from pydantic_core import PydanticUndefined
-
+import logging
+import json
 from lib.model import ParametersProps
 
 
@@ -140,6 +141,43 @@ def find_image(start_dir: str):
 
     return None
 
+
+def load_models_metadata_from_repo():
+    """Load models metadata from repository with structure: model_repo/model_name/{data, info.json}"""
+    models = []
+    models_root_dir = os.environ.get("INTERNAL_MODEL_STORAGE")
+    
+    for model_name in os.listdir(models_root_dir):
+        model_dir = os.path.join(models_root_dir, model_name)
+        # Skip if not a directory
+        if not os.path.isdir(model_dir):
+            continue
+        
+        json_path = os.path.join(model_dir, "info.json")
+        
+        if not os.path.isfile(json_path):
+            raise FileNotFoundError(
+                f"Missing info.json for model: {model_name}"
+            )
+        
+        # Load model info
+        with open(json_path, 'r') as f:
+            model_info = json.load(f)
+        
+        # Determine type based on data file content or extension if needed
+        model_type = model_info.get("type", "timm")
+        
+        # Merge info with base entry
+        model_entry = {
+            "name": model_name,
+            "type": model_type,
+            **model_info
+        }
+        
+        models.append(model_entry)
+        logging.info(f"Loaded model: {model_name}")
+    
+    return models
 # logic related to single attack example
 import base64
 from typing import Tuple
