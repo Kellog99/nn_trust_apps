@@ -116,6 +116,10 @@ def get_jobs_results(id: str = Query(None),
             benchmarking.postprocess_benchmark_run_results(task_dir)
             with open(os.path.join(model_dir, 'info.json'), "r", encoding="utf-8") as f:
                 info = json.load(f)
+            info["tool"] = "nntrust"
+            info["dataset"] = str(model_dir).split(os.sep)[-2]
+            info["id"] = benchmark_id
+            info["task"]="Classification"
 
             # ----# thumbnail
             try:
@@ -167,9 +171,7 @@ def get_jobs_results(id: str = Query(None),
             }
             if prototype:
                 report_data["prototype"] = prototype
-            report_data["tool"] = "nntrust"
-            report_data["dataset"] = str(model_dir).split(os.sep)[-2]
-
+            
             with open(os.path.join(task_dir, "report.json"), "w", encoding="utf-8") as f:
                 json.dump(report_data, f)
 
@@ -336,7 +338,6 @@ async def start_benchmark_job(body: ExecutionConfig = Body(...)) -> Union[str, E
             }
             for metric in body.metrics
         ]
-        print(benchmark_config['attacks'])
         task_id = benchmarking.benchmark(benchmark_config, executor)
         return JSONResponse(status_code=200, content=task_id)
 

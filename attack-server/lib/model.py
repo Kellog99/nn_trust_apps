@@ -158,7 +158,7 @@ class ReportAttacksProps(BaseModel):
     misclassification: Optional[float] = None
     power: Optional[float] = None
     num_queries: Optional[int] = None
-    robustness: Optional[List[float]] = None
+    robustness: Optional[float] = None
     confusion_matrix: Optional[List[List[int]]] = None
 
 

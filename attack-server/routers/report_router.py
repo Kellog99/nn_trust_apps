@@ -52,16 +52,16 @@ def get_reports(
                     )
                     # Filtering the reports that satisfies a specific task and dataset
                     # If the task or the dataset is None then there is no filtering
-                    if ((tasks is None or model_report.info.task in tasks)
-                            and (datasets is None or model_report.info.dataset in datasets)):
-                        out.append(model_report)
+                    # if ((tasks is None or model_report.info.task in tasks)
+                    #         and (datasets is None or model_report.info.dataset in datasets)):
+                    out.append(model_report)
 
                 except (json.JSONDecodeError, OSError) as e:
                     print(f"⚠️ Could not read {report_path}: {e}")
     return out
 
 
-@router.post("/listBenchmarking", response_model=ModelReportProps)
+@router.get("/listBenchmarking", response_model=ModelReportProps)
 def get_list_benchmarks(
         repo_path: str = Query(
             default=...,
