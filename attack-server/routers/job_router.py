@@ -1,4 +1,5 @@
 import base64
+import importlib
 import io
 import json
 import logging
@@ -9,7 +10,7 @@ from typing import Union
 import ray
 import torch
 from PIL import Image
-from fastapi import APIRouter, Response, Request, HTTPException
+from fastapi import APIRouter, Response
 from fastapi import Body, Query
 from fastapi.responses import JSONResponse
 from nn_trust.attack.attack_factory import EvasionAttackFactory as EAF
@@ -23,7 +24,7 @@ from routers.dataset_router import get_datasets
 from routers.model_router import get_models
 from routers.utils import find_image
 
-benchmarking = ""  # importlib.import_module("benchmarking")
+benchmarking = importlib.import_module("benchmarking")
 
 router = APIRouter(prefix="/job", tags=["jobs management", "jobs utils"])
 
@@ -225,50 +226,6 @@ def get_jobs_results(
         return Response(
             status_code=500,
             content=Error(code=500, message=f"Unexpected error during get result").model_dump_json())
-
-
-# @router.get("/report/getReports")
-# def get_reports() -> list[ReportProps]:
-#    """
-#        Recursively searches for all 'report.json' files under the given root folder
-#        and returns a list of their parsed JSON contents (as dictionaries).
-#
-#        Returns:
-#            list[dict]: A list of dictionaries loaded from each report.json file.
-#        """
-#    reports = []
-#    for dirpath, dirnames, filenames in os.walk(os.enviroos.walkn.get("BENCHMARK_OUTPUT_DIR")):
-#        if "report.json" in filenames:
-#            report_path = os.path.join(dirpath, "report.json")
-#            try:
-#                with open(report_path, "r", encoding="utf-8") as f:
-#                    data = json.load(f)
-#                    reports.append(ReportProps(**data))
-#            except (json.JSONDecodeError, OSError) as e:
-#                print(f"⚠️ Could not read {report_path}: {e}")
-#    return reports
-
-
-################################### POST ###################################
-@router.post("/report/upload")
-async def upload_report(request: Request):
-    try:
-        report = await request.json()
-        if "info" not in report:
-            raise Exception("Info not in the report.")
-        if "name" not in report["info"]:
-            raise Exception("Model name not in the report.")
-        if "dataset" not in report:
-            raise Exception("Dataset name not in the report.")
-
-        _, task_dir = find_model_and_task_dir(os.environ.get("BENCHMARK_OUTPUT_DIR"), report["dataset"],
-                                              report["info"]["name"], None)
-        with open(os.path.join(task_dir, "report.json"), 'w') as f:
-            json.dump(report, f, indent=2)
-        return Response()
-
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error saving JSON: {str(e)}")
 
 
 # --- Start --- #

@@ -45,7 +45,7 @@ def get_reports(
 
 
 @router.post("/upload/model", response_model=ModelReportProps)
-def load_reports(
+def upload_reports(
         report: UploadReportModel = Body(...),
         report_path: str = Query(
             default=...,
@@ -56,7 +56,6 @@ def load_reports(
     This function handles the uploading of the report.
     At this moment, it handles only the Models' report repository.
     """
-    print(report)
     report = ModelReportProps(
         info=ReportInfoProps(**report.info),
         metrics=ReportMetricsProps(**report.metrics),
