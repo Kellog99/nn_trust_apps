@@ -6,16 +6,25 @@ from nn_trust.evaluation.statistic_factory import StatisticsFactory as SF
 from lib.model import RegisteredObject
 from .utils import get_parameter_prop
 import json 
+import os
 
 router = APIRouter(prefix="/info")
 
 if not hasattr(router,"excluded_attacks"):
-    with open('./resources/excluded_attacks.json', 'r') as f:
-        router.excluded_attacks = json.load(f)
+    path = './resources/excluded_attacks.json'
+    if os.path.exists(path):
+        with open(path, 'r') as f:
+            router.excluded_attacks = json.load(f)
+    else:
+        router.excluded_attacks = None
 
 if not hasattr(router,"excluded_statistics"):
-    with open('./resources/excluded_statistics.json', 'r') as f:
-        router.excluded_statistics = json.load(f)
+    path = './resources/excluded_statistics.json'
+    if os.path.exists(path):
+        with open(path, 'r') as f:
+            router.excluded_statistics = json.load(f)
+    else:
+        router.excluded_statistics = None
 
 
 @router.get("/attacks/getInfo")
@@ -26,7 +35,7 @@ def get_attacks_info() -> dict[str, RegisteredObject]:
 
     out: dict[str, RegisteredObject] = {}
     for atk in EAF.get_list_classes(task={Task.Classification}):
-        if atk in router.excluded_attacks:
+        if router.excluded_attacks and atk in router.excluded_attacks:
             continue
         atk_info: AttackInfo = EAF.get_information(id=atk, exclude={})
 
@@ -56,7 +65,7 @@ def get_statistics_info() -> dict[str, RegisteredObject]:
     try:
         out: dict[str, RegisteredObject] = {}
         for stat in SF.get_list_classes(task={Task.Classification}):
-            if stat in router.excluded_statistics:
+            if router.excluded_statistics and stat in router.excluded_statistics:
                 continue
             metric_info: AttackInfo = SF.get_information(id=stat, exclude={})
 
