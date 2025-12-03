@@ -129,7 +129,7 @@ def get_jobs_results(id: str = Query(None),
             benchmarking.postprocess_benchmark_run_results(task_dir)
             with open(os.path.join(model_dir, 'info.json'), "r", encoding="utf-8") as f:
                 info = json.load(f)
-            info["tool"] = "nntrust"
+            #info["tool"] = "nntrust"
             info["dataset"] = str(model_dir).split(os.sep)[-2]
             info["id"] = benchmark_id
             info["task"]="Classification"
@@ -147,18 +147,18 @@ def get_jobs_results(id: str = Query(None),
             with open(os.path.join(model_dir, 'aggregate_statistics.json'), "r", encoding="utf-8") as f:
                 aggregate = json.load(f)
                 aggregate["params"] = info["parameters"]
-                results = benchmarking.collect_dataset_aggregates_with_info(
-                    base_dir=os.environ.get("BENCHMARK_OUTPUT_DIR"),
-                    dataset=str(model_dir).split(os.sep)[-2],
-                    keep_latest_only=False,
-                )
+                #results = benchmarking.collect_dataset_aggregates_with_info(
+                #    base_dir=os.environ.get("BENCHMARK_OUTPUT_DIR"),
+                #    dataset=str(model_dir).split(os.sep)[-2],
+                #    keep_latest_only=False,
+                #)
 
-                out = benchmarking.transform_to_benchmark(results, task="classification")
-                out = benchmarking.enrich_with_ranks(out)
-                out = benchmarking.extract_rank_metrics(out, str(model_dir).split(os.sep)[-1])
-                num_b = len(results)
-                out["total benchmarks"] = num_b
-                aggregate = aggregate | out
+                #out = benchmarking.transform_to_benchmark(results, task="classification")
+                #out = benchmarking.enrich_with_ranks(out)
+                #out = benchmarking.extract_rank_metrics(out, str(model_dir).split(os.sep)[-1])
+                #num_b = len(results)
+                #out["total benchmarks"] = num_b
+                #aggregate = aggregate | out
 
             statistics = {}
             for entry in os.listdir(model_dir):
@@ -170,9 +170,9 @@ def get_jobs_results(id: str = Query(None),
                             with open(stat_file, "r", encoding="utf-8") as sf:
                                 sf_data = json.load(sf)
                                 sf_data["name"] = router.state.attacks[entry.lower()].name
-                                sf_data["risk"] = 0.5
-                                sf_data["num_queries"] = 1
-                                sf_data["power"] = 0.5
+                                #sf_data["risk"] = 0.5
+                                #sf_data["num_queries"] = 1
+                                #sf_data["power"] = 0.5
                                 statistics[entry.upper()] = sf_data
                         except Exception as e:
                             logging.warning(f"Could not load statistics.json in '{entry_path}': {e}")

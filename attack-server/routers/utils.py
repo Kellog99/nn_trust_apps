@@ -223,7 +223,7 @@ def execute_single_image_attack(
         T.ToImage(),
         T.ToDtype(torch.float32, scale=True),
     ])
-
+    model.eval()
     x = transformations(img).to(device).unsqueeze(0)
     labels = model(x).argmax(-1).tolist()
     target = AvoidOnehotTarget(num_classes=num_classes)(labels)
@@ -254,11 +254,11 @@ def execute_single_image_attack(
         "x": img,
         "y": str(labels[0]),
         "x_adv": x_adv_pil,
-        "y_adv": str(y_adv.argmax(-1).item()),
+        "y_adv": str(y_adv.item()),
         "pert": pert_pil,
         "metrics":{
             "ssim": ssim_metric(x, x_adv).item(),
-            "distance": torch.norm(pert, p=1).item(),
+            "distance": torch.norm(pert, p=attack_params.get("p",2)).item(),
             "execution_time": end - start,
         }
     }
