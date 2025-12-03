@@ -108,6 +108,9 @@ class BenchmarkAttackConfig(BaseModel):
     id: str | None = None
     max_iters: int | None = None
     losses: List[str] | None = None
+    optim_lr: float | None = None
+    optim_momentum: float | None = None
+    optim_nesterov: bool | None = None
 
 
 class BenchmarkConfig(BaseModel):
