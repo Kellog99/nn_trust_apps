@@ -54,7 +54,11 @@ def get_parameter_prop(id: str, param_info: FieldInfo) -> ParametersProps:
     if hasattr(param_info, 'step'):
         step = getattr(param_info, 'step')
     else:
-        step = (max_value - min_value) / 1000
+        step = (max_value - min_value) / 10000
+        if id=="lr":
+            step=1e-6
+            max_value=1
+            min_value=1e-3
         if isinstance(param_info.annotation, int) or param_info.annotation == int:
             step = max(int(step), 1)
 
