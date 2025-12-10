@@ -40,7 +40,7 @@ def get_models() -> Union[Models, Error]:
                     content=Error(code=500, message=f"Internal server error during config import.").model_dump_json())
     try:
         models = []
-        models_root_dir = os.environ.get("INTERNAL_MODEL_STORAGE")
+        models_root_dir = os.environ.get("MODEL_REPO")
         for item in os.listdir(models_root_dir):
             item_path = os.path.join(models_root_dir, item)
             if os.path.isfile(item_path) and item_path.endswith(".pth"):

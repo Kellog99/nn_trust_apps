@@ -138,12 +138,17 @@ def get_model(
     In this function it is set the model in the correct form,
     independent from the starting point
     """
+
+    model_type="hf"
+    
     tt = transforms.Compose(
         [
             transforms.Normalize(mean=[-1, -1, -1], std=[2.0, 2.0, 2.0]),
             transforms.Normalize(mean=mean, std=std),
         ]
     )
+
+
     if model:
         model = ModelAdapter(model, name=model._get_name(), task=model_task)
     elif model_name and model_type == "timm":
