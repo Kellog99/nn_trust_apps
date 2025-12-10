@@ -19,6 +19,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torchvision.models import resnet101, ResNet101_Weights
+import torchvision.models as tvmodels
 
 from blocks.attacks import ListAttacks
 from blocks.imageloader import InputImage, from_standardized_image_to_resnet
@@ -49,7 +50,7 @@ class TitanApp:
         css_path: Path = Path("./style.css"),
         log_path: Path = Path("./titann-app-logs/log"),
         logo_path: Path = Path("./titann-logo.png"),
-        classes_path: Path = Path("./classes.json"),
+        classes_path: Path | None = None,
         server_name: str = "0.0.0.0",
         server_port: int = 7860,
     ):
@@ -89,6 +90,10 @@ class TitanApp:
         #########################################################################
 
         # Load labels id
+        if classes_path is None:
+            classes_path = Path("assets/data/imagenet_classes.json")
+            logging.warning(f"No class file provided. Fall back to Imagenet classes at {classes_path}")
+
         if classes_path.is_file():
             with open(classes_path) as f:
                 data = json.load(f)
@@ -172,7 +177,6 @@ class TitanApp:
         """
         After having done an attack, this function will populate all the elements that are needed in the output part.
         """
-
         # Adversarial image
         x = self.input_image_block.get_image(format="pil")
         y = self.input_image_block.get_prediction(format="label")
@@ -298,7 +302,7 @@ if __name__ == "__main__":
     # Parse args in case of additional configuration might be needed
     parser = ArgumentParser()
     parser.add_argument("--model_path", type=Path, default=Path("./model.pth"))
-    parser.add_argument("--labels_path", type=Path, default=Path("./classes.json"))
+    parser.add_argument("--labels_path", type=Path, default=None)
     parser.add_argument("--device", type=str, default="auto")
     args = parser.parse_args()
 
@@ -310,22 +314,54 @@ if __name__ == "__main__":
         device = args.device
 
     # Initialize model and device
-    available_models = os.listdir("./assets/models")
-    for i, model in enumerate(available_models):
+    local_models = os.listdir("./assets/models")
+    open_models = ["torchvision:resnet18-imagenet", "torchvision:resnet50-imagenet", "torchvision:resnet101-imagenet"]
+    all_models = [*local_models, *open_models]
+    for i, model in enumerate(all_models):
         print(f"{i}: {model}")
-    selected_model_id = input("Select a model")
-    model_path = Path("./assets/models") / available_models[int(selected_model_id)]
-    device = torch.device(device)
-    logging.info(f"Device selected: {device}")
-    model = torch.load(str(model_path), weights_only=False).eval()
-    model = ModelAdapter(model=model, task=Task.Classification, transform=from_standardized_image_to_resnet)
+    selected_model_id = input("Select a model: ")
+    selected_model = all_models[int(selected_model_id)]
+
+    if selected_model == "torchvision:resnet18-imagenet":
+        model = ModelAdapter(
+            model=tvmodels.resnet18(weights=tvmodels.ResNet18_Weights.IMAGENET1K_V1).eval(),
+            transform=from_standardized_image_to_resnet,
+            task=Task.Classification
+        )
+    elif selected_model == "torchvision:resnet50-imagenet":
+        model = ModelAdapter(
+            model=tvmodels.resnet50(weights=tvmodels.ResNet50_Weights.IMAGENET1K_V1).eval(),
+            transform=from_standardized_image_to_resnet,
+            task=Task.Classification
+        )
+    elif selected_model == "torchvision:resnet101-imagenet":
+        model = ModelAdapter(
+            model=tvmodels.resnet101(weights=tvmodels.ResNet101_Weights.IMAGENET1K_V1).eval(),
+            transform=from_standardized_image_to_resnet,
+            task=Task.Classification
+        )
+    else:
+        model_path = Path("./assets/models") / selected_model
+        device = torch.device(device)
+        logging.info(f"Device selected: {device}")
+        model = torch.load(str(model_path), weights_only=False).eval()
+        model = ModelAdapter(model=model, task=Task.Classification, transform=from_standardized_image_to_resnet)
+
+
+    # Select labels
+
+
+    local_label_files = os.listdir("./assets/data")
+    for i, labelfile in enumerate(local_label_files):
+        print(f"{i}: {labelfile}")
+    selected_label_id = input("Select a labels files: ")
+    selected_label_file = local_label_files[int(selected_label_id)]
 
     # Start the app
-    app = TitanApp(classes_path=args.labels_path, device=device, model=model)
+    app = TitanApp(classes_path=Path("./assets/data")/selected_label_file, device=device, model=model)
     demo = app.generate()
     demo.launch(
         debug=False,
-        favicon_path=app.logo_path,
         server_name=app.server_name,
         server_port=app.server_port,
         quiet=True,

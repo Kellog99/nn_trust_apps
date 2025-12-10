@@ -8,9 +8,6 @@ import torch.nn
 import torchvision.transforms
 import yaml
 
-from .evaluator import EvaluatorConfig
-from .utils import get_dataloader, get_model
-
 
 class StoreTrueIfSet(argparse.Action):
     def __init__(self, option_strings, dest, nargs=0, **kwargs):
@@ -75,10 +72,10 @@ def read_config_file(config_filename: str) -> dict:
 
 def get_data_transformation_config(
     transform_id: str,
-    size: int,
+    size: int|None = None,
     crop: Optional[int] = None,
-    # mean: Optional[list[float]] = None,
-    # std: Optional[list[float]] = None
+    mean: Optional[list[float]] = None,
+    std: Optional[list[float]] = None
 ):
     """
     An utility function providing the transformation and inverse transformation
@@ -92,6 +89,13 @@ def get_data_transformation_config(
                 torchvision.transforms.Resize(size=(size, size)),
                 torchvision.transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5]),
                 # torchvision.transforms.Normalize(mean=[0.5074, 0.5308, 0.5306], std=[0.2639, 0.2518, 0.2521])
+            ]
+        )
+    elif transform_id == "normalize_only":
+        transform = torchvision.transforms.Compose(
+            [
+                torchvision.transforms.ToTensor(),
+                torchvision.transforms.Normalize(mean=mean, std=std),
             ]
         )
     elif transform_id == "imagenet_like_crop":
@@ -147,81 +151,6 @@ def get_data_transformation_config(
         )
 
     return transform, inverse_transform
-
-
-def get_config(config_filename: str) -> EvaluatorConfig:
-    """
-    Define the arguments to insert in the command line.
-    To do so, it is used a `Pydantic` base model to check the type of all the elements.
-    """
-    args = get_parser(model_fields=EvaluatorConfig.model_fields)
-
-    config_path = args.config if args.config is not None else config_filename
-
-    if os.path.exists(config_path):
-        with open(config_path, "r") as f:
-            # The YAML file format is unusual with [evaluation] section header
-            # We need to handle this custom format
-            config = yaml.safe_load(f)
-    else:
-        raise ValueError("The path to the configuration file does not lead to anything.")
-
-    # Sync all value:
-    # command_line + yaml.
-    configuration_dict = {}
-    for key, value in config.items():
-        if key == "attack_configurations":
-            data["attack_configurations"] = value
-        else:
-            data = data | value
-
-    arguments = vars(args)
-    for key, value in arguments.items():
-        if value is not None:
-            data[key] = value
-
-    for var in ["batch", "subset", "type_dataset", "num_workers", "mean", "std"]:
-        # These are all defaults values that are needed for getting the dataloader
-        if var not in data:
-            # TODO remove reference to Evaluator config, config reading function should not depend on EvaluatorConfig
-            # It should just read a config file or dictionary, other classes will set default if needed by them
-            data[var] = EvaluatorConfig.model_fields[var].default
-
-    data["dataloader"] = get_dataloader(**data)
-
-    # TODO remove hardcoded values, link to dataset and model selection
-    data["inverse_transformation"] = torchvision.transforms.Compose(
-        [
-            torchvision.transforms.Normalize(
-                mean=[-mean / std for mean, std in zip(data["mean"], data["std"])], std=[1 / std for std in data["std"]]
-            ),
-            torchvision.transforms.Resize(size=(224, 224)),
-            torchvision.transforms.ToPILImage(),
-        ]
-    )
-
-    if isinstance(data["model"], str):
-        if os.path.isfile(data["model"]):
-            model_name = str(Path(data["model"]).name)
-        else:
-            model_name = data["model"]
-    elif isinstance(data["model"], torch.nn.Module):
-        model_name = data["model"]._get_name()
-
-    result_file = os.path.join(data["out"], model_name, "data.json")
-    if os.path.exists(result_file) and data["load_results"]:
-        with open(result_file, "r") as f:
-            # The YAML file format is unusual with [evaluation] section header
-            # We need to handle this custom format
-            results = yaml.safe_load(f)
-
-        if "atk" in results.keys():
-            data["attacks"] = [atk for atk in data["attacks"] if atk not in results["atk"]]
-        else:
-            raise ValueError("The results that have been loaded do not provide any list of attacks.")
-
-    return data
-
 
 if __name__ == "__main__":
     config = get_config()

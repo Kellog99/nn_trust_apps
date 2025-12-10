@@ -4,6 +4,9 @@
 *.webp
 *.db
 *.log
+*.json
+*.png
+*.pdf
 __pycache__
 mlruns
 lightning_logs

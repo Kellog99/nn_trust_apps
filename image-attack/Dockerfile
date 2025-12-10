@@ -27,7 +27,7 @@
 # > docker run -it --device nvidia.com/gpu:0 -p 7860:7860 nntrust-generic-demo:latest uv run --no-default-groups -s example/one_image_attacks.py
 
 # Use a slim python image as building block
-FROM python:3.12.3-slim AS generic-demo
+FROM python:3.12.3-slim
 
 # Install uv and update PATH
 ADD https://astral.sh/uv/0.7.17/install.sh /uv-installer.sh
@@ -46,7 +46,7 @@ ARG MODEL_PATH
 WORKDIR /app/demo
 
 # Copy the current directory into the container
-COPY . /app/demo
+
 
 # Install curl 
 RUN apt update && \
@@ -56,9 +56,16 @@ RUN apt update && \
 ENV PATH="/root/.local/bin/:$PATH"
 
 # Use uv to manage all dependencies based on pyproject.toml
-RUN uv sync --no-cache
+COPY pyproject.toml /app/demo
+COPY ./submodules /app/demo/submodules
+RUN uv sync
+RUN uv pip install ./submodules/nn_trust
 
-RUN uv pip install -e ./submodules/nn_trust
+COPY ./style.css /app/demo
+COPY ./titann-logo.png /app/demo
+COPY ./assets /app/demo/assets
+COPY ./blocks /app/demo/blocks
+COPY ./main.py /app/demo
 
 #RUN uv pip install --system -r pyproject.toml --group demo
 
@@ -66,4 +73,4 @@ RUN uv pip install -e ./submodules/nn_trust
 
 #RUN uv sync --system --group demo
 
-CMD ["bash", "/app/demo/assets/scripts/run_one_iamge.sh"]
+CMD ["uv", "run", "main.py"]

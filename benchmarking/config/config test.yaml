@@ -1,6 +1,12 @@
 evaluation:
-  statistics: [ "local_accuracy", "local_precision", "local_f1score" ]
-  statistic_average_method: "macro"
+  statistics:
+    - name: 'countsamples'
+    - name: 'accuracy'
+      average: 'macro'
+    - name: 'precision'
+      average: 'macro'
+    - name: 'robustness'
+    - name: 'misclassification'
 
 options:
   load_results: false                 # loading any existing results.
@@ -9,16 +15,16 @@ options:
   save_perturbation: false
   gpu: true
   output_path: "./benchmark_out" # Path to the output folder
-  output_format: "test" # report or test
+  output_format: "report" # report or test
 
 datasets:
   - name: "imagenet" # Name of the dataset
-    num_classes: 1000
-    subset: 10
+    num_classes: 90
+    subset: 50
     batch: 2
-    type_dataset: 1
+    type_dataset: 2
     num_workers: 2
-    source_path: "../../../data/imagenet-1k/val_images/" # "../data/military/dataset/test/" # Path to the dataset
+    source_path: "/home/cristiano-carta/Desktop/datasets/animals/data" # "../data/military/dataset/test/" # Path to the dataset
     transform_config:
       size: 256
       crop: 224
@@ -35,13 +41,8 @@ models:
 
 attacks:
   - name: 'fgsm'
-  - name: 'priorgd'
-  - name: 'dag'
-  - name: 'du'
-  - name: 'fgsm'
-    max_iters: 100
-    losses: [ "misclassification",
-          "totalvariation",
-          "similarity",
-          "bound" ]
+    id: 'vanilla-fgsm'
+  - name: 'banditprior'
+    max_iters: 30
+    losses: ["misclassification"]
 

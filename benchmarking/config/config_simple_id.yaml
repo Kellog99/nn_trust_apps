@@ -1,6 +1,13 @@
 evaluation:
-  statistics: [ "local_accuracy", "local_precision", "local_f1score" ]
-  statistic_average_method: "macro"
+  statistics:
+    - name: 'countsamples'
+    - name: 'accuracy'
+      average: 'macro'
+    - name: 'precision'
+      average: 'macro'
+    - name: 'robustness'
+    - name: 'misclassification'
+
 
 options:
   load_results: false                 # loading any existing results.
@@ -9,15 +16,15 @@ options:
   save_perturbation: false
   gpu: true
   output_path: "./benchmark_out" # Path to the output folder
-  output_format: "test" # report or test
+  output_format: "report" # report or test
 
 datasets:
   - name: "imagenet" # Name of the dataset
     num_classes: 1000
-    subset: 4
-    batch: 2
+    subset: 20
+    batch: 5
     type_dataset: 1
-    num_workers: 4
+    num_workers: 2
     source_path: "../../data/imagenet-1k/val_images/" # "../data/military/dataset/test/" # Path to the dataset
     transform_config:
       size: 256
@@ -34,26 +41,7 @@ models:
     task: "classification"
 
 attacks:
-  attack_list: "all"
-  configurations:
-    commons:
-      max_iters: 10
-    fgsm:
-      max_iters: 100
-      losses: [ "misclassification",
-                "totalvariation",
-                "similarity",
-                "bound" ]
-
-    priorgd:
-      max_iters: 100
-      losses: [ "misclassification",
-                "totalvariation",
-                "similarity",
-                "bound" ]
-    dag: 
-      max_iters: 100  
-    du: 
-      max_iters: 100
-
+  - name: 'fgsm'
+    epsilon: 50
+    max_iters: 10
 

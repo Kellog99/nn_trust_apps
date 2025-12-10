@@ -20,11 +20,11 @@ options:
 datasets:
   - name: "imagenet" # Name of the dataset
     num_classes: 1000
-    subset: 50
-    batch: 2
+    subset: -1
+    batch: 32
     type_dataset: 1
     num_workers: 2
-    source_path: "../../data/imagenet-1k/val_images/" # "../data/military/dataset/test/" # Path to the dataset
+    source_path: "../../data/imagenet-1k/val_images/"
     transform_config:
       size: 256
       crop: 224
@@ -39,10 +39,24 @@ models:
     num_classes: 1000
     task: "classification"
 
+  - name: 'convnext_base.clip_laion2b_augreg_ft_in12k_in1k'
+    type: 'timm'
+    pretrained: True
+    num_classes: 1000
+    task: "classification"
+
+  - name: 'vit_base_patch16_clip_224.openai_ft_in1k'
+    type: 'timm'
+    pretrained: True
+    num_classes: 1000
+    task: "classification"
+
 attacks:
   - name: 'fgsm'
-    id: 'vanilla-fgsm'
+    max_iters: 20
   - name: 'banditprior'
-    max_iters: 30
-    losses: ["misclassification"]
+    max_iters: 50
+  - name: 'dag'
+    max_iters: 50
+
 

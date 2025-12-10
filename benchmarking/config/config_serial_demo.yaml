@@ -1,0 +1,100 @@
+evaluation:
+  statistics:
+    - name: 'countsamples'
+    - name: 'accuracy'
+      average: 'macro'
+    - name: 'precision'
+      average: 'macro'
+    - name: 'robustness'
+    - name: 'misclassification'
+
+options:
+  load_results: false            # Load any existing results
+  overwrite: true                # Overwrite results if benchmarking is performed
+  num_images_to_save: -1
+  save_perturbation: false
+  gpu: true
+  output_path: "./output" # Path to the output folder
+  output_format: "report"                             # "report" or "test"
+  mode : "single_node_parallel"
+  num_workers : 4
+  num_gpus_per_worker : 1
+  executor_type : "ray"
+
+datasets:
+  - name: "clean-aircraft-crop"             # Dataset name
+    num_classes: 36
+    subset: 100
+    batch: 20
+    type_dataset: 2
+    num_workers: 2
+    source_path: "/home/papab/data/aircraft-dataset/clean-aircraft-crop"
+    transform_config:
+      transform_id: "normalize_only"
+      mean: [0.485, 0.456, 0.406]
+      std: [0.229, 0.224, 0.225]
+#datasets:
+#  - name: "imagenet" # Name of the dataset
+#    num_classes: 1000
+#    subset: 50
+#    batch: 2
+#    type_dataset: 1
+#    num_workers: 2
+#    source_path: "/home/papab/data/imagenet-1k/val_images" # "../data/military/dataset/test/" # Path to the dataset
+#    transform_config:
+#      size: 256
+#      crop: 224
+#      transform_id: "imagenet_like_crop"
+#      mean: [0.5074, 0.5308, 0.5306]
+#      std: [0.2639, 0.2518, 0.2521]
+
+models:
+#   - name: 'resnetv2_50d_evos.ah_in1k'
+#     type: 'timm'
+#     pretrained: True
+#     num_classes: 1000
+#     task: "classification"
+
+
+
+  - name: 'timm/convnextv2_base.fcmae_ft_in1k'
+    weights_path: '/home/papab/codes/nn_trust_apps/train_classificationv2/lightning_logs/304_model_training/model_timm/convnextv2_base.fcmae_ft_in1k_lr_0.0001_1e-06_bs_32/last.ckpt'
+    type: 'hf'
+    pretrained: true
+    num_classes: 36
+    task: "classification"
+
+  # - name: 'timm/tf_efficientnet_b7.aa_in1k'
+  #   weights_path: '/home/papab/codes/nn_trust_apps/train_classificationv2/lightning_logs/304_model_training/model_timm/tf_efficientnet_b7.aa_in1k_lr_0.0001_1e-06_bs_32/last.ckpt'
+  #   type: 'hf'
+  #   pretrained: true
+  #   num_classes: 36
+  #   task: "classification"
+
+attacks:
+#  - name: 'autozoom'
+  - name: 'banditprior'
+#  - name: 'binary'
+#  - name: 'blackboxtransfer'
+#  - name: 'boundary'
+#  - name: 'contrastbaseline'
+#  - name: 'dag'
+#  - name: 'deepfool'
+#  - name: 'du'
+  - name: 'fgsm'
+#  - name: 'fuap'
+  - name: 'gaussianbaseline'
+#  - name: 'gduap'
+#  - name: 'geoda'
+#  - name: 'identitybaseline'
+#  - name: 'localsearch'
+#  - name: 'patchfgsm'
+#  - name: 'patchpgd'
+#  - name: 'pgd'
+#  - name: 'pgdkde'
+#  - name: 'priorgd'
+#  - name: 'saltnpeppernoisebaseline'
+#  - name: 'signopt'
+#   - name: 'simba'
+#  - name: 'uniformbaseline'
+  - name: 'zoo'
