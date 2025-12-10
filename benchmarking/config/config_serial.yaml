@@ -1,0 +1,90 @@
+evaluation:
+  statistics:
+    - name: 'countsamples'
+    - name: 'accuracy'
+      average: 'macro'
+    - name: 'precision'
+      average: 'macro'
+    - name: 'robustness'
+    - name: 'misclassification'
+
+options:
+  load_results: false            # Load any existing results
+  overwrite: true                # Overwrite results if benchmarking is performed
+  num_images_to_save: -1
+  save_perturbation: false
+  gpu: true
+  output_path: "/home/cristiano-carta/Desktop/output" # Path to the output folder
+  output_format: "report"                             # "report" or "test"
+  mode : "single_node_parallel"
+  num_workers : 1
+  num_gpus_per_worker : 1
+  executor_type : "ray"
+
+datasets:
+  - name: "animals"             # Dataset name
+    num_classes: 90
+    subset: 100
+    batch: 20
+    type_dataset: 2
+    num_workers: 2
+    source_path: "/home/cristiano-carta/Desktop/datasets/animals/data"
+    transform_config:
+      size: 256
+      crop: 224
+      transform_id: "imagenet_like_crop"
+      mean: [0.5074, 0.5308, 0.5306]
+      std: [0.2639, 0.2518, 0.2521]
+  #- name: "landanimals"             # Dataset name
+  #  num_classes: 12
+  #  subset: 50
+  #  batch: 32
+  #  type_dataset: 2
+  #  num_workers: 2
+  #  source_path: "/home/cristiano-carta/Desktop/datasets/landanimals/data"
+  #  transform_config:
+  #    size: 256
+  #    crop: 224
+  #    transform_id: "imagenet_like_crop"
+  #    mean: [0.5074, 0.5308, 0.5306]
+  #    std: [0.2639, 0.2518, 0.2521]
+
+models:
+  #- name: 'convnext_base.clip_laion2b_augreg_ft_in12k_in1k'
+  #  type: 'timm'
+  #  pretrained: true
+  #  num_classes: 1000
+  #  task: "classification"
+  - name: 'resnet50'
+    type: 'timm'
+    pretrained: true
+    num_classes: 1000
+    task: "classification"
+
+attacks:
+#  - name: 'autozoom'
+  - name: 'banditprior'
+#  - name: 'binary'
+#  - name: 'blackboxtransfer'
+#  - name: 'boundary'
+#  - name: 'contrastbaseline'
+#  - name: 'dag'
+#  - name: 'deepfool'
+#  - name: 'du'
+#  - name: 'fgsm'
+#  - name: 'fuap'
+  - name: 'gaussianbaseline'
+#  - name: 'gduap'
+#  - name: 'geoda'
+#  - name: 'identitybaseline'
+#  - name: 'localsearch'
+#  - name: 'patchfgsm'
+#  - name: 'patchpgd'
+#  - name: 'pgd'
+#  - name: 'pgdkde'
+#  - name: 'priorgd'
+#  - name: 'saltnpeppernoisebaseline'
+#  - name: 'signopt'
+  - name: 'simba'
+#  - name: 'uniformbaseline'
+  - name: 'zoo'

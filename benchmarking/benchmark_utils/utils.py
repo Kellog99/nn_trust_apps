@@ -1,7 +1,6 @@
 import os
 import random
 from pathlib import Path
-
 import numpy
 import timm
 from PIL import Image as PILImage
@@ -12,10 +11,22 @@ from torch.utils.data import DataLoader, Subset
 from torchvision import transforms
 from torchvision.datasets import ImageFolder
 from torchvision.models import resnet50
-
 from nn_trust.core import ModelAdapter
 from .imagenet2012_loader import ImageNetTrainDataset
 from .model_library import models_library
+from nn_trust.models.hf_model import HFModel
+
+def resolve_path(path: str) -> str:
+    """
+    Returns an absolute path. If the given path is not absolute,
+    it prepends a root path read from the environment variable ROOT_PATH.
+    """
+    root = os.getenv("DATASETS_REPO", "default")
+    if root=="default":
+        raise Exception("Env varible DATASETS_REPO must be specified.")
+    if os.path.isabs(path):
+        return Exception("When performing benchmarking multi node or from attack server, dataset paths must be relative.")
+    return os.path.join(root, path)
 
 
 class ImageDatasetFolder(ImageFolder):
@@ -61,7 +72,7 @@ def get_dataloader(
     Return the dataloader to use and the inverse transformation to use for displaying the images
     """
     if not os.path.exists(dataset):
-        raise ValueError("The dataset does not exists.")
+        raise ValueError(f"The dataset --------{dataset} does not exists.")
     if type_dataset == 1:
         # get the transformation associated with the model
         # and its inverse for the display
@@ -115,6 +126,7 @@ def get_dataloader(
 
 def get_model(
     model: ModelAdapter | torch.nn.Module = None,
+    num_labels: int = None,
     model_name: str = None,
     model_type: str = None,
     model_task: str = None,
@@ -126,29 +138,31 @@ def get_model(
     In this function it is set the model in the correct form,
     independent from the starting point
     """
+
+    model_type="hf"
+    
     tt = transforms.Compose(
         [
             transforms.Normalize(mean=[-1, -1, -1], std=[2.0, 2.0, 2.0]),
             transforms.Normalize(mean=mean, std=std),
         ]
     )
+
+
     if model:
         model = ModelAdapter(model, name=model._get_name(), task=model_task)
     elif model_name and model_type == "timm":
         model = ModelAdapter(model=timm.create_model(model_name, pretrained=True), name=model_name, transform=tt, task=model_task)
     elif model_name and model_type == "saved_model":
-        print("*****************************")
-        original = os.getcwd()
-        print("---------------------", original)
-        os.chdir('..')
         model = ModelAdapter(model=torch.load(model_weights_path, weights_only=False), name=model_name, transform=tt, task=model_task)
-        os.chdir(original)
     elif model_name and model_type == "saved_weights":
         # model = ResNet50Dirichlet()
         model = models_library[model_name]()
         state_dict = torch.load(model_weights_path, map_location="cpu")
         model.load_state_dict(state_dict)
         model = ModelAdapter(model=model, name=model_name, transform=tt, task=model_task)
+    elif model_type == "hf" and model_name:
+        model = HFModel(model_name=model_name, checkpoint_path=model_weights_path, device="cpu", task=model_task, num_labels=num_labels)
     else:
         raise ValueError("You must provide a model or a model name and type.")
 

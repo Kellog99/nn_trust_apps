@@ -1,0 +1,85 @@
+evaluation:
+  statistics:
+    - name: 'countsamples'
+    - name: 'accuracy'
+      average: 'macro'
+    - name: 'robustness'
+    - name: 'ssim'
+    - name: 'misclassification'
+
+options:
+  load_results: false
+  overwrite: true
+  num_images_to_save: -1
+  save_perturbation: false
+  gpu: true
+  output_path: "./output" # NOTE: set output folder
+  output_format: "report"
+  mode : "single_node_parallel"
+  num_workers : 4
+  num_gpus_per_worker : 1
+  executor_type : "ray"
+
+datasets:
+  - name: "clean-aircraft-crop"
+    num_classes: 36
+    subset: 20
+    batch: 20
+    type_dataset: 2
+    num_workers: 2
+    source_path: "/home/cartac/data/clean-aircraft-crop"  # NOTE: set dataset path
+    transform_config:
+      transform_id: "normalize_only"
+      mean: [0.485, 0.456, 0.406]
+      std: [0.229, 0.224, 0.225]
+
+models:
+
+  - name: 'timm/tf_efficientnet_b7.ap_in1k'
+    weights_path: '/home/cartac/models/model_timm/tf_efficientnet_b7.ap_in1k_lr_0.0001_1e-06_bs_32/last.ckpt'
+    type: 'hf'
+    pretrained: true
+    num_classes: 36
+    task: "classification"
+
+  - name: 'timm/tf_efficientnet_b7.aa_in1k'
+    weights_path: '/home/cartac/models/model_timm/tf_efficientnet_b7.aa_in1k_lr_0.0001_1e-06_bs_32/last.ckpt'
+    type: 'hf'
+    pretrained: true
+    num_classes: 36
+    task: "classification"
+
+  - name: 'timm/convnextv2_base.fcmae_ft_in1k'
+    weights_path: '/home/cartac/models/model_timm/convnextv2_base.fcmae_ft_in1k_lr_0.0001_1e-06_bs_32/last.ckpt'
+    type: 'hf'
+    pretrained: true
+    num_classes: 36
+    task: "classification"
+
+  - name: 'timm/vit_base_patch16_224.augreg2_in21k_ft_in1k'
+    weights_path: '/home/cartac/models/model_timm/vit_base_patch16_224.augreg2_in21k_ft_in1k_lr_0.0001_1e-06_bs_32/last.ckpt'
+    type: 'hf'
+    pretrained: true
+    num_classes: 36
+    task: "classification"
+
+  - name: 'timm/davit_base.msft_in1k'
+    weights_path: '/home/cartac/models/model_timm/davit_base.msft_in1k_lr_0.0001_1e-06_bs_32/last.ckpt'
+    type: 'hf'
+    pretrained: true
+    num_classes: 36
+    task: "classification"
+
+attacks:
+  - name: 'banditprior'
+    max_iters: 100
+  - name: 'signopt'
+    max_iters: 5
+  - name: 'fuap'
+    max_iters: 30
+  - name: 'deepfool'
+    max_iters: 5
+  - name: 'fgsm'
+    max_iters: 30
+  - name: 'pgd'
+    max_iters: 30

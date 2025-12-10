@@ -4,6 +4,7 @@
 *.webp
 *.db
 *.log
-*.pdf
+*.json
 *.png
+*.pdf
 __pycache__

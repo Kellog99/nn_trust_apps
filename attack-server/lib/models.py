@@ -4,10 +4,13 @@
 
 from __future__ import annotations
 
-from typing import List, Optional, Dict
+from typing import List, Optional, Dict, Any
 
 from pydantic import BaseModel, Field
 
+from typing import Literal
+
+from nn_trust.core import AttackType, Knowledge
 
 class Datasets(BaseModel):
     names: Optional[List[str]] = None
@@ -31,11 +34,9 @@ class JobConfig(BaseModel):
     model: str = Field(..., example='resnet50')
 
 class AttackConfig(BaseModel):
-    attack_name: str
     image: str
-    p: float = 2.0
-    epsilon: float = 50.0
-    max_iters: int = 30
+    model_name : str
+    attack : Any
 
 class Error(BaseModel):
     code: int
@@ -58,3 +59,91 @@ class AttackJob(BaseModel):
     id: str 
     progress : float
     is_over : bool = Field(default=False)
+
+class ModelConfig(BaseModel):
+    name: str
+    type: Optional[str] = None
+    pretrained: bool
+    num_classes: int
+    task: Literal["classification"] 
+
+class ParametersProps(BaseModel):
+    name: str
+    label: str
+    min: float
+    max: float
+    step: float
+    default: float
+    description: str
+
+class AttackProps(BaseModel):
+    id: str
+    name: str
+    description: str
+    knowledge: Optional[str] = None
+    task: Optional[str] = None
+    parameters: Optional[List[ParametersProps]] = None
+
+class MetricProps(BaseModel):
+    name: str
+
+class ExecutionConfig(BaseModel):
+    dataset: str
+    model: str
+    attacks: Any
+    metrics: Any
+
+class ReportProps(BaseModel):
+    info: ReportInfoProps
+    metrics: ReportMetricsProps
+    attacks: Dict[str, ReportAttacksProps]
+
+
+class ReportMetricsProps(BaseModel):
+    params: int
+    accuracy: Optional[float] = None
+    precision: Optional[float] = None
+    f1score: Optional[float] = None
+    confusion_matrix: Optional[List[List[int]]] = None
+    robustness: Optional[float] = None
+    wobbliness: Optional[float] = None
+
+
+class ReportAttacksProps(BaseModel):
+    name: str
+    risk: float
+    accuracy: Optional[float] = None
+    precision: Optional[float] = None
+    f1score: Optional[float] = None
+    misclassification: Optional[float] = None
+    power: Optional[float] = None
+    num_queries: Optional[int] = None
+    robustness: Optional[List[float]] = None
+    confusion_matrix: Optional[List[List[int]]] = None
+
+class ReportInfoProps(BaseModel):
+    id: str
+    name: str
+    parameters: int
+    classes: int
+    dimensionality: List[int]
+
+class BenchmarkModelProps(BaseModel):
+    name: str
+    param: int
+    task: str
+    benchmark_id : str
+    metrics: Dict[str, float | int]
+
+class SingleAttackProps(BaseModel):
+    x: str
+    x_adv: str
+    adv_perturbation: str
+    original_prediction: str
+    adversarial_prediction: str
+    # the first is the confidence of the original class while the second is the confidence of the most probable class during each iteration
+    confidence: tuple[list[float], list[float]]
+    # Container of all the possible metrics that can be useful
+    advance_metrics: dict[str, float]
+
+
