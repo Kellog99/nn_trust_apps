@@ -4,9 +4,9 @@ from pathlib import Path
 import logging
 import argparse
 import ray
-# Importing other nn_trust apps scope
-sys.path.insert(0, str(Path(__file__).parent.parent))
 
+# Importing other nn_trust apps scope - MUST be before imports
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from dotenv import load_dotenv
 from fastapi import FastAPI
@@ -14,18 +14,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from routers import api_router
 import uvicorn
 
-
+load_dotenv()
 
 app = FastAPI(
     title='TITANN backend',
     description='This is the TITANN backend.',
-#    termsOfService='https://swagger.io/terms/',
-#    contact={'email': 'apiteam@swagger.io'},
-#    license={
-#        'name': 'Apache 2.0',
-#        'url': 'https://www.apache.org/licenses/LICENSE-2.0.html',
-#    },
-#    version='1.0.12',
     servers=[{'url': 'https://titann.swagger.io/api/v3'}],
 )
 
@@ -134,9 +127,9 @@ if __name__ == "__main__":
     except Exception as e:
         logging.error(f"Failed to initialize Ray: {e}")
         raise
-    
+
     uvicorn.run(
-        "app:app",
+        app,
         host=args.host,
         port=args.port,
         workers=args.workers

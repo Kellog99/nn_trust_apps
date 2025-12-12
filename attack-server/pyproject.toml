@@ -3,15 +3,29 @@ name = "attack-server"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = "~=3.11.0"
 dependencies = [
     "fastapi[standard]==0.120.2",
+    "flask>=3.1.2",
+    "nn-trust",
     "Pillow==12.0.0",
-    "pydantic==2.12.3",
+    "pydantic==2.9.2",
     "python-dotenv==1.2.1",
     "python_magic==0.4.27",
     "ray==2.45.0",
-    "torch==2.4.0",
+    "reportlab>=4.4.6",
+    "timm>=1.0.22",
+    "torch~=2.4.0",
     "torchvision==0.19.0",
+    "transformers>=4.57.3",
+    "ultralytics>=8.2.85",
     "uvicorn[standard]==0.38.0",
 ]
+
+[tool.uv.workspace]
+members = [
+    "submodules/nn_trust",
+]
+
+[tool.uv.sources]
+nn-trust = { workspace = true }

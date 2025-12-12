@@ -126,7 +126,7 @@ if [ -n "$RAY_PY_MODS" ]; then
     echo "  Ray Python Modules: $RAY_PY_MODS"
 fi
 
-source .venv/bin/activate && python app.py \
+python app.py \
     --host "$APP_HOST" \
     --port "$APP_PORT" \
     --workers "$APP_WORKERS" \

@@ -1,6 +1,5 @@
 from fastapi import UploadFile, File, HTTPException, status
 import json
-import magic 
 import os
 import logging
 from pathlib import Path

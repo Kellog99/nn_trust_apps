@@ -1,0 +1,28 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: titann_attack_server
+    network_mode: host
+    environment:
+      - ENVIRONMENT=demo
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+  gui:
+    build:
+      context: ./submodules/data-quality_gui
+      dockerfile: Dockerfile
+    container_name: titann_gui
+    network_mode: host
+    environment:
+      - NODE_ENV=development
+      - API_HOST=localhost
+    depends_on:
+      - backend

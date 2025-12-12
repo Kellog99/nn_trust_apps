@@ -1,0 +1,17 @@
+metrics:
+  - name: 'countsamples'
+  - name: 'accuracy'
+    average: 'macro'
+  - name: 'precision'
+    average: 'macro'
+  - name: 'robustness'
+  - name: 'misclassification'
+
+dataset: 'animals0
+model: 'resnetv2_50d_evos.ah_in1k'
+ 
+attacks:
+  - name: 'fgsm'
+  - name: 'banditprior'
+    max_iters: 30
+

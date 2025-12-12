@@ -156,7 +156,7 @@ def get_jobs(id : str = Query(None)):
                 for k,v in tasks.items():
                     output_dict = {}
                     if v["benchmark_id"]==id:
-                        atk_id = k.split(f"_{v["benchmark_id"]}")[0]
+                        atk_id = k.split(f"_{v['benchmark_id']}")[0]
                         output_dict["id"] = atk_id
                         output_dict["name"] = router.state.attacks[atk_id].name if atk_id!="reference" else "Reference (Identity Attack)"
                         output_dict["status"] = v["status"]
@@ -405,7 +405,7 @@ async def start_benchmark_job(body: ExecutionConfig = Body(...)) -> Union[str,Er
             return Response(
                 status_code=404,
                 content=Error(code=404, 
-                              message=f"No model found: {model_name}").model_dump_json())
+                              message=f'No model found: {model_name}').model_dump_json())
         
         #if len(dataset)>1:
         #    logging.error(f"The provided dataset string {dataset_name} has had more than one match. Check dataset repository")
@@ -647,13 +647,13 @@ async def start_singleattack_job(body : models.AttackConfig = Body(...)) -> Opti
             x_adv = atk.generate(x=img, y=labels_ohe)
             end = time.time()
             labels_adv = model_ad(x_adv).argmax(1)
-            return transforms.ToPILImage()(x_adv[0]), x_adv, labels_adv.item(), x_adv - img, img, end-start
+            return transforms.ToPILImage()(x_adv[0]), x_adv, labels_adv.item(), x_adv - img, img, end-start, labels
         
         params = {}
         for param in body.attack["parameters"]:
             params[param["label"]] = param["default"]
 
-        adv_img, x_adv, y_adv, pert, tensor_image, execution_time = run_attack(
+        adv_img, x_adv, y_adv, pert, tensor_image, execution_time, labels = run_attack(
             model_ad=model_ad,
             img=image,
             attack_name=body.attack["id"],
@@ -678,8 +678,8 @@ async def start_singleattack_job(body : models.AttackConfig = Body(...)) -> Opti
             x=body.image,
             adv_perturbation=pert_image_base64,
             x_adv=adv_img_base64,
-            original_prediction="original",
-            adversarial_prediction="adversarial",
+            original_prediction=f"Original: {labels.item()}",
+            adversarial_prediction=f"Adversarial: {y_adv}",
             confidence=([],
                         []),
             advance_metrics={

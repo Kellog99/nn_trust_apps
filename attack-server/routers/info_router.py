@@ -121,12 +121,14 @@ def get_statistics_info() -> dict[str, MetricProps]:
     Get the list of all the available statistics that can be measured during a benchmark
     """
     try:
+        avail_metrics = SF.list_statistics(name=False, task=Task.Classification)
+        avail_metrics = ['countsamples', 'accuracy', 'misclassification', 'robustness', 'ssim']
         return {
             stat: MetricProps(
                 id=stat,
                 name=stat,
                 description="-"
-            ) for stat in SF.list_statistics(name=False, task=Task.Classification)
+            ) for stat in avail_metrics
         }
 
     except Exception as e:
