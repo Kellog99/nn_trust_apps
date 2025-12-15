@@ -135,7 +135,7 @@ class ProgressTracker:
         self.tasks: Dict[str, Dict] = {}
         on_disk_tasks = collect_benchmark_attacks(os.environ.get("BENCHMARK_OUTPUT_DIR","./benchmark_out"))
         for task in on_disk_tasks:
-            self.create_task(task_id=f"{task["attack"]}_{task["benchmark_id"]}",
+            self.create_task(task_id=f'{task["attack"]}_{task["benchmark_id"]}',
                              task_type="attack",
                              message="Task read from disk at boot up",
                              status="completed",

@@ -27,6 +27,46 @@ from torchvision import transforms
 import PIL
 import copy
 
+
+aircraft_labels = [
+    "A10",
+    "A400M",
+    "AH64",
+    "AV8B",
+    "B1",
+    "B2",
+    "B52",
+    "C130",
+    "C17",
+    "C2",
+    "E2",
+    "EF2000",
+    "F14",
+    "F15",
+    "F16",
+    "F18",
+    "F22",
+    "F35",
+    "F4",
+    "H6",
+    "J10",
+    "J20",
+    "JAS39",
+    "KC135",
+    "Mig31",
+    "Mirage2000",
+    "P3",
+    "Rafale",
+    "Su24",
+    "Su25",
+    "Su34",
+    "Su57",
+    "TB2",
+    "Tornado",
+    "US2",
+    "V22"
+]
+
 benchmarking = importlib.import_module("benchmarking")
 
 router = APIRouter(prefix="/job", tags=["jobs management", "jobs utils"])
@@ -623,6 +663,7 @@ async def start_singleattack_job(body : models.AttackConfig = Body(...)) -> Opti
             logging.info(f"Running attack on {device}")
 
             img = transforms.ToTensor()(img).unsqueeze(0).to(device)
+            img = transforms.Resize((224, 224))(img)
             
             model_ad.model.eval()
             model_ad.model.to(device)
@@ -678,8 +719,8 @@ async def start_singleattack_job(body : models.AttackConfig = Body(...)) -> Opti
             x=body.image,
             adv_perturbation=pert_image_base64,
             x_adv=adv_img_base64,
-            original_prediction=f"Original: {labels.item()}",
-            adversarial_prediction=f"Adversarial: {y_adv}",
+            original_prediction=f"Original: {aircraft_labels[labels.item()]}",
+            adversarial_prediction=f"Adversarial: {aircraft_labels[y_adv]}",
             confidence=([],
                         []),
             advance_metrics={

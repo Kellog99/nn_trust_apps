@@ -84,7 +84,7 @@ def get_models() -> Union[Models, Error]:
         if len(models)==0:
             logging.info("No uploaded models found.")
 
-        models.extend(MODELS)
+        #models.extend(MODELS)
         if len(models)==0:
             logging.info("No models found.")
             return Response(status_code=404, 

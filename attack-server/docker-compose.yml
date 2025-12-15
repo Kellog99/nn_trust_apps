@@ -23,6 +23,7 @@ services:
     network_mode: host
     environment:
       - NODE_ENV=development
-      - API_HOST=localhost
+      - API_HOST=localhost  # Use localhost with host network
+      - API_PORT=8082
     depends_on:
       - backend

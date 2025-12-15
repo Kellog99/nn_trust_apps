@@ -608,8 +608,9 @@ class MetricsSection:
         # Metrics table
         table_data = []
         for key, value in metrics.items():
-            formatted_value = MetricsSection._format_metric(value)
-            table_data.append([key.replace('_', ' ').title(), formatted_value])
+            if key.lower() != "params":
+                formatted_value = MetricsSection._format_metric(value)
+                table_data.append([key.replace('_', ' ').title(), formatted_value])
         
         if table_data:
             table = Table(table_data, colWidths=[150, 350])
