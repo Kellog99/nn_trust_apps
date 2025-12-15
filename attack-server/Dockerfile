@@ -17,7 +17,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --locked --no-install-project
 
 COPY . /app
-COPY ./benchmarking /benchmarking
+# COPY ./benchmarking /benchmarking
 
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --locked --all-groups

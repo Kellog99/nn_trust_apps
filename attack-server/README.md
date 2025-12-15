@@ -131,7 +131,7 @@ Configure the distributed computing cluster head:
 RAY_HEAD_HOST=127.0.0.1
 RAY_HEAD_PORT=6379
 RAY_DASHBOARD_PORT=8265
-RAY_PY_MODULES=/path/to/nn_trust_apps/benchmarking   
+RAY_PY_MODULES=/path/to/benchmarking   
 ```
 
 **For worker nodes**, uncomment and configure:
