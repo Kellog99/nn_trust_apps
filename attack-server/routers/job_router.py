@@ -169,7 +169,7 @@ def get_jobs_results(id: str = Query(None),
                         try:
                             with open(stat_file, "r", encoding="utf-8") as sf:
                                 sf_data = json.load(sf)
-                                sf_data["name"] = router.state.attacks[entry.lower()].name
+                                sf_data["name"] = router.state.attacks[entry.lower()].name if entry in router.state.attacks else entry
                                 #sf_data["risk"] = 0.5
                                 #sf_data["num_queries"] = 1
                                 #sf_data["power"] = 0.5
