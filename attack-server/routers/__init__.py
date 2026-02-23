@@ -5,7 +5,7 @@ from .dataset_router import router as dataset_router
 from .job_router import router as job_router
 from .model_router import router as model_router
 from .info_router import router as info_router
-
+from .report_router import router as report_router
 
 api_router = APIRouter()
 
@@ -13,3 +13,4 @@ api_router.include_router(dataset_router)
 api_router.include_router(model_router)
 api_router.include_router(job_router)
 api_router.include_router(info_router)
+api_router.include_router(report_router)

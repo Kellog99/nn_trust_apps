@@ -1,13 +1,12 @@
-from fastapi import UploadFile, File, HTTPException, status
 import json
-import magic 
-import os
 import logging
-from pathlib import Path
-from pydantic import ValidationError
-from lib.models import ModelConfig
+import os
 from typing import Union
 
+from fastapi import HTTPException
+from pydantic import ValidationError
+
+from lib.model import ModelConfig
 
 CHUNK_SIZE = 4096
 ALLOWED_MIMES = {"application/json"}
@@ -27,7 +26,7 @@ def json_safety_check(metadata: Union[str, dict]) -> dict:
         HTTPException: If validation fails
     """
     logging.info("Starting JSON safety check...")
-    
+
     # Handle both string and dict inputs
     if isinstance(metadata, dict):
         obj = metadata
@@ -42,20 +41,20 @@ def json_safety_check(metadata: Union[str, dict]) -> dict:
     else:
         logging.error("Input must be a string or dict")
         raise HTTPException(status_code=400, detail="Input must be a JSON string or dict")
-    
-    MAX_BYTES = int(os.environ.get('MAX_MODEL_JSON_SIZE_UPLOAD',5000)) * 1024
+
+    MAX_BYTES = int(os.environ.get('MAX_MODEL_JSON_SIZE_UPLOAD', 5000)) * 1024
     # Check size limit
     if len(raw_bytes) > MAX_BYTES:
         logging.error(f"JSON exceeded size limit of {MAX_BYTES} bytes")
-        raise HTTPException(status_code=413, 
-                          detail=f"JSON exceeded size limit of {MAX_BYTES} bytes")
-    
+        raise HTTPException(status_code=413,
+                            detail=f"JSON exceeded size limit of {MAX_BYTES} bytes")
+
     # Validate top-level type
     if not isinstance(obj, (dict, list)):
         logging.error("JSON top-level must be an object or array")
-        raise HTTPException(status_code=400, 
-                          detail="JSON top-level must be an object or array")
-    
+        raise HTTPException(status_code=400,
+                            detail="JSON top-level must be an object or array")
+
     # Validate against Pydantic model
     try:
         validated = ModelConfig.model_validate(obj)
@@ -63,5 +62,5 @@ def json_safety_check(metadata: Union[str, dict]) -> dict:
     except ValidationError as e:
         logging.error(f"Metadata validation failed: {e}")
         raise HTTPException(status_code=422, detail=e.errors())
-    
+
     return obj

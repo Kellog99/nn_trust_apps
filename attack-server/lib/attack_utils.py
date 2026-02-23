@@ -1,5 +1,5 @@
 from typing import List, Dict, Any, Iterable
-from lib.models import BenchmarkModelProps
+from lib.model import BenchmarkModelProps
 import numpy as np
 
 def _coerce_number(x):
