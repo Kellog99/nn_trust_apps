@@ -1,17 +1,18 @@
 import base64
-from fastapi import APIRouter, UploadFile, Response
-from typing import Union, Optional
+import importlib
+import json
+import logging
 import os
 import shutil
 import zipfile
-import logging
-from lib.models import Datasets, Error
-import importlib
-import json
-from pathlib import Path
+
+from fastapi import APIRouter, UploadFile, Response
+
+from lib.model import Error
 
 benchmarking = importlib.import_module("benchmarking")
 router = APIRouter(prefix="/dataset", tags=["datasets and models"])
+
 
 def find_image(start_dir: str):
     """
@@ -73,7 +74,7 @@ def get_datasets():
                     type_dataset = info_data.get("type_dataset")
                     task = info_data.get("mode")
                 datasetObject = benchmarking.get_dataloader(dataset=str(os.path.join(item_path,"data")), 
-                                                            subset=1, 
+                                                            subset=None, 
                                                             batch=1, 
                                                             type_dataset=type_dataset, 
                                                             transform = lambda x: x,
@@ -89,11 +90,11 @@ def get_datasets():
                 out_item = {
                     "name": item,
                     "size": len(datasetObject),
-                    "task": task,
-                    "prototype": {
-                        "datas":[b64_string],
-                        "type": image_type
-                    }
+                    "task": task
+                    #"prototype": {
+                    #    "datas":[b64_string],
+                    #    "type": image_type
+                    #}
                 }
                 datasets.append(out_item)
         if len(datasets)==0:
@@ -113,7 +114,7 @@ def get_datasets():
     '409': {'model': Error},
     '500': {'model': Error},
 })
-def upload_dataset(file: UploadFile) -> Optional[Error]:
+def upload_dataset(file: UploadFile):
     """
     Upload a dataset to the TITANN backend.
     """
@@ -121,29 +122,31 @@ def upload_dataset(file: UploadFile) -> Optional[Error]:
         if not file.filename.endswith(".zip"):
             logging.error("Error: Only.zip files are allowed.")
             return Response(status_code=400,
-                            content=Error(code=400,message="Only .zip files are allowed.").model_dump_json())
-        
+                            content=Error(code=400, message="Only .zip files are allowed.").model_dump_json())
+
         UPLOAD_DIRECTORY = os.environ.get('INTERNAL_DS_STORAGE')
         if not UPLOAD_DIRECTORY:
             logging.error("Error: No internal dataset storage is specified in the environment.")
             return Response(status_code=500,
-                            content=Error(code=500,message="Upload directory not configured.").model_dump_json())
-        
+                            content=Error(code=500, message="Upload directory not configured.").model_dump_json())
+
         # Check if dataset already exists 
-        dataset_name = os.path.splitext(file.filename)[0] 
+        dataset_name = os.path.splitext(file.filename)[0]
         dataset_folder_path = os.path.join(UPLOAD_DIRECTORY, dataset_name)
-        
+
         if os.path.exists(dataset_folder_path) and os.path.isdir(dataset_folder_path):
             logging.error(f"Dataset '{dataset_name}' already exists.")
             return Response(status_code=409,
-                            content=Error(code=409,message=f"Dataset - {dataset_name} - already exists.").model_dump_json())
+                            content=Error(code=409,
+                                          message=f"Dataset - {dataset_name} - already exists.").model_dump_json())
 
         file_path = os.path.join(UPLOAD_DIRECTORY, file.filename)
     except Exception as e:
         logging.error(f"An error occurred before the zip copy and extraction: {e}")
         return Response(status_code=500,
-                        content=Error(code=500, message=f"An error occurred before the zip copy and extraction: {e}").model_dump_json())
-    
+                        content=Error(code=500,
+                                      message=f"An error occurred before the zip copy and extraction: {e}").model_dump_json())
+
     try:
         # Save the uploaded zip file
         with open(file_path, "wb") as buffer:
@@ -158,18 +161,19 @@ def upload_dataset(file: UploadFile) -> Optional[Error]:
         logging.info("File extracted.")
 
         return Response(status_code=200)
-        
+
     except zipfile.BadZipFile:
         logging.error("Invalid or corrupted zip file.")
-        return Response(status_code=400, 
-                        content=Error(code=400,message="Invalid or corrupted zip file.").model_dump_json())
+        return Response(status_code=400,
+                        content=Error(code=400, message="Invalid or corrupted zip file.").model_dump_json())
     except PermissionError:
         logging.error("Permission denied when accessing upload directory.")
-        return Response(status_code=403, 
-                        content=Error(code=403,message="Permission denied when accessing upload directory.").model_dump_json())
+        return Response(status_code=403,
+                        content=Error(code=403,
+                                      message="Permission denied when accessing upload directory.").model_dump_json())
     except Exception as e:
         logging.error(f"Failed to process file: {str(e)}")
-        return Response(status_code=500, 
+        return Response(status_code=500,
                         content=Error(code=500, message=f"Failed to process file.").model_dump_json())
     finally:
         try:
@@ -177,4 +181,4 @@ def upload_dataset(file: UploadFile) -> Optional[Error]:
                 os.remove(file_path)
         except Exception as e:
             logging.error(f"Exception occurred in the removal of the .zip: {e}")
-            pass  
+            pass

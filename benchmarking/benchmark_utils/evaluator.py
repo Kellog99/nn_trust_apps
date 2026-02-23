@@ -1,50 +1,50 @@
 import json
-import pathlib
-from pathlib import Path
-from typing import Union, Annotated, Literal, List, Optional
 import logging
-import time
-from tqdm.auto import tqdm
-import yaml
-import glob
-import re
 import os
-import traceback
+import pathlib
 import pickle
+import traceback
+from inspect import signature
+from pathlib import Path
+from typing import Annotated, Literal, List
+from typing import Dict
+import time
 
 import torch
 import torchvision
 from annotated_types import Gt, Ge
-from pydantic import BaseModel, Field, field_validator, ValidationInfo
-from torch.utils.data import DataLoader
-from inspect import signature
 from nn_trust.attack import EvasionAttackFactory
 from nn_trust.attack._evasion import EvasionAttack
-from nn_trust.attack.evaluation._statistics import StatisticsFactory
-from nn_trust.attack.evaluation.composer import ConfigStatisticComposer, StatisticComposer
 from nn_trust.attack.utils._utils import enumerated_list, get_min
 from nn_trust.attack.utils.logger import TensorboardLogger
-from nn_trust.attack.utils.loss._loss import LossFactory
-from nn_trust.attack.utils.loss.loss_composer import ConfigLossComposer, LossComposer
 from nn_trust.core import Task, ModelAdapter
+from nn_trust.evaluation.composer import ConfigStatisticComposer, StatisticComposer
+from nn_trust.evaluation.statistic_factory import StatisticsFactory
+from nn_trust.loss.loss_composer import LossComposer
+from nn_trust.loss.loss_factory import LossFactory
+from nn_trust.target import AvoidOnehotTarget
+from nn_trust.models.model_utils import load_model
+from pydantic import BaseModel, Field, field_validator, ValidationInfo
+from torch.utils.data import DataLoader
+from tqdm.auto import tqdm
+
 from .config import get_data_transformation_config
 from .utils import get_dataloader, get_model
-from typing import Dict
 
 
 class Plan:
 
-    def __init__(self, 
+    def __init__(self,
                  dataset,
                  model,
-                 worker_action : callable, 
-                 worker_params : Dict[str,Dict], 
-                 action : callable = None,
-                 params : Dict = None):
+                 worker_action: callable,
+                 worker_params: Dict[str, Dict],
+                 action: callable = None,
+                 params: Dict = None):
         """
         This class stores a callable to be executed with a list of parameters.
         """
-        #TODO:add typing
+        # TODO:add typing
         self.dataset = dataset
         self.model = model
         self.action = action
@@ -55,8 +55,10 @@ class Plan:
     def __repr__(self):
         return f'Plan(worker_action={self.worker_action.__name__}, num_attacks={len(self.worker_params)}, params={self.params}, worker_params={self.worker_params})'
 
+
 class BenchmarkEvaluationConfig(BaseModel):
     statistics: list[dict] | None = Field(default_factory=lambda x: [])
+
 
 class BenchmarkOptionConfig(BaseModel):
     load_results: bool
@@ -66,10 +68,11 @@ class BenchmarkOptionConfig(BaseModel):
     gpu: bool
     output_path: str
     output_format: str
-    mode : Literal["single_node_parallel", "multi_node_parallel", "single_node_serial"]
-    num_workers : int
-    num_gpus_per_worker : float
-    executor_type : Literal["ray"]
+    mode: Literal["single_node_parallel", "multi_node_parallel", "single_node_serial"]
+    num_workers: int
+    num_gpus_per_worker: float
+    executor_type: Literal["ray"]
+
 
 class BenchmarkDatasetTransformConfig(BaseModel):
     size: int | None = None
@@ -77,6 +80,7 @@ class BenchmarkDatasetTransformConfig(BaseModel):
     transform_id: str
     mean: List[float]
     std: List[float]
+
 
 class BenchmarkDatasetConfig(BaseModel):
     name: str
@@ -90,12 +94,14 @@ class BenchmarkDatasetConfig(BaseModel):
 
 
 class BenchmarkModelsConfig(BaseModel):
-    name: str
-    type: str
-    pretrained: bool
-    num_classes: int
-    task: str
+    name: str | None = None
+    model_path: str | None = None
+    type: str | None = None
+    pretrained: bool | None = None
+    num_classes: int | None = None
+    task: str | None = None
     weights_path: str | None = None
+    input_size: int | None = None
 
 
 class BenchmarkAttackConfig(BaseModel):
@@ -103,15 +109,18 @@ class BenchmarkAttackConfig(BaseModel):
     id: str | None = None
     max_iters: int | None = None
     losses: List[str] | None = None
+    optim_lr: float | None = None
+    optim_momentum: float | None = None
+    optim_nesterov: bool | None = None
 
 
 class BenchmarkConfig(BaseModel):
-
     evaluation: BenchmarkEvaluationConfig
     options: BenchmarkOptionConfig
     datasets: List[BenchmarkDatasetConfig]
     models: List[BenchmarkModelsConfig]
     attacks: List[BenchmarkAttackConfig]
+
 
 class EvaluatorConfig(BaseModel):
     """
@@ -120,35 +129,37 @@ class EvaluatorConfig(BaseModel):
     ################# GLOBAL #################
     model: ModelAdapter | str | torch.nn.Module = Field(default=...,
                                                         description='The model on which to generate the attack.')
-    dataset : dict = Field(default=..., description="The part of the config with dataset info. Needed for parallel execution")
+    dataset: dict = Field(default=...,
+                          description="The part of the config with dataset info. Needed for parallel execution")
 
     dataloader: DataLoader | str = Field(default=...,
-                            description="Dataset to use for the benchmarking.")
+                                         description="Dataset to use for the benchmarking.")
     attacks: List[BenchmarkAttackConfig] = Field(default_factory=list,
-                            description="List of attacks to perform. If None, all the attacks are performed.")
+                                                 description="List of attacks to perform. If None, all the attacks are performed.")
     statistics: list[dict] = Field(default_factroy=list,
-                            description="List of statistics names to use in the evaluation process.")
+                                   description="List of statistics names to use in the evaluation process.")
     load_results: bool = Field(default=False,
-                            description="Load previous results and skip the tests that have already been done.")
+                               description="Load previous results and skip the tests that have already been done.")
     save_perturbation: bool = Field(default=True,
-                            description="Whether to save the adversarial perturbation or not.")
+                                    description="Whether to save the adversarial perturbation or not.")
     overwrite: bool = Field(default=True,
                             description="Whether to overwrite the results from the new tests onto the old one.")
     num_classes: Annotated[int, Ge(-1)] = Field(default=...,
-                            description="Number of possible classes")
+                                                description="Number of possible classes")
     output_path: str | Path = Field(default=Path("./benchmark_output"),
-                            description="Path to the output folder.")
+                                    description="Path to the output folder.")
     output_format: Literal["report", "test"] = Field(default="report",
-                            description="Output format: 'report' for saving results, 'test' for test mode.")
+                                                     description="Output format: 'report' for saving results, 'test' for test mode.")
     logger: TensorboardLogger = Field(default=None,
-                            description="The logger to use for keeping track of the attacks.")
+                                      description="The logger to use for keeping track of the attacks.")
     inverse_transformation: torchvision.transforms.Compose = Field(default=None,
-                            description="Inverse transformation for showing the images.")
+                                                                   description="Inverse transformation for showing the images.")
     device: torch.device = Field(default=torch.device('cuda' if torch.cuda.is_available() else 'cpu'),
-                            description='The device to use.')
+                                 description='The device to use.')
     verbose: bool = Field(default=False,
-                            description='True to generate more debug print.')
-    reference: str = Field(default='identitybaseline', description='Include an attack to use as reference. Usually its the identity')
+                          description='True to generate more debug print.')
+    reference: str = Field(default='identitybaseline',
+                           description='Include an attack to use as reference. Usually its the identity')
 
     class Config:
         arbitrary_types_allowed = True
@@ -173,9 +184,9 @@ class EvaluatorConfig(BaseModel):
 
     @field_validator('attacks')
     @classmethod
-    def validate_attacks(cls, v, info:ValidationInfo):
+    def validate_attacks(cls, v, info: ValidationInfo):
         field_name = info.field_name
-        complete_list = EvasionAttackFactory.list_attacks()
+        complete_list = EvasionAttackFactory.get_list_classes()
         return [atk for atk in v if atk.name in complete_list]
 
 
@@ -238,23 +249,7 @@ class Evaluator:
             name=dataset["name"]
         )
 
-        model = get_model(
-            num_labels=model_config.get("num_classes"),
-            model_name=model_config.get("name"),
-            model_type=model_config.get("type"),
-            model_weights_path=model_config.get("weights_path", None),
-            mean=dataset["transform_config"].get("mean"),
-            std=dataset["transform_config"].get("std"),
-            model_task=model_config.get("task")
-        )
-
-        num_classes = (
-            model_config["num_classes"]
-            if model_config["num_classes"] > 0
-            else len(dataloader.dataset.dataset.classes)  # TODO: Manage both datasets and subsets
-        )
-
-        print(f"This is options configurations {config['options']}")
+        model = load_model(**model_config)
 
         return cls(
             config=EvaluatorConfig(
@@ -266,7 +261,7 @@ class Evaluator:
                 attacks=config["attacks"],
                 save_perturbation=config["options"]["save_perturbation"],
                 overwrite=config["options"]["overwrite"],
-                num_classes=num_classes,
+                num_classes=model.num_classes,
                 output_path=config["output_path"],
                 output_format=config["options"]["output_format"],
             )
@@ -281,10 +276,10 @@ class Evaluator:
             device: torch.device,
             num_classes: int,
             verbose: bool = False,
-            tracker = None,
-            benchmark_id : str = None,
-            num_tasks : str = None
-        ) -> dict:
+            tracker=None,
+            benchmark_id: str = None,
+            num_tasks: str = None
+    ) -> dict:
         """
         Evaluate the model on the attack that is passed.
 
@@ -303,12 +298,11 @@ class Evaluator:
             atk_id = attack_config.pop("id", atk_name)
             if "losses" in attack_config:
                 # If losses are specified, convert them to Loss objects
-                attack_config['loss'] = LossComposer(ConfigLossComposer(
+                attack_config['loss'] = LossComposer(
                     loss=attack_config['losses'],
-                    p=attack_config.get('p', 2.0),
                     loss_weights=attack_config.get('loss_weights', [1.0] * len(attack_config['losses'])),
-                ))
-            atk = EvasionAttackFactory.create_attack(
+                )
+            atk = EvasionAttackFactory.create(
                 atk_name,
                 model=model,
                 device=device,
@@ -317,7 +311,7 @@ class Evaluator:
                 **attack_config
             )
             atk.name = atk_id
-            if model.task not in atk.TASKS:
+            if model.task not in atk.task:
                 raise ValueError(
                     f"\U0001F928 Attack {atk_name} does not support Model {model.name} task {model.task}.")
 
@@ -327,18 +321,20 @@ class Evaluator:
             else:
                 progress_bar = enumerate(dataloader)
 
+            # tracker.create_task.remote(f"{atk_id}_{benchmark_id}","attack", benchmark_id = benchmark_id, num_tasks=num_tasks)
             for idx, (batch, label, element_info) in progress_bar:
                 if tracker:
-                    tracker.update_progress.remote(f"{atk_id}_{benchmark_id}", 
-                                                status="in_progress", 
-                                                progress=int((idx / len(dataloader)) * 100), 
-                                                message=f"Processing batch {idx+1}/{len(dataloader)}")
+                    tracker.update_progress.remote(f"{atk_id}_{benchmark_id}",
+                                                   status="in_progress",
+                                                   progress=int((idx / len(dataloader)) * 100),
+                                                   message=f"Processing batch {idx + 1}/{len(dataloader)}")
                 batch = batch.to(device)
                 label = label.to(device)
                 y_one_hot = torch.nn.functional.one_hot(label, num_classes=num_classes)
+                target = AvoidOnehotTarget(num_classes=num_classes)(label.tolist())
                 x_adv = atk.generate(
                     x=batch,
-                    y=y_one_hot
+                    y=target
                 ).detach()
 
                 with torch.no_grad():
@@ -369,7 +365,7 @@ class Evaluator:
                     'out': out,
                     'out_adv': out_adv,
                     'y_pred': y_pred,
-                    'y_pred_adv': y_pred_adv 
+                    'y_pred_adv': y_pred_adv
                 }
                 statistics_composer.update(**input_stat)
 
@@ -380,10 +376,11 @@ class Evaluator:
                 "statistics_states":statistics_composer.get_raw_state()
             }
         except Exception as e:
-            logging.error(f"Error during evaluation of attack {attack_config.get('name','unknown')} : {e}")
+            logging.error(f"Error during evaluation of attack {attack_config.get('name', 'unknown')} : {e}")
             traceback.print_exc()
             if tracker:
-                tracker.update_progress.remote(f"{atk_id}_{benchmark_id}", status="completed", progress=50, message=f"Failed attack {atk_id} with error {e}")
+                tracker.update_progress.remote(f"{atk_id}_{benchmark_id}", status="completed", progress=50,
+                                               message=f"Failed attack {atk_id} with error {e}")
             raise e
 
     def get_model_dataset_info(self) -> dict:
@@ -394,8 +391,6 @@ class Evaluator:
             'classes': self.config.num_classes,
             'dimensionality': batch[0].shape
         }
-
-
 
     def evaluate_attacks(self) -> dict:
         """
@@ -419,7 +414,7 @@ class Evaluator:
         attack_evaluation_parameters = {}
 
         for i, attack_config in enumerate(self.config.attacks):
-            attack_config_dict = {k:v for k,v in attack_config.model_dump().items() if v is not None}
+            attack_config_dict = {k: v for k, v in attack_config.model_dump().items() if v is not None}
             atk_id = attack_config_dict.get("id", attack_config_dict["name"])
             if atk_id in attack_evaluation_parameters:
                 raise ValueError(f"{atk_id} is already setup for evaluation")
@@ -434,9 +429,10 @@ class Evaluator:
             )
 
         # moved attack evaluation execution here
-        self.results["attacks"] = {atk_id:self.evaluate_attack(**params) for atk_id, params in attack_evaluation_parameters.items()}
+        self.results["attacks"] = {atk_id: self.evaluate_attack(**params) for atk_id, params in
+                                   attack_evaluation_parameters.items()}
         return self.results
-    
+
     def plan_attacks_evaluation(self) -> Plan:
         """
         Outputs an attack Plan to be executed by an Executor class
@@ -446,7 +442,7 @@ class Evaluator:
         attack_evaluation_parameters = {}
 
         for i, attack_config in enumerate(self.config.attacks):
-            attack_config_dict = {k:v for k,v in attack_config.model_dump().items() if v is not None}
+            attack_config_dict = {k: v for k, v in attack_config.model_dump().items() if v is not None}
             atk_id = attack_config_dict.get("id", attack_config_dict["name"])
             if atk_id in attack_evaluation_parameters:
                 raise ValueError(f"{atk_id} is already setup for evaluation")
@@ -466,7 +462,7 @@ class Evaluator:
             worker_params["dataset_name"] = self.config.dataloader.dataset.dataset.name
             worker_params["model_name"] = self.config.model.name
             worker_params["output_path"] = self.config.output_path
-        
+
         action = Evaluator.save_info_to_disk
         params = dict(
             results_info=self.results["info"],
@@ -474,10 +470,10 @@ class Evaluator:
             model_name=self.config.model.name,
             output_path=self.config.output_path
         )
-        self.config.dataset["source_path"]=self.config.dataset["relative_source_path"]
+        self.config.dataset["source_path"] = self.config.dataset["relative_source_path"]
         plan = Plan(
             dataset=self.config.dataset,
-            model = self.config.model,
+            model=self.config.model,
             worker_action=worker_action,
             worker_params=attack_evaluation_parameters,
             action=action,
@@ -508,7 +504,6 @@ class Evaluator:
         )
         return self.results
 
-
     @staticmethod
     def aggregate_attacks_statistics(statistics_composer: StatisticComposer, results: dict) -> dict:
         """Use statistic composer in aggregation mode to aggregate statistics states and 
@@ -528,7 +523,8 @@ class Evaluator:
         self.results = dict(info, attacks=dict(attacks=dict(statistics, statistics_states)), aggregate_statistics:optional)
         """
         if not output_path:
-            model_result_path = Path(self.config.output_path) / self.config.dataloader.dataset.dataset.name / self.config.model.name
+            model_result_path = Path(
+                self.config.output_path) / self.config.dataloader.dataset.dataset.name / self.config.model.name
         else:
             model_result_path = output_path
         os.makedirs(model_result_path, exist_ok=True)
@@ -547,11 +543,11 @@ class Evaluator:
         logging.info(f"Results saved to {model_result_path}")
 
     @staticmethod
-    def save_attack_result_to_disk(atk_result : dict,
-                                   atk_id : str,
-                                   dataset_name : str , 
-                                   model_name : str , 
-                                   output_path: str | pathlib.Path ) -> None:
+    def save_attack_result_to_disk(atk_result: dict,
+                                   atk_id: str,
+                                   dataset_name: str,
+                                   model_name: str,
+                                   output_path: str | pathlib.Path) -> None:
         """
         Save single attack results from static method -evaluate_attack- to a JSON file
         """
@@ -571,14 +567,14 @@ class Evaluator:
             json.dump(atk_res["statistics"], f)
         with open(attack_result_path / "statistics_states.pkl", 'wb') as f:
             pickle.dump(atk_res["statistics_states"], f)
-        
+
         logging.info(f"Single attack results saved to {model_result_path}")
 
     @staticmethod
-    def save_info_to_disk(results_info : dict,
-                          dataset_name : str , 
-                          model_name : str , 
-                          output_path: str | pathlib.Path ) -> None:
+    def save_info_to_disk(results_info: dict,
+                          dataset_name: str,
+                          model_name: str,
+                          output_path: str | pathlib.Path) -> None:
         """
         Save single info to a JSON file
         """
@@ -605,7 +601,7 @@ class Evaluator:
             atk_params = {k: v for k, v in kwargs.items() if k in accepted_params}
             tracker = kwargs.get("tracker", None)
             benchmark_id = kwargs.get("benchmark_id", None)
-            num_tasks = kwargs.get("num_tasks",None)
+            num_tasks = kwargs.get("num_tasks", None)
             if tracker:
                 atk_params["tracker"] = tracker
             if benchmark_id:
@@ -634,7 +630,7 @@ class Evaluator:
         self.results = dict(info, attacks=dict(attacks=dict(statistics, statistics_states)), aggregate_statistics:optional)
         """
         results_dir = Path(results_dir)
-        results = {"attacks":{}}
+        results = {"attacks": {}}
         attacks_dir = [attack_dir for attack_dir in results_dir.iterdir() if attack_dir.is_dir()]
         for attack_dir in attacks_dir:
             with open(attack_dir / "statistics.json", "r") as fmetric:
@@ -655,9 +651,3 @@ class Evaluator:
 
     def __repr__(self):
         return f'Evaluator(dataset={self.config.dataloader.dataset.dataset.name}, model={self.config.model.name})'
-
-
-
-
-
-
