@@ -7,4 +7,9 @@
 *.json
 *.png
 *.pdf
+
+
+*.sh
 __pycache__
+
+*/submodules/

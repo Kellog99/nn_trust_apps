@@ -6,9 +6,7 @@ import os
 import shutil
 import zipfile
 
-from fastapi import APIRouter, UploadFile, Response
-
-from lib.model import Error
+from fastapi import APIRouter, UploadFile, Response, Request
 
 benchmarking = importlib.import_module("benchmarking")
 router = APIRouter(prefix="/dataset", tags=["datasets and models"])
@@ -52,11 +50,12 @@ def find_image(start_dir: str):
                 _, ext = os.path.splitext(path)
                 if ext.lower() in image_exts:
                     abs_path = os.path.abspath(path)
-                    return os.path.join(start_dir.split(os.sep)[-1],os.path.relpath(abs_path, start_dir))
+                    return os.path.join(start_dir.split(os.sep)[-1], os.path.relpath(abs_path, start_dir))
         except Exception:
             continue
 
     return None
+
 
 @router.get("/getDatasets")
 def get_datasets():
@@ -69,21 +68,23 @@ def get_datasets():
         for item in os.listdir(dataset_root_dir):
             item_path = os.path.join(dataset_root_dir, item)
             if os.path.isdir(item_path):
-                with open(os.path.join(item_path,f"{item}.json"), "r") as info_file:
+                with open(os.path.join(item_path, f"{item}.json"), "r") as info_file:
                     info_data = json.load(info_file)
                     type_dataset = info_data.get("type_dataset")
                     task = info_data.get("mode")
-                datasetObject = benchmarking.get_dataloader(dataset=str(os.path.join(item_path,"data")), 
-                                                            subset=None, 
-                                                            batch=1, 
-                                                            type_dataset=type_dataset, 
-                                                            transform = lambda x: x,
-                                                            name = item).dataset
+                datasetObject = benchmarking.get_dataloader(dataset=str(os.path.join(item_path, "data")),
+                                                            subset=None,
+                                                            batch=1,
+                                                            type_dataset=type_dataset,
+                                                            transform=lambda x: x,
+                                                            name=item).dataset
                 image_path = find_image(item_path)
+
                 def image_to_base64(p):
                     path = os.path.join(dataset_root_dir, p)
                     with open(path, "rb") as img:
                         return base64.b64encode(img.read()).decode("utf-8")
+
                 b64_string = image_to_base64(image_path)
                 image_type = "IMAGE_FEATURE"
                 logging.info(f"Found a dataset: {item_path}")
@@ -91,30 +92,30 @@ def get_datasets():
                     "name": item,
                     "size": len(datasetObject),
                     "task": task
-                    #"prototype": {
+                    # "prototype": {
                     #    "datas":[b64_string],
                     #    "type": image_type
-                    #}
+                    # }
                 }
                 datasets.append(out_item)
-        if len(datasets)==0:
+        if len(datasets) == 0:
             logging.error("No datasets found.")
-            return Response(status_code=404, 
-                            content=Error(code=404, message="No datasets found.").model_dump_json())
+            return Response(status_code=404,
+                            content="No datasets found.")
 
         return datasets
 
     except Exception as e:
         logging.error(f"An error occurred during datasets reading from disk: {e}")
-        return Response(status_code=500, 
-                        content=Error(code=500, message=f"An error occurred during datasets reading from disk.").model_dump_json())
+        return Response(status_code=500,
+                        content=f"An error occurred during datasets reading from disk.")
 
-@router.post("/upload", response_model=None, responses={
-    '400': {'model': Error},
-    '409': {'model': Error},
-    '500': {'model': Error},
-})
-def upload_dataset(file: UploadFile):
+
+@router.post("/upload")
+def upload_dataset(
+        request: Request,
+        file: UploadFile
+):
     """
     Upload a dataset to the TITANN backend.
     """
@@ -122,30 +123,28 @@ def upload_dataset(file: UploadFile):
         if not file.filename.endswith(".zip"):
             logging.error("Error: Only.zip files are allowed.")
             return Response(status_code=400,
-                            content=Error(code=400, message="Only .zip files are allowed.").model_dump_json())
+                            content="Only .zip files are allowed.")
 
-        UPLOAD_DIRECTORY = os.environ.get('INTERNAL_DS_STORAGE')
-        if not UPLOAD_DIRECTORY:
+        path_ds_store = request.app.state.config.path_ds_store
+        if not path_ds_store:
             logging.error("Error: No internal dataset storage is specified in the environment.")
             return Response(status_code=500,
-                            content=Error(code=500, message="Upload directory not configured.").model_dump_json())
+                            content="Upload directory not configured.")
 
         # Check if dataset already exists 
         dataset_name = os.path.splitext(file.filename)[0]
-        dataset_folder_path = os.path.join(UPLOAD_DIRECTORY, dataset_name)
+        dataset_folder_path = os.path.join(path_ds_store, dataset_name)
 
         if os.path.exists(dataset_folder_path) and os.path.isdir(dataset_folder_path):
             logging.error(f"Dataset '{dataset_name}' already exists.")
             return Response(status_code=409,
-                            content=Error(code=409,
-                                          message=f"Dataset - {dataset_name} - already exists.").model_dump_json())
+                            content=f"Dataset - {dataset_name} - already exists.")
 
-        file_path = os.path.join(UPLOAD_DIRECTORY, file.filename)
+        file_path = os.path.join(path_ds_store, file.filename)
     except Exception as e:
         logging.error(f"An error occurred before the zip copy and extraction: {e}")
         return Response(status_code=500,
-                        content=Error(code=500,
-                                      message=f"An error occurred before the zip copy and extraction: {e}").model_dump_json())
+                        content=f"An error occurred before the zip copy and extraction: {e}")
 
     try:
         # Save the uploaded zip file
@@ -154,7 +153,7 @@ def upload_dataset(file: UploadFile):
         logging.info("File saved.")
 
         # Extract the zip file
-        extract_to_path = UPLOAD_DIRECTORY
+        extract_to_path = path_ds_store
         os.makedirs(extract_to_path, exist_ok=True)
         with zipfile.ZipFile(file_path, 'r') as zip_ref:
             zip_ref.extractall(extract_to_path)
@@ -165,16 +164,15 @@ def upload_dataset(file: UploadFile):
     except zipfile.BadZipFile:
         logging.error("Invalid or corrupted zip file.")
         return Response(status_code=400,
-                        content=Error(code=400, message="Invalid or corrupted zip file.").model_dump_json())
+                        content="Invalid or corrupted zip file.")
     except PermissionError:
         logging.error("Permission denied when accessing upload directory.")
         return Response(status_code=403,
-                        content=Error(code=403,
-                                      message="Permission denied when accessing upload directory.").model_dump_json())
+                        content="Permission denied when accessing upload directory.")
     except Exception as e:
         logging.error(f"Failed to process file: {str(e)}")
         return Response(status_code=500,
-                        content=Error(code=500, message=f"Failed to process file.").model_dump_json())
+                        content=f"Failed to process file.")
     finally:
         try:
             if os.path.exists(file_path):

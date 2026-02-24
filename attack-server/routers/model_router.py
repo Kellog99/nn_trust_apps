@@ -6,61 +6,19 @@ import shutil
 import tempfile
 import zipfile
 from pathlib import Path
-from routers.utils import load_models_metadata_from_repo
+
 import torch
 from fastapi import APIRouter, Response, Query
 from fastapi import UploadFile, HTTPException
 from fastapi.responses import JSONResponse
 
-from lib.model import Error
 from lib.validator import json_safety_check
 
 router = APIRouter(prefix="/model", tags=["datasets and models"])
 
 
-@router.get("/getModels", responses={
-    '400': {'model': Error},
-    '404': {'model': Error},
-    '500': {'model': Error},
-})
-def get_models():
-    """
-    Get all models of the TITANN backend.
-    """
-    try:
-        with open(os.environ.get("TIMM_MODELS_JSON_PATH")) as f:
-            config = json.load(f)
-            MODELS = config["timm_models"]
-            for n in MODELS:
-                n["type"] = "timm"
-    except Exception as e:
-        # Handle unexpected errors
-        logging.error(f"Unexpected error during config import: {str(e)}")
-        return Response(
-            status_code=500,
-            content=Error(code=500, message=f"Internal server error during config import.").model_dump_json())
-    try:
-        models = load_models_metadata_from_repo()
-        models.extend(MODELS)
-        if len(models) == 0:
-            logging.info("No models found.")
-            return Response(status_code=404,
-                            content=Error(code=404, message="No models found.").model_dump_json())
-
-        return models
-
-    except Exception as e:
-        logging.error(f"An error occurred during models reading from disk: {e}")
-        return Response(status_code=500,
-                        content=Error(code=500,
-                                      message=f"An error occurred durign models reading from disk.").model_dump_json())
-
-
 # --- Model Upload (Check Phase) ---
-@router.post("/upload/check", response_model=None, responses={
-    '400': {'model': Error},
-    '500': {'model': Error},
-})
+@router.post("/upload/check", response_model=None)
 async def upload_model_check(file: UploadFile):
     """
     Step 1: Upload a model package as a ZIP file, validate its structure and content.
@@ -83,14 +41,14 @@ async def upload_model_check(file: UploadFile):
         # but sticking to Response for compatibility with original code's return type.
         return Response(
             status_code=500,
-            content=Error(code=500, message=f"Internal server error during config import.").model_dump_json())
+            content=f"Internal server error during config import.")
 
     # 1. Validate file type is ZIP
     if not file.filename or not file.filename.endswith('.zip'):
         logging.error("Invalid file type. File must be a ZIP archive")
         return Response(
             status_code=400,
-            content=Error(code=400, message="Invalid file type. File must be a ZIP archive").model_dump_json()
+            content="Invalid file type. File must be a ZIP archive"
         )
 
     # 2. Check file size
@@ -100,7 +58,7 @@ async def upload_model_check(file: UploadFile):
         logging.error(f"File size exceeds {limit_mb}MB limit")
         return Response(
             status_code=400,
-            content=Error(code=400, message=f"File size exceeds {limit_mb}MB limit").model_dump_json()
+            content=f"File size exceeds {limit_mb}MB limit"
         )
 
     temp_dir = None
@@ -127,15 +85,14 @@ async def upload_model_check(file: UploadFile):
                     if member.startswith('/') or '..' in member or os.path.isabs(member):
                         return Response(
                             status_code=400,
-                            content=Error(code=400,
-                                          message="Invalid ZIP content - path traversal detected").model_dump_json()
+                            content="Invalid ZIP content - path traversal detected"
                         )
 
                 zip_ref.extractall(extract_dir)
         except zipfile.BadZipFile:
             return Response(
                 status_code=400,
-                content=Error(code=400, message="Invalid or corrupted ZIP file").model_dump_json()
+                content="Invalid or corrupted ZIP file"
             )
 
         # 5. Find model and metadata files
@@ -155,15 +112,13 @@ async def upload_model_check(file: UploadFile):
         if len(model_files) != 1:
             return Response(
                 status_code=400,
-                content=Error(code=400,
-                              message=f"ZIP must contain exactly one model file. Found {len(model_files)}").model_dump_json()
+                content=f"ZIP must contain exactly one model file. Found {len(model_files)}"
             )
 
         if len(json_files) != 1:
             return Response(
                 status_code=400,
-                content=Error(code=400,
-                              message=f"ZIP must contain exactly one JSON metadata file. Found {len(json_files)}").model_dump_json()
+                content=f"ZIP must contain exactly one JSON metadata file. Found {len(json_files)}"
             )
 
         model_path = model_files[0]
@@ -187,14 +142,14 @@ async def upload_model_check(file: UploadFile):
             logging.error(f"Failed to load model from {model_path}: {str(e)}")
             return Response(
                 status_code=400,
-                content=Error(code=400, message=f"Invalid or corrupted model file: {str(e)}").model_dump_json()
+                content=f"Invalid or corrupted model file: {str(e)}"
             )
 
         # 8. Validate it's a valid PyTorch model
         if not isinstance(model, torch.nn.Module):
             return Response(
                 status_code=400,
-                content=Error(code=400, message="File does not contain a valid PyTorch model").model_dump_json()
+                content="File does not contain a valid PyTorch model"
             )
 
         # 9. Process and validate JSON metadata
@@ -204,19 +159,19 @@ async def upload_model_check(file: UploadFile):
                 raw_json_metadata = f.read()
 
             # Validate JSON
-            checked_metadata = json_safety_check(raw_json_metadata)
+            checked_metadata = True  # json_safety_check(raw_json_metadata)
 
         except json.JSONDecodeError as e:
             logging.error(f"Invalid JSON metadata: {str(e)}")
             return Response(
                 status_code=400,
-                content=Error(code=400, message=f"Invalid JSON metadata: {str(e)}").model_dump_json()
+                content=f"Invalid JSON metadata: {str(e)}"
             )
         except Exception as e:
             logging.error(f"Failed to process JSON metadata: {str(e)}")
             return Response(
                 status_code=400,
-                content=Error(code=400, message=f"Failed to process JSON metadata: {str(e)}").model_dump_json()
+                content=f"Failed to process JSON metadata: {str(e)}"
             )
 
         # Successfully validated. Return the metadata and leave files in temp_dir.
@@ -237,8 +192,7 @@ async def upload_model_check(file: UploadFile):
 
         return Response(
             status_code=500,
-            content=Error(code=500, message=f"Internal server error during model check: {e}").model_dump_json()
-        )
+            content=f"Internal server error during model check: {e}")
 
     finally:
         # Note: We skip cleanup here. Cleanup is done in the 'proceed' step.
@@ -246,11 +200,7 @@ async def upload_model_check(file: UploadFile):
 
 
 # --- Model Upload (Proceed Phase) ---
-@router.get("/upload", response_model=None, responses={
-    '400': {'model': Error},
-    '409': {'model': Error},
-    '500': {'model': Error},
-})
+@router.get("/upload", response_model=None)
 async def upload_model_proceed(
         model_name: str = Query(
             default=...,
@@ -272,7 +222,7 @@ async def upload_model_proceed(
         logging.error(f"Unexpected error during config import: {str(e)}")
         return Response(
             status_code=500,
-            content=Error(code=500, message=f"Internal server error during config import.").model_dump_json())
+            content=f"Internal server error during config import.")
 
     try:
         # 1. Find the model in tmp directories
@@ -324,7 +274,7 @@ async def upload_model_proceed(
         if os.path.exists(os.path.join(model_storage_path, model_filename)) or model_name in MODELS:
             return Response(
                 status_code=409,
-                content=Error(code=409, message=f"Model '{model_name}' already exists").model_dump_json()
+                content=f"Model '{model_name}' already exists"
             )
 
         # 4. Copy the model file to permanent storage
@@ -342,7 +292,7 @@ async def upload_model_proceed(
             raw_json_metadata = f.read()
 
         # Re-parse/re-check the metadata before saving for safety and to get dict form
-        # We assume json_safety_check can handle both string and dict input, 
+        # We assume json_safety_check can handle both string and dict input,
         # but since we read the file here, it's a string.
         json_metadata = json_safety_check(raw_json_metadata)
 
@@ -364,8 +314,7 @@ async def upload_model_proceed(
         logging.error(f"Unexpected error during model upload: {str(e)}")
         return Response(
             status_code=500,
-            content=Error(code=500, message=f"Internal server error during model upload: {e}").model_dump_json()
-        )
+            content=f"Internal server error during model upload: {e}")
 
     finally:
         # 6. Cleanup temporary files
@@ -375,8 +324,3 @@ async def upload_model_proceed(
                 logging.info(f"Cleaned up temporary directory: {temp_dir_to_cleanup}")
             except Exception as e:
                 logging.error(f"Failed to cleanup temporary directory {temp_dir_to_cleanup}: {str(e)}")
-
-# Combine all new and old router definitions for completeness if needed in one file
-# from backendserver.bslib.singletons.dataset import Datasets # Placeholder if needed
-# router.post("/upload_folder/check", ...) # Existing /upload_folder/check endpoint
-# router.get("/upload_folder", ...)     # Existing /upload_folder endpoint

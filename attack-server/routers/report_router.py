@@ -1,105 +1,87 @@
+"""
+This router handles:
+ * the reports' PDF creation
+ * the upload of a report
+ * the creation of the benchmark
+"""
+import argparse
 import json
-import os
 from pathlib import Path
 
-from fastapi import APIRouter, Query, Body
-from nn_trust.core import Task
+from fastapi import APIRouter, Query, Body, Depends
 
-from lib.model import ModelReportProps, ReportInfoProps, ReportMetricsProps, ReportAttacksProps, \
-    UploadReportModel, BenchmarkModelProps
+from lib.model import BenchmarkModelProps
+from models.main_model import config_field
+from models.reports import ModelReportProps
+from routers.repository_router import get_info
 
 router = APIRouter(prefix="/report", tags=["datasets and models"])
 
 
-@router.get("/repository", response_model=list[ModelReportProps])
-def get_reports(
-        repo_path: str = Query(
-            default=...,
-            description="Path to the repository"),
+@router.get("/benchmarks", response_model=list[BenchmarkModelProps])
+def get_benchmarks(
+        id: str = Query(
+            default=None,
+            description="It represents the model's id that is tested. Hence It has to be excluded from the list."
+        ),
         tasks: str | list[str] | None = Query(
-            default="Classification",
+            default=None,
             description="It represents the task to filter the reports with."
         ),
         datasets: str | list[str] | None = Query(
             default=None,
             description="It represents the dataset to filter the reports with."
-        )
-) -> list[ModelReportProps]:
-    """
-    This function handle the fetching of all the reports from a certain path
-    It is also possible to filter the list of reports by:
-        * task
-        * dataset
-    """
-    out = []
-    if os.path.exists(repo_path):
-        if datasets and (not isinstance(datasets, list)):
-            datasets = [datasets]
-        if tasks and (not isinstance(tasks, list)):
-            tasks = [tasks]
-        for dirpath, dirnames, filenames in os.walk(repo_path):
-            if "report.json" in filenames:
-                report_path = os.path.join(dirpath, "report.json")
-                try:
-                    with open(report_path, "r", encoding="utf-8") as f:
-                        report = json.load(f)
-
-                    model_report = ModelReportProps(
-                        info=ReportInfoProps(**report['info']),
-                        metrics=ReportMetricsProps(**report['metrics']),
-                        attacks={atk: ReportAttacksProps(**atk_info) for atk, atk_info in
-                                 report['attacks'].items()}
-                    )
-                    # Filtering the reports that satisfies a specific task and dataset
-                    # If the task or the dataset is None then there is no filtering
-                    # if ((tasks is None or model_report.info.task in tasks)
-                    #         and (datasets is None or model_report.info.dataset in datasets)):
-                    out.append(model_report)
-
-                except (json.JSONDecodeError, OSError) as e:
-                    print(f"⚠️ Could not read {report_path}: {e}")
-    return out
-
-
-@router.get("/listBenchmarking", response_model=ModelReportProps)
-def get_list_benchmarks(
-        repo_path: str = Query(
-            default=...,
-            description="Path to the repository"),
-        tasks: str | list[str] | None = Query(
-            default=Task.Classification.name,
-            description="It represents the task to filter the reports with."
         ),
-        datasets: str | list[str] | None = Query(
-            default=None,
-            description="It represents the dataset to filter the reports with."
-        )
-) -> list:
+        repo_path: str | Path = Depends(config_field(attr_name="path_model_report_repo")),
+) -> list[BenchmarkModelProps]:
     """
     This function handle the creation of the list responsible for the ranking list.
     It is also possible to filter the list of reports by:
         * task
         * dataset
     """
-    list_reports = get_reports(
-        repo_path=repo_path,
+    if isinstance(repo_path, str):
+        repo_path: Path = Path(repo_path).expanduser()
+    list_reports: list[ModelReportProps] = get_info(
         tasks=tasks,
-        datasets=datasets
+        repo_path=repo_path,
+        file_checker="report.json",
+        base_model=ModelReportProps
     )
-    return [
-        BenchmarkModelProps(
-            name=report.info.name,
-            param=report.info.parameters,
-            task=report.info.task,
-            benchmark_id=report.info.id,
-            metrics=report.metrics.model_dump()
-        ) for report in list_reports
-    ]
+    print("num of reports ", len(list_reports))
+
+    if isinstance(tasks, str):
+        tasks = [tasks]
+    if isinstance(datasets, str):
+        datasets = [datasets]
+
+    out: list[BenchmarkModelProps] = []
+    for report in list_reports:
+        # There are three level of filtering
+        # 1) the id: the id of the selected model must not be inside the benchmark list
+        # 2) the task: the models inside the benchmark must satisfy the filter for the task
+        # 3) the dataset: the models inside the benchmark must satisfy the filter for the dataset
+        report_dataset = getattr(report.info, "dataset", None)
+        if ((id is None or report.info.id != id)
+                and (tasks is None or report.info.task in tasks)
+                and (datasets is None or report_dataset is None or report_dataset in datasets)):
+            out.append(
+                BenchmarkModelProps(
+                    name=report.info.name,
+                    param=report.info.parameters,
+                    task=report.info.task,
+                    benchmark_id=report.info.id,
+                    metrics=report.metrics.model_dump(exclude={"confusion_matrix"})
+                )
+            )
+    print("list of benchmarks ", out)
+
+    return out
 
 
 @router.post("/upload/model", response_model=ModelReportProps)
 def upload_report(
-        report: UploadReportModel = Body(...),
+        report: dict = Body(...),
         report_path: str = Query(
             default=...,
             description="Path to the repository's folder"
@@ -109,12 +91,8 @@ def upload_report(
     This function handles the uploading of the report.
     At this moment, it handles only the Models' report repository.
     """
-    print(report)
-    report = ModelReportProps(
-        info=ReportInfoProps(**report.info),
-        metrics=ReportMetricsProps(**report.metrics),
-        attacks={atk: ReportAttacksProps(**atk_value) for atk, atk_value in report.attacks.items()}
-    )
+    report: ModelReportProps = ModelReportProps.model_validate(report)
+
     new_report_path = Path(report_path) / report.info.id
     # create a folder for the new report
     new_report_path.mkdir(parents=True, exist_ok=True)
@@ -125,3 +103,18 @@ def upload_report(
         json.dump(report.model_dump(), f, indent=2)  # or report.dict() for older Pydantic
 
     return report
+
+
+def generate_pdf_report(
+        model_path: str = Query(
+            default=...,
+            description="Path to the repository's folder"
+        )
+):
+    """
+    This function takes all the necessary information for generating the model's report.
+    """
+    try:
+        report: ModelReportProps = ModelReportProps.model_validate(report)
+    except Exception as e:
+        raise ValueError("The model that has been uploaded is not valid.")

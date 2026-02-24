@@ -6,7 +6,6 @@ from typing import Union
 from fastapi import HTTPException
 from pydantic import ValidationError
 
-from lib.model import ModelConfig
 
 CHUNK_SIZE = 4096
 ALLOWED_MIMES = {"application/json"}
@@ -57,7 +56,6 @@ def json_safety_check(metadata: Union[str, dict]) -> dict:
 
     # Validate against Pydantic model
     try:
-        validated = ModelConfig.model_validate(obj)
         logging.info("JSON validation successful")
     except ValidationError as e:
         logging.error(f"Metadata validation failed: {e}")

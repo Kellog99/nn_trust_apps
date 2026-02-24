@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="VcsDirectoryMappings">
+    <mapping directory="$PROJECT_DIR$/.." vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/../attack-server/submodules/data-quality_gui" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/../attack-server/submodules/nn_trust" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/../benchmarking/submodules/nn_trust" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/../image-attack/submodules/nn_trust" vcs="Git" />
+  </component>
+</project>

@@ -5,12 +5,15 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="22d92992-d96d-425b-81b7-4e977d138887" name="Changes" comment="">
+      <change afterPath="$PROJECT_DIR$/../report/pdf_sections/attack_section.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/../report/pdf_sections/header.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/../report/pdf_sections/info_section.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/../report/pdf_sections/metric_section.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/../report/pdf_sections/utils.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/../report/report.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../README.md" beforeDir="false" afterPath="$PROJECT_DIR$/../README.md" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/app.py" beforeDir="false" afterPath="$PROJECT_DIR$/app.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/routers/report_router.py" beforeDir="false" afterPath="$PROJECT_DIR$/routers/report_router.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../benchmarking/benchmark_utils/evaluator.py" beforeDir="false" afterPath="$PROJECT_DIR$/../benchmarking/benchmark_utils/evaluator.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../benchmarking/submodules/nn_trust" beforeDir="false" afterPath="$PROJECT_DIR$/../benchmarking/submodules/nn_trust" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../image-attack/submodules/nn_trust" beforeDir="false" afterPath="$PROJECT_DIR$/../image-attack/submodules/nn_trust" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -40,15 +43,20 @@
   &quot;keyToString&quot;: {
     &quot;ModuleVcsDetector.initialDetectionPerformed&quot;: &quot;true&quot;,
     &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
-    &quot;git-widget-placeholder&quot;: &quot;fix/interface__backend&quot;,
+    &quot;git-widget-placeholder&quot;: &quot;dev/report__refactoring&quot;,
     &quot;last_opened_file_path&quot;: &quot;/home/andrea/Desktop/lavoro/nn_trust_apps&quot;,
     &quot;settings.editor.selected.configurable&quot;: &quot;preferences.lookFeel&quot;
   }
 }</component>
+  <component name="RecentsManager">
+    <key name="MoveFile.RECENT_KEYS">
+      <recent name="$PROJECT_DIR$/utils" />
+    </key>
+  </component>
   <component name="SharedIndexes">
     <attachedChunks>
       <set>
-        <option value="bundled-python-sdk-7bb8055f9097-cbfc7b97e6b2-com.jetbrains.pycharm.community.sharedIndexes.bundled-PC-252.28238.29" />
+        <option value="bundled-python-sdk-4762d8aabb82-6d6dccd035ac-com.jetbrains.pycharm.pro.sharedIndexes.bundled-PY-253.30387.173" />
       </set>
     </attachedChunks>
   </component>
@@ -63,6 +71,21 @@
     <servers />
   </component>
   <component name="Vcs.Log.Tabs.Properties">
+    <option name="RECENT_FILTERS">
+      <map>
+        <entry key="Branch">
+          <value>
+            <list>
+              <RecentGroup>
+                <option name="FILTER_VALUES">
+                  <option value="develop" />
+                </option>
+              </RecentGroup>
+            </list>
+          </value>
+        </entry>
+      </map>
+    </option>
     <option name="TAB_STATES">
       <map>
         <entry key="MAIN">

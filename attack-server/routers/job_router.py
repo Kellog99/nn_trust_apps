@@ -1,41 +1,18 @@
-import timm
-import torch
-from fastapi import APIRouter, Response, Request, HTTPException
-from fastapi.responses import JSONResponse
 import base64
 import importlib
-import io
 import json
 import logging
 import os
-import time
-from typing import Union
+
 import ray
-import torch
-from PIL import Image
+import requests
 from fastapi import APIRouter, Response
 from fastapi import Body, Query
 from fastapi.responses import JSONResponse
-from nn_trust.attack.attack_factory import EvasionAttackFactory as EAF
-from nn_trust.core import Task, ModelAdapter
-from lib.model import SingleAttackOutput, SingleAttackProps, Error
-import base64
-import importlib
-import json
-import logging
-import os
-from pathlib import Path
-from typing import Union
-import ray
-from torchmetrics.image import StructuralSimilarityIndexMeasure
-from torchvision import transforms
+
 from lib.disk_reader import find_model_and_task_dir
-from lib.model import Error, ExecutionConfig, SingleAttackOutput, SingleAttackProps
-from routers.dataset_router import get_datasets
-from routers.model_router import get_models
-from routers.utils import find_image
-from nn_trust.models.model_utils import load_model
-from .utils import b64str_to_pilimage, pilimage_to_b64str, execute_single_image_attack
+from lib.model import ExecutionConfig
+from utils.utils import find_image
 
 benchmarking = importlib.import_module("benchmarking")
 
@@ -96,15 +73,29 @@ def get_jobs(id: str = Query(None)):
         logging.error(f"Unexpected error during get jobs: {str(e)}")
         return Response(
             status_code=500,
-            content=Error(code=500, message=f"Unexpected error during get jobs").model_dump_json())
+            content=f"Unexpected error during get jobs"
+        )
 
 
 # --- Results --- #
 @router.get("/report/getResult")
-def get_jobs_results(id: str = Query(None),
-                     dataset: str = Query(None),
-                     model: str = Query(None),
-                     pdf_report: bool = Query(None)):
+def get_jobs_results(
+        id: str = Query(
+            default=None,
+            description="report id"
+        ),
+        dataset: str = Query(
+            default=None,
+            description="Dataset of the results"
+        ),
+        model: str = Query(
+            default=None,
+            description="Model that has to filter for the results"
+        ),
+        pdf_report: bool = Query(
+            default=False,
+            description="This flag tells whether a pdf report has to be done."
+        )):
     """
     Get a TITANN benchmark report job result.
     """
@@ -119,76 +110,55 @@ def get_jobs_results(id: str = Query(None),
             logging.error(f"Benchmark {benchmark_id} not found")
             return Response(
                 status_code=404,
-                content=Error(code=404, message=f"Benchmark {benchmark_id} not found").model_dump_json())
+                content=f"Benchmark {benchmark_id} not found"
+            )
+        benchmarking.postprocess_benchmark_run_results(task_dir)
+        with open(os.path.join(model_dir, 'info.json'), "r", encoding="utf-8") as f:
+            info = json.load(f)
+        info["dataset"] = str(model_dir).split(os.sep)[-2]
+        info["id"] = benchmark_id
+        info["task"] = "Classification"
 
-        if False:
-            with open(os.path.join(task_dir, "report.json"), 'r', encoding='utf-8') as f:
-                report_data = json.load(f)
-            prototype = None
-        else:
-            benchmarking.postprocess_benchmark_run_results(task_dir)
-            with open(os.path.join(model_dir, 'info.json'), "r", encoding="utf-8") as f:
-                info = json.load(f)
-            #info["tool"] = "nntrust"
-            info["dataset"] = str(model_dir).split(os.sep)[-2]
-            info["id"] = benchmark_id
-            info["task"]="Classification"
+        # ----# thumbnail
+        try:
+            prototype = json.loads(requests.get(
+                f"http://{os.getenv('DQ_HOST')}:{os.getenv('DQ_PORT')}/getDataset?dataset=animals").text)[
+                "prototype"]["datas"][0]
+        except Exception as e:
+            prototype = find_image(os.path.join(os.environ.get("DATASETS_REPO"), str(model_dir).split(os.sep)[-2]))
+        # ----#
 
-            # ----# thumbnail
-            try:
-                import requests
-                prototype = json.loads(requests.get(
-                    f"http://{os.getenv('DQ_HOST')}:{os.getenv('DQ_PORT')}/getDataset?dataset=animals").text)[
-                    "prototype"]["datas"][0]
-            except Exception as e:
-                prototype = find_image(os.path.join(os.environ.get("DATASETS_REPO"), str(model_dir).split(os.sep)[-2]))
-            # ----#
+        with open(os.path.join(model_dir, 'aggregate_statistics.json'), "r", encoding="utf-8") as f:
+            aggregate = json.load(f)
+            aggregate["params"] = info["parameters"]
 
-            with open(os.path.join(model_dir, 'aggregate_statistics.json'), "r", encoding="utf-8") as f:
-                aggregate = json.load(f)
-                aggregate["params"] = info["parameters"]
-                #results = benchmarking.collect_dataset_aggregates_with_info(
-                #    base_dir=os.environ.get("BENCHMARK_OUTPUT_DIR"),
-                #    dataset=str(model_dir).split(os.sep)[-2],
-                #    keep_latest_only=False,
-                #)
+        statistics = {}
+        for entry in os.listdir(model_dir):
+            entry_path = os.path.join(model_dir, entry)
+            if os.path.isdir(entry_path):
+                stat_file = os.path.join(entry_path, "statistics.json")
+                if os.path.exists(stat_file) and os.path.isfile(stat_file):
+                    try:
+                        with open(stat_file, "r", encoding="utf-8") as sf:
+                            sf_data = json.load(sf)
+                            sf_data["name"] = router.state.attacks[
+                                entry.lower()].name if entry in router.state.attacks else entry
+                            statistics[entry.upper()] = sf_data
+                    except Exception as e:
+                        logging.warning(f"Could not load statistics.json in '{entry_path}': {e}")
 
-                #out = benchmarking.transform_to_benchmark(results, task="classification")
-                #out = benchmarking.enrich_with_ranks(out)
-                #out = benchmarking.extract_rank_metrics(out, str(model_dir).split(os.sep)[-1])
-                #num_b = len(results)
-                #out["total benchmarks"] = num_b
-                #aggregate = aggregate | out
+        report_data = {
+            "info": info,
+            "metrics": aggregate,
+            "attacks": statistics
+        }
+        if prototype:
+            report_data["prototype"] = prototype
 
-            statistics = {}
-            for entry in os.listdir(model_dir):
-                entry_path = os.path.join(model_dir, entry)
-                if os.path.isdir(entry_path):
-                    stat_file = os.path.join(entry_path, "statistics.json")
-                    if os.path.exists(stat_file) and os.path.isfile(stat_file):
-                        try:
-                            with open(stat_file, "r", encoding="utf-8") as sf:
-                                sf_data = json.load(sf)
-                                sf_data["name"] = router.state.attacks[entry.lower()].name if entry in router.state.attacks else entry
-                                #sf_data["risk"] = 0.5
-                                #sf_data["num_queries"] = 1
-                                #sf_data["power"] = 0.5
-                                statistics[entry.upper()] = sf_data
-                        except Exception as e:
-                            logging.warning(f"Could not load statistics.json in '{entry_path}': {e}")
+        with open(os.path.join(task_dir, "report.json"), "w", encoding="utf-8") as f:
+            json.dump(report_data, f)
 
-            report_data = {
-                "info": info,
-                "metrics": aggregate,
-                "attacks": statistics
-            }
-            if prototype:
-                report_data["prototype"] = prototype
-            
-            with open(os.path.join(task_dir, "report.json"), "w", encoding="utf-8") as f:
-                json.dump(report_data, f)
-
-        if pdf_report and bool(pdf_report) == True:
+        if pdf_report:
             generator = benchmarking.AdversarialReportGenerator(logo_path='./resources/logo_leonardo.png')
             report_file = './resources/adversarial_report.pdf'
             generator.generate(report_data, report_file)
@@ -203,12 +173,13 @@ def get_jobs_results(id: str = Query(None),
         logging.error(f"Unexpected error during get result: {str(e)}")
         return Response(
             status_code=500,
-            content=Error(code=500, message=f"Unexpected error during get result").model_dump_json())
+            content=f"Unexpected error during get result"
+        )
 
 
 # --- Start --- #
 @router.post("/start", response_model=str)
-async def start_benchmark_job(body: ExecutionConfig = Body(...)) -> Union[str, Error]:
+async def start_benchmark_job(body: ExecutionConfig = Body(...)) -> str | Response:
     """
     Start a new TITANN benchmark job.
     """
@@ -226,8 +197,8 @@ async def start_benchmark_job(body: ExecutionConfig = Body(...)) -> Union[str, E
             logging.error(f"Can't find dataset metadata in the repository for dataset:{dataset_name}")
             return Response(
                 status_code=404,
-                content=Error(code=404,
-                              message=f"Can't find dataset metadata in the repository for dataset:{dataset_name}").model_dump_json())
+                content=f"Can't find dataset metadata in the repository for dataset:{dataset_name}"
+            )
 
         benchmark_config = {}
         benchmark_config['options'] = {
@@ -242,7 +213,7 @@ async def start_benchmark_job(body: ExecutionConfig = Body(...)) -> Union[str, E
 
         model_file_path = os.path.join(os.environ.get('MODEL_REPO'), model_name)
         config_models = {
-            "model_path":model_file_path
+            "model_path": model_file_path
         }
 
         config_dataset["source_path"] = os.path.join(dataset_name, "data")
@@ -270,47 +241,5 @@ async def start_benchmark_job(body: ExecutionConfig = Body(...)) -> Union[str, E
     except Exception as e:
         logging.error(f"Unexpected error during job start: {str(e)}")
         raise e
-        return Response(
-            status_code=500,
-            content=Error(code=500, message=f"Unexpected error during job start").model_dump_json())
 
 
-# --- Single attack --- #
-@router.post("/attack")
-async def startSingleAttack(body: SingleAttackProps = Body(...)) -> SingleAttackOutput | Error:
-    """
-    Start a new TITANN attack on single image job.
-    """
-    model_repo_path = Path(os.environ.get("MODEL_REPO"))
-    pil_image = b64str_to_pilimage(body.image)
-    model_name = body.model_name
-    model_path = model_repo_path / model_name
-
-    model = load_model(model_path=model_path)
-
-    atk_results = execute_single_image_attack(
-        model=model,
-        model_input_size=model.input_size,
-        img=pil_image,
-        num_classes=model.num_classes,
-        attack_id=body.attack.id,
-        attack_params={param.id: param.default for param in body.attack.parameters}
-    )
-    adv_img_base64 = pilimage_to_b64str(atk_results["x_adv"])
-    pert_img_base64 = pilimage_to_b64str(atk_results["pert"])
-
-    return SingleAttackOutput(
-        x=body.image,
-        adv_perturbation=pert_img_base64,
-        x_adv=adv_img_base64,
-        original_prediction=atk_results["y"],
-        adversarial_prediction=atk_results["y_adv"],
-        confidence={
-            "adversarial": [],
-            "original": []
-        },
-        advance_metrics={
-            "ssim": atk_results["metrics"]["ssim"],
-            "distance": atk_results["metrics"]["distance"],
-            "executionTime": atk_results["metrics"]["execution_time"],
-        })

@@ -56,48 +56,103 @@ PORT=8000
 WORKERS=1
 ```
 
-### Repository
+## Repository
 
-The repositories play an important role for the application because they collect all the results that have been produced
+The repositories play a fundamental role in the application because they collect all the results that have been produced
 over the time. There are mainly 3 types of repositories:
 
-1. Model Repository
-2. Dataset Repository
-3. Report Repository
+1. **Model Repository**: it contains all the models that are uploaded.
+2. **Dataset Repository**: it contains all the datasets that are uploaded.
+3. **Report Repository**: it contains all the reports that are done.
 
-Hence, it is important to define their path:
+The model and dataset repository have a straightforward organization: each folder corresponds to a model or dataset with
+its information. Here below, it it shown an example of the **model repository**. The case associated with the **dataset
+repository** is the same.
 
-```bash
-MODEL_REPO=/path/to/your/model_repo
-DATASETS_REPO=/path/to/your/datasets
-```
-
-#### Model repository
-
-This contains all the models that have been given to the application. The repository is a folder of folders whose
-contain the actual model and its information. The structure is given by
-
-```
+```cmd
 model_repository/
-├── model_1/                        # Folder containing the model 1
-    ├── model.pth                   # actual model
-    ├── info.json                   # Json containing the model's information
-└── ...                             
+├── model_1/                              # Folder containing the model 1
+│         ├── model.pth                   # actual model
+│         └── info.json                   # Json containing the model's information
+└── model_2    
+          └── ...                         
 ```
 
-## Dataset and Model Structure
+**Remark**\
+Despite the multiple types of models (.pth, .py, .onnx, etc) or dataset (folder, YOLO, etc.) the only thing that is in
+common for this structure is the `info.json` file. This file allows to set the main important features of the object
+that has to be loaded.
 
-### Dataset Repository Structure
+The **report repository** has a different structure due to its creation. Despite a model is trained on a specific
+dataset, it could happen that it is tested on different datasets that could not be included in the original one.
+For this reason, the structure that this repository holds is based on
 
-Datasets must follow the data quality structure format:
-
+```cmd
+report_repository/
+└── id_run1/                                        # test's id
+          ├── dataset_id_1                          # dataset that has been used for the test
+          │         ├── model_1                     # model's id that has been tested
+          │         │         ├── report.json       # Actual report with all the metrics that have been computed
+          │         │         └── examples/         # Folder containing some examples that are collected 
+          │         └── model_2
+          │                   ├── report.json
+          │                   └── examples/                                      
+          └── dataset_id_2                        
 ```
-dataset_folder_name/
-├── data/                           # Folder containing dataset files
-└── dataset_folder_name.json        # Metadata file
-```
 
-### Dataset Metadata Example
+## Info file
+
+The `info.json` file is common in the model and dataset repository. This file stores all the main information that
+allows a proper use of the stored elements. Below are represented the format of this file among the two cases.
+
+```python
+from typing import Optional, List, Literal
+
+from pydantic import BaseModel
+
+
+class Info(BaseModel):
+    """
+    This class contains all the information common to the model and dataset `info.json` file
+    """
+    id: str
+    name: str
+    task: str
+    domain: str
+    input_dimensionality: List[int]
+
+    # Optional information that describes the file itself
+    classes: Optional[int]
+    file_size: Optional[float]
+    date: Optional[str]
+    image: Optional[str]
+    description: Optional[str]
+    repository: Optional[str]
+
+
+# Class for the dataset's info.json file
+class DatasetInfo(Info):
+    num_sample: Optional[int]
+    label_dict: Optional[dict[int, str]]
+
+
+# Class for the model's info.json file
+class ModelInfo(Info):
+    dataset: Optional[str]
+    parameters: Optional[int]
+
+    api: Optional[str]
+
+    model_type: Literal[
+        "plain",
+        "timm",
+        "HuggingFace",
+        "torch_script",
+        "torch_dynamo",
+        "onnx",
+        "api"
+    ] 
+```
 
 The metadata JSON file must include the following fields:
 
