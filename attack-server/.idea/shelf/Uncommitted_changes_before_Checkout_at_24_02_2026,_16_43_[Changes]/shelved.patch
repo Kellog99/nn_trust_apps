@@ -1,0 +1,55 @@
+Index: .idea/workspace.xml
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.BaseRevisionTextPatchEP
+<+><?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<project version=\"4\">\n  <component name=\"AutoImportSettings\">\n    <option name=\"autoReloadType\" value=\"SELECTIVE\" />\n  </component>\n  <component name=\"ChangeListManager\">\n    <list default=\"true\" id=\"22d92992-d96d-425b-81b7-4e977d138887\" name=\"Changes\" comment=\"\">\n      <change beforePath=\"$PROJECT_DIR$/.idea/workspace.xml\" beforeDir=\"false\" afterPath=\"$PROJECT_DIR$/.idea/workspace.xml\" afterDir=\"false\" />\n      <change beforePath=\"$PROJECT_DIR$/README.md\" beforeDir=\"false\" afterPath=\"$PROJECT_DIR$/README.md\" afterDir=\"false\" />\n      <change beforePath=\"$PROJECT_DIR$/lib/model.py\" beforeDir=\"false\" afterPath=\"$PROJECT_DIR$/lib/model.py\" afterDir=\"false\" />\n      <change beforePath=\"$PROJECT_DIR$/lib/validator.py\" beforeDir=\"false\" afterPath=\"$PROJECT_DIR$/lib/validator.py\" afterDir=\"false\" />\n      <change beforePath=\"$PROJECT_DIR$/models/info.py\" beforeDir=\"false\" afterPath=\"$PROJECT_DIR$/models/info.py\" afterDir=\"false\" />\n      <change beforePath=\"$PROJECT_DIR$/models/main_model.py\" beforeDir=\"false\" afterPath=\"$PROJECT_DIR$/models/main_model.py\" afterDir=\"false\" />\n      <change beforePath=\"$PROJECT_DIR$/models/reports.py\" beforeDir=\"false\" afterPath=\"$PROJECT_DIR$/models/reports.py\" afterDir=\"false\" />\n      <change beforePath=\"$PROJECT_DIR$/routers/info_router.py\" beforeDir=\"false\" afterPath=\"$PROJECT_DIR$/routers/info_router.py\" afterDir=\"false\" />\n      <change beforePath=\"$PROJECT_DIR$/routers/model_router.py\" beforeDir=\"false\" afterPath=\"$PROJECT_DIR$/routers/model_router.py\" afterDir=\"false\" />\n      <change beforePath=\"$PROJECT_DIR$/routers/report_router.py\" beforeDir=\"false\" afterPath=\"$PROJECT_DIR$/routers/report_router.py\" afterDir=\"false\" />\n      <change beforePath=\"$PROJECT_DIR$/routers/repository_router.py\" beforeDir=\"false\" afterPath=\"$PROJECT_DIR$/routers/repository_router.py\" afterDir=\"false\" />\n    </list>\n    <option name=\"SHOW_DIALOG\" value=\"false\" />\n    <option name=\"HIGHLIGHT_CONFLICTS\" value=\"true\" />\n    <option name=\"HIGHLIGHT_NON_ACTIVE_CHANGELIST\" value=\"false\" />\n    <option name=\"LAST_RESOLUTION\" value=\"IGNORE\" />\n  </component>\n  <component name=\"FileTemplateManagerImpl\">\n    <option name=\"RECENT_TEMPLATES\">\n      <list>\n        <option value=\"Python Script\" />\n      </list>\n    </option>\n  </component>\n  <component name=\"Git.Settings\">\n    <option name=\"RECENT_GIT_ROOT_PATH\" value=\"$PROJECT_DIR$/..\" />\n    <option name=\"ROOT_SYNC\" value=\"DONT_SYNC\" />\n  </component>\n  <component name=\"ProjectColorInfo\">{\n  &quot;associatedIndex&quot;: 6\n}</component>\n  <component name=\"ProjectId\" id=\"360ff7Nx4We01fCq02j9vKJvjOc\" />\n  <component name=\"ProjectViewState\">\n    <option name=\"hideEmptyMiddlePackages\" value=\"true\" />\n    <option name=\"showLibraryContents\" value=\"true\" />\n  </component>\n  <component name=\"PropertiesComponent\">{\n  &quot;keyToString&quot;: {\n    &quot;ModuleVcsDetector.initialDetectionPerformed&quot;: &quot;true&quot;,\n    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,\n    &quot;git-widget-placeholder&quot;: &quot;dev/report__refactoring&quot;,\n    &quot;last_opened_file_path&quot;: &quot;/home/andrea/Desktop/lavoro/nn_trust_apps&quot;,\n    &quot;settings.editor.selected.configurable&quot;: &quot;preferences.lookFeel&quot;\n  }\n}</component>\n  <component name=\"RecentsManager\">\n    <key name=\"MoveFile.RECENT_KEYS\">\n      <recent name=\"$PROJECT_DIR$/utils\" />\n    </key>\n  </component>\n  <component name=\"SharedIndexes\">\n    <attachedChunks>\n      <set>\n        <option value=\"bundled-python-sdk-4762d8aabb82-6d6dccd035ac-com.jetbrains.pycharm.pro.sharedIndexes.bundled-PY-253.30387.173\" />\n      </set>\n    </attachedChunks>\n  </component>\n  <component name=\"TaskManager\">\n    <task active=\"true\" id=\"Default\" summary=\"Default task\">\n      <changelist id=\"22d92992-d96d-425b-81b7-4e977d138887\" name=\"Changes\" comment=\"\" />\n      <created>1764148509563</created>\n      <option name=\"number\" value=\"Default\" />\n      <option name=\"presentableId\" value=\"Default\" />\n      <updated>1764148509563</updated>\n    </task>\n    <servers />\n  </component>\n  <component name=\"Vcs.Log.Tabs.Properties\">\n    <option name=\"RECENT_FILTERS\">\n      <map>\n        <entry key=\"Branch\">\n          <value>\n            <list>\n              <RecentGroup>\n                <option name=\"FILTER_VALUES\">\n                  <option value=\"develop\" />\n                </option>\n              </RecentGroup>\n            </list>\n          </value>\n        </entry>\n      </map>\n    </option>\n    <option name=\"TAB_STATES\">\n      <map>\n        <entry key=\"MAIN\">\n          <value>\n            <State />\n          </value>\n        </entry>\n      </map>\n    </option>\n  </component>\n</project>
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/.idea/workspace.xml b/.idea/workspace.xml
+--- a/.idea/workspace.xml	(revision edeaf443b6825e92c8b7e2413b07096a4c54243c)
++++ b/.idea/workspace.xml	(date 1771947467948)
+@@ -4,19 +4,7 @@
+     <option name="autoReloadType" value="SELECTIVE" />
+   </component>
+   <component name="ChangeListManager">
+-    <list default="true" id="22d92992-d96d-425b-81b7-4e977d138887" name="Changes" comment="">
+-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+-      <change beforePath="$PROJECT_DIR$/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
+-      <change beforePath="$PROJECT_DIR$/lib/model.py" beforeDir="false" afterPath="$PROJECT_DIR$/lib/model.py" afterDir="false" />
+-      <change beforePath="$PROJECT_DIR$/lib/validator.py" beforeDir="false" afterPath="$PROJECT_DIR$/lib/validator.py" afterDir="false" />
+-      <change beforePath="$PROJECT_DIR$/models/info.py" beforeDir="false" afterPath="$PROJECT_DIR$/models/info.py" afterDir="false" />
+-      <change beforePath="$PROJECT_DIR$/models/main_model.py" beforeDir="false" afterPath="$PROJECT_DIR$/models/main_model.py" afterDir="false" />
+-      <change beforePath="$PROJECT_DIR$/models/reports.py" beforeDir="false" afterPath="$PROJECT_DIR$/models/reports.py" afterDir="false" />
+-      <change beforePath="$PROJECT_DIR$/routers/info_router.py" beforeDir="false" afterPath="$PROJECT_DIR$/routers/info_router.py" afterDir="false" />
+-      <change beforePath="$PROJECT_DIR$/routers/model_router.py" beforeDir="false" afterPath="$PROJECT_DIR$/routers/model_router.py" afterDir="false" />
+-      <change beforePath="$PROJECT_DIR$/routers/report_router.py" beforeDir="false" afterPath="$PROJECT_DIR$/routers/report_router.py" afterDir="false" />
+-      <change beforePath="$PROJECT_DIR$/routers/repository_router.py" beforeDir="false" afterPath="$PROJECT_DIR$/routers/repository_router.py" afterDir="false" />
+-    </list>
++    <list default="true" id="22d92992-d96d-425b-81b7-4e977d138887" name="Changes" comment="" />
+     <option name="SHOW_DIALOG" value="false" />
+     <option name="HIGHLIGHT_CONFLICTS" value="true" />
+     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
+@@ -41,15 +29,15 @@
+     <option name="hideEmptyMiddlePackages" value="true" />
+     <option name="showLibraryContents" value="true" />
+   </component>
+-  <component name="PropertiesComponent">{
+-  &quot;keyToString&quot;: {
+-    &quot;ModuleVcsDetector.initialDetectionPerformed&quot;: &quot;true&quot;,
+-    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
+-    &quot;git-widget-placeholder&quot;: &quot;dev/report__refactoring&quot;,
+-    &quot;last_opened_file_path&quot;: &quot;/home/andrea/Desktop/lavoro/nn_trust_apps&quot;,
+-    &quot;settings.editor.selected.configurable&quot;: &quot;preferences.lookFeel&quot;
++  <component name="PropertiesComponent"><![CDATA[{
++  "keyToString": {
++    "ModuleVcsDetector.initialDetectionPerformed": "true",
++    "RunOnceActivity.ShowReadmeOnStart": "true",
++    "git-widget-placeholder": "dev/repository__refactoring",
++    "last_opened_file_path": "/home/andrea/Desktop/lavoro/nn_trust_apps",
++    "settings.editor.selected.configurable": "preferences.lookFeel"
+   }
+-}</component>
++}]]></component>
+   <component name="RecentsManager">
+     <key name="MoveFile.RECENT_KEYS">
+       <recent name="$PROJECT_DIR$/utils" />

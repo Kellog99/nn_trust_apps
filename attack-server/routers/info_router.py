@@ -1,10 +1,11 @@
 import logging
 
 import torch
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request, Depends, Body
 
 from lib.model import RegisteredObject
 from models.main_model import ServerConfig, SharableVariables
+from models.main_model import config_field
 from nn_trust.attack.attack_factory import EvasionAttackFactory as EAF, AttackInfo
 from nn_trust.core import Task
 from nn_trust.evaluation.statistic_factory import StatisticsFactory as SF, InfoStatistic
@@ -14,13 +15,13 @@ router = APIRouter(prefix="/info")
 
 
 @router.get("/attacks")
-def get_attacks_info(request: Request) -> dict[str, RegisteredObject]:
+def get_attacks_info(
+        excluded_attacks: list[str] = Depends(config_field(attr_name="excluded_attacks"))
+) -> dict[str, RegisteredObject]:
     """
     Get the list of all the available attacks for a specific task.
     """
-
     out: dict[str, RegisteredObject] = {}
-    excluded_attacks: list[str] = request.app.state.config.excluded_attacks
     for atk in EAF.get_list_classes(task={Task.Classification}):
         if atk in excluded_attacks:
             continue
@@ -45,14 +46,15 @@ def get_attacks_info(request: Request) -> dict[str, RegisteredObject]:
 
 
 @router.get("/metrics")
-def get_statistics_info(request: Request) -> dict[str, RegisteredObject]:
+def get_statistics_info(
+        excluded_statistics: list[str] = Depends(config_field(attr_name="excluded_statistics"))
+) -> dict[str, RegisteredObject]:
     """
     Get the list of all the available statistics that can be measured during a benchmark
     """
     try:
 
         out: dict[str, RegisteredObject] = {}
-        excluded_statistics: list[str] = request.app.state.config.excluded_statistics
 
         for stat in SF.get_list_classes(task={Task.Classification}):
             if stat in excluded_statistics:
@@ -109,13 +111,37 @@ def get_devices() -> list[str]:
 
 
 @router.get("/variables")
-def get_variables_info(request: Request) -> SharableVariables:
+def get_variables_info(
+        config: ServerConfig = Depends(config_field(attr_name=None))
+) -> SharableVariables:
+    """
+    This function handles the sharing of the backend variables with the frontend.
+
+    Args:
+        config:
+    """
     # These are all the variables that have been set so far
-    out: ServerConfig = request.app.state.config
-    return SharableVariables.model_validate(out.model_dump())
+    return SharableVariables.model_validate(config.model_dump())
 
 
 @router.post("/saveConfiguration")
-def save_configuration(new_config: dict, request: Request) -> ServerConfig:
-    request.app.state.config = ServerConfig(**new_config)
+def save_configuration(
+        request: Request,
+        new_config: dict = Body(...)
+) -> ServerConfig:
+    """
+    This function handles the saving of the  new configuration file after the modifications on the frontend.
+    In this case, it is impossible to avoid the `Request` in the input because it is its state that has to be changed
+
+    Args:
+        request:  fastapi state
+        new_config: New configuration file
+
+    Returns:
+
+    """
+    config: ServerConfig = request.app.state.config
+    for key, value in new_config.items():
+        setattr(config, key, value)
+    request.app.state.config = config
     return request.app.state.config

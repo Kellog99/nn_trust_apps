@@ -107,6 +107,13 @@ def parsed_argument(model_class) -> Namespace:
     """Add all fields from a Pydantic model to an argument parser"""
     parser = argparse.ArgumentParser()
 
+    parser.add_argument(
+        f"--configuration_file",
+        "-cf",
+        type=str,
+        help="Path to a configuration file."
+    )
+
     for field_name, field_info in model_class.model_fields.items():
         default = field_info.default
         help_text = field_info.description or f"{field_name} parameter"

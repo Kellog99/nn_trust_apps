@@ -1,4 +1,5 @@
-import logging
+import json
+from pathlib import Path
 
 import uvicorn
 from fastapi import FastAPI
@@ -10,57 +11,58 @@ from routers.info_router import router
 
 ########### Environmental variables ###########
 args = parsed_argument(ServerConfig)
-config = ServerConfig(**vars(args))
+if args.configuration_file:
+    cnf_path: Path = Path(args.configuration_file).expanduser()
+    if cnf_path.exists():
+        with open(args.configuration_file, "r") as f:
+            file_config = json.load(f)
+        config = ServerConfig.model_validate(file_config)
+    else:
+        raise ValueError("The path to the configuration file does not exist.")
+else:
+    config = ServerConfig(**vars(args))
+
+
 ###############################################
 
-app = FastAPI(
-    title='TITANN backend',
-    description='This is the TITANN backend.',
-    servers=[{'url': 'https://titann.swagger.io/api/v3'}],
-)
-app.state.config = config
-app.include_router(router)
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-# Include routers
-app.include_router(api_router)
+def create_app() -> FastAPI:
+    """
+    This function is for using the uvicorn factory function.
+    When uvicorn starts multiple workers:
+      *  Each worker is a separate process
+      *  Each worker imports your code independently
+      *  Each worker calls your factory function to create its own app instance
+      *  This ensures each worker has properly initialized state
+    """
+    app = FastAPI(
+        title='TITANN backend',
+        description='This is the TITANN backend.',
+        servers=[{'url': 'https://titann.swagger.io/api/v3'}],
+    )
+    app.include_router(router)
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+    # Include routers
+    app.include_router(api_router)
+    app.state.config = config
 
-############### LOGGER ###############
-logging.basicConfig(level=logging.WARNING)
-logger = logging.getLogger(__name__)
+    @app.get("/")
+    def root():
+        return {"message": "Welcome to the TITANN Job API"}
 
-
-#######################################
-
-@app.get("/")
-def root():
-    return {"message": "Welcome to the TITANN Job API"}
+    return app
 
 
 if __name__ == "__main__":
-    logging.info(
-        f"Starting FastAPI app with internal storage: {config.path_ds_repo}, {config.path_model_repo}"
-    )
-    logging.info(
-        f"Max upload sizes - Model: {config.max_model_size_upload}MB, JSON: {config.max_model_json_size_upload}MB"
-    )
-    logging.info(
-        f"Server will run on {config.host}:{config.port} with {config.workers} worker(s)"
-    )
-
-
     uvicorn.run(
-        "app:app",
+        "app:create_app",
         host=config.host,
         port=config.port,
-        workers=config.workers
+        workers=config.workers,
+        factory=True
     )
-
-
-
-
