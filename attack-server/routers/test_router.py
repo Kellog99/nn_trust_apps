@@ -1,3 +1,5 @@
+from pprint import pprint
+
 import torch
 from fastapi import APIRouter
 from fastapi import Body, Query
@@ -37,6 +39,7 @@ async def single_attack(
     """
     ################## MODEL ##################
     model_info: ModelInfo = body.model
+    pprint(model_info)
     model = load_model(
         model_type=model_info.model_type,
         model_path=model_info.repository,

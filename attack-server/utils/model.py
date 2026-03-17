@@ -63,22 +63,39 @@ def load_model(
     ModelAdapter
         A unified adapter wrapping the loaded model.
     """
-    if isinstance(model_path, str):
-        model_path = Path(model_path).expanduser()
+    if isinstance(model_path, (str, Path)):
+        if isinstance(model_path, str):
+            model_path: Path = Path(model_path).expanduser()
+    else:
+        raise ValueError(
+            f"The type associate to `model_path`, {type(model_path)} is not supported."
+        )
 
     model = None
     match model_type:
         case "plain":
-            # This is the case where a plain model is given in a pth file
-            # hence it is sufficient to load the pth
             if model_path is None:
-                raise ValueError("The model's class does not exist in the python file.")
-            model_checkpoint_path = model_path / "model.pth"
-            assert model_checkpoint_path.exists() and model_checkpoint_path.is_file()
+                raise ValueError("model_path must be provided for 'plain' model type.")
+
+            # Case 1: direct file
+            if model_path.is_file():
+                model_checkpoint_path = model_path
+
+            # Case 2: directory containing model.pth
+            elif model_path.is_dir():
+                model_checkpoint_path = model_path / "model.pth"
+            else:
+                raise FileNotFoundError(f"{model_path} does not exist.")
+
+            if not model_checkpoint_path.exists():
+                raise FileNotFoundError(
+                    f"Model checkpoint not found at {model_checkpoint_path}"
+                )
+
             model = torch.load(
                 model_checkpoint_path,
                 weights_only=False,
-                map_location=torch.device('cpu')
+                map_location=torch.device("cpu"),
             )
         case "timm":
             model = timm.create_model(

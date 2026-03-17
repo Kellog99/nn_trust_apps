@@ -103,7 +103,7 @@ class ModelInfo(Info):
         "onnx",
         "api"
     ] = Field(
-        default="plain",
+        default="timm",
         title="Library where the model has been taken from.",
     )
 

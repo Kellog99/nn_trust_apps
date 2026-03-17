@@ -6,9 +6,9 @@
   <component name="ChangeListManager">
     <list default="true" id="22d92992-d96d-425b-81b7-4e977d138887" name="Changes" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/app.py" beforeDir="false" afterPath="$PROJECT_DIR$/app.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/models/main_model.py" beforeDir="false" afterPath="$PROJECT_DIR$/models/main_model.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/routers/info_router.py" beforeDir="false" afterPath="$PROJECT_DIR$/routers/info_router.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/models/info.py" beforeDir="false" afterPath="$PROJECT_DIR$/models/info.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/routers/test_router.py" beforeDir="false" afterPath="$PROJECT_DIR$/routers/test_router.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/utils/model.py" beforeDir="false" afterPath="$PROJECT_DIR$/utils/model.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -38,7 +38,7 @@
   "keyToString": {
     "ModuleVcsDetector.initialDetectionPerformed": "true",
     "RunOnceActivity.ShowReadmeOnStart": "true",
-    "git-widget-placeholder": "bugfix/instance__function",
+    "git-widget-placeholder": "develop",
     "last_opened_file_path": "/home/andrea/Desktop/lavoro/nn_trust_apps",
     "settings.editor.selected.configurable": "preferences.lookFeel"
   }
@@ -51,7 +51,7 @@
   <component name="SharedIndexes">
     <attachedChunks>
       <set>
-        <option value="bundled-python-sdk-4762d8aabb82-6d6dccd035ac-com.jetbrains.pycharm.pro.sharedIndexes.bundled-PY-253.30387.173" />
+        <option value="bundled-python-sdk-2653e85de345-6d6dccd035ac-com.jetbrains.pycharm.pro.sharedIndexes.bundled-PY-253.31033.139" />
       </set>
     </attachedChunks>
   </component>
