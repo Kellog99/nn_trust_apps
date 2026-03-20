@@ -5,10 +5,17 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="22d92992-d96d-425b-81b7-4e977d138887" name="Changes" comment="">
+      <change beforePath="$PROJECT_DIR$/../.gitignore" beforeDir="false" afterPath="$PROJECT_DIR$/../.gitignore" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/models/info.py" beforeDir="false" afterPath="$PROJECT_DIR$/models/info.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/models/attack.py" beforeDir="false" afterPath="$PROJECT_DIR$/models/attack.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/models/main_model.py" beforeDir="false" afterPath="$PROJECT_DIR$/models/main_model.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/routers/repository_router.py" beforeDir="false" afterPath="$PROJECT_DIR$/routers/repository_router.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/routers/test_router.py" beforeDir="false" afterPath="$PROJECT_DIR$/routers/test_router.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/utils/model.py" beforeDir="false" afterPath="$PROJECT_DIR$/utils/model.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/submodules/nn_trust" beforeDir="false" afterPath="$PROJECT_DIR$/submodules/nn_trust" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/submodules/nn_trust/nn_trust/attack/_evasion.py" beforeDir="false" afterPath="$PROJECT_DIR$/submodules/nn_trust/nn_trust/attack/_evasion.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/submodules/nn_trust/nn_trust/attack/utils/logger.py" beforeDir="false" afterPath="$PROJECT_DIR$/submodules/nn_trust/nn_trust/attack/utils/logger.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/submodules/nn_trust/nn_trust/attack/utils/pytorch_logger.py" beforeDir="false" afterPath="$PROJECT_DIR$/submodules/nn_trust/nn_trust/attack/utils/pytorch_logger.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/utils/attack.py" beforeDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -38,8 +45,8 @@
   "keyToString": {
     "ModuleVcsDetector.initialDetectionPerformed": "true",
     "RunOnceActivity.ShowReadmeOnStart": "true",
-    "git-widget-placeholder": "develop",
-    "last_opened_file_path": "/home/andrea/Desktop/lavoro/nn_trust_apps",
+    "git-widget-placeholder": "dev/presentation",
+    "last_opened_file_path": "/home/andrea/Desktop/lavoro/nn_trust",
     "settings.editor.selected.configurable": "preferences.lookFeel"
   }
 }]]></component>

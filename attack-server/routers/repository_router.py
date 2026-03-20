@@ -10,7 +10,7 @@ import os
 from pathlib import Path
 from typing import Literal, Union
 
-from fastapi import APIRouter, Query, HTTPException, Depends, Request
+from fastapi import APIRouter, Query, Depends, Request, Body
 from pydantic import BaseModel
 
 from models.info import ModelInfo, DatasetInfo
@@ -75,6 +75,7 @@ def get_info(
 
     # Walk through all subdirectories
     # and validate the json that it is found
+    print(f"Exploring {repo_path}")
     for root, dirs, files in os.walk(repo_path):
         if file_checker in files:
             file_info_path = os.path.join(root, file_checker)
@@ -105,24 +106,31 @@ def get_info(
 
 @router.post("/upload")
 def upload(
-        file: dict,
-        repository: Literal["model_report", "dataset_report"]
+        file: dict = Body(...),
+        repo_path: str | Path | None = Depends(get_path),
 ):
-    path = Path("~/Desktop/StableAI").expanduser()
-    if repository == "model_report":
-        try:
-            info = ModelReportProps.model_validate(file)
-        except ValueError as e:
-            print(e)
-            raise HTTPException(status_code=400, detail=str(e))
+    """
+    Upload a .zip file and organize it.
 
-    elif repository == "dataset_report":
-        try:
-            info = DatasetReportProps.dataset_validate(file)
-        except ValueError as e:
-            print(e)
-            raise HTTPException(status_code=400, detail=str(e))
+    Args:
+        file: zip file
+        repo_path: repository folder where the file has to be uploaded
+
+    """
+    if repo_path:
+        if isinstance(repo_path, (str, Path)):
+            if isinstance(repo_path, str):
+                repo_path: Path = Path(repo_path).expanduser()
+        else:
+            raise ValueError("The type of the path is not supported.")
     else:
-        raise HTTPException(status_code=400, detail="Repository not supported.")
-
+        repo_path = Path("~/Desktop/StableAI").expanduser()
+    repo_path.mkdir(parents=True, exist_ok=True)
+    base_model: BaseModel | None = None
+    for model in [DatasetInfo, ModelInfo, ModelReportProps, DatasetReportProps]:
+        try:
+            base_model = model.model_validate(file)
+            break
+        except:
+            print(f"Exclusion of the model {model}")
     return {}

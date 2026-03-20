@@ -24,10 +24,10 @@ class SingleAttackOutput(BaseModel):
     original_prediction: str
     adversarial_prediction: str
     advance_metrics: dict[str, float]
-    confidence: dict[str, list[float]] = Field(
+    confidence: dict[str, dict] = Field(
         default={
-            "adversarial": [],
-            "original": []
+            "adversarial": {},
+            "original": {}
         },
         description="This contain original and adversarial predictions' confidence."
     )

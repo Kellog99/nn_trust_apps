@@ -1,9 +1,13 @@
+import datetime
+import time
+from pathlib import Path
 from pprint import pprint
 
 import torch
-from fastapi import APIRouter
-from fastapi import Body, Query
-from torchvision.transforms import v2 as T
+from fastapi import APIRouter, Body, Query, HTTPException
+from pydantic import ValidationError
+from torchmetrics.image import StructuralSimilarityIndexMeasure
+from torchvision.transforms import v2 as T, InterpolationMode
 
 from lib.model import RegisteredObject
 from models.attack import SingleAttackOutput, SingleAttackProps
@@ -11,7 +15,8 @@ from models.info import ModelInfo
 from nn_trust import Task
 from nn_trust.attack import EvasionAttack
 from nn_trust.attack.attack_factory import EvasionAttackFactory as EAF
-from utils.attack import single_image_attack
+from nn_trust.attack.utils.pytorch_logger import PyTorchCheckpointLogger
+from nn_trust.target import AvoidOnehotTarget
 from utils.model import load_model
 from utils.utils import b64str_to_pil
 
@@ -33,13 +38,35 @@ async def single_attack(
         1. an image: str
         2. an attack: RegisterdObject
         3. a model: ModelInfo
+    Args:
+        body: Body of the request
+        out_path: Path for saving eventually temporary files due to the logger
+        device: device where the computations are done.
 
     Returns:
         SingleAttackOutput: a collection of all the results concerning a single attack.
     """
+
+    if device in ["cpu", "cuda"]:
+        device = torch.device(device)
+    else:
+        device = torch.device("cpu")
+
     ################## MODEL ##################
-    model_info: ModelInfo = body.model
-    pprint(model_info)
+    try:
+        # Your existing code...
+        model_info: ModelInfo = body.model
+        pprint(model_info.model_dump())
+    except ValidationError as e:
+        print("=== VALIDATION ERROR ===")
+        print(e.json())
+        raise HTTPException(status_code=422, detail=e.errors())
+    except Exception as e:
+        print(f"=== UNEXPECTED ERROR ===")
+        print(f"Error type: {type(e)}")
+        print(f"Error message: {str(e)}")
+        raise
+
     model = load_model(
         model_type=model_info.model_type,
         model_path=model_info.repository,
@@ -47,6 +74,8 @@ async def single_attack(
         model_api=model_info.api,
         model_id=model_info.id,
     )
+    model = model.to(device)
+    model.eval()
     ###########################################
 
     ################## IMAGE ##################
@@ -62,13 +91,21 @@ async def single_attack(
     elif isinstance(input_dimensionality, int):
         input_dimensionality = (input_dimensionality, input_dimensionality)
 
+    ############ image transformation ############
+    original_input: torch.Tensor = T.ToTensor()(pil_image)
+    C, H, W = original_input.shape
+
     transformations = T.Compose([
-        T.Resize(input_dimensionality),
+        T.Resize(size=input_dimensionality, interpolation=InterpolationMode.NEAREST),
         T.ToImage(),
         T.ToDtype(torch.float32, scale=True),
+        T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
     ])
-    x = transformations(pil_image)
-    ###########################################
+    x: torch.Tensor = transformations(pil_image)
+    if x.dim() == 3:
+        x = x.unsqueeze(0)
+    x = x.to(device)
+    ###############################################
 
     ################## ATTACK ##################
     attack: RegisteredObject = body.attack
@@ -80,9 +117,57 @@ async def single_attack(
     )
     ############################################
 
-    return single_image_attack(
-        model=model,
+    ################## Results ##################
+    y = model(x)
+    labels = y.argmax(-1).tolist()
+    target = AvoidOnehotTarget(num_classes=y.shape[-1])(labels).to(device)
+    ssim_metric = StructuralSimilarityIndexMeasure()
+    # Logger for getting additional material
+    out_path = Path(f"./tmp/{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}")
+    logger = PyTorchCheckpointLogger(
+        states=["conf_adversarial", "conf_original"],
+        path=out_path
+    )
+
+    start = time.time()
+    x_adv = attack.generate(
         x=x,
-        attack=attack,
-        device=torch.device(device),
+        y=target,
+        logger=logger
+    )
+    end = time.time()
+
+    y_adv = model(x_adv).argmax(-1)
+    ssim_measure = ssim_metric(x, x_adv.cpu()).item()
+    conf_original, conf_adversarial = {}, {}
+    if logger:
+        conf_original: dict = logger.get_logging(tag="conf_original", state="generate")
+        conf_adversarial: dict = logger.get_logging(tag="conf_adversarial", state="generate")
+    ############################################
+
+    ################## Invert transform ################
+    inv_transform = T.Compose([
+        T.Normalize(
+            mean=[-0.485 / 0.229, -0.456 / 0.224, -0.406 / 0.225],
+            std=[1 / 0.229, 1 / 0.224, 1 / 0.225]
+        ),
+        T.Resize(size=(H, W), interpolation=InterpolationMode.BICUBIC),
+    ])
+    pert = inv_transform(x_adv.cpu() - x)
+    x_adv = inv_transform(x_adv.cpu())
+
+    return SingleAttackOutput(
+        x_adv=x_adv.cpu(),
+        adv_perturbation=pert.cpu(),
+        original_prediction=str(labels[0]),
+        adversarial_prediction=str(y_adv.item()),
+        advance_metrics={
+            "ssim": ssim_measure,
+            "distance": torch.norm(pert, p=getattr(attack.config, "p", 2)).item(),
+            "execution_time": end - start,
+        },
+        confidence={
+            "adversarial": conf_original,
+            "original": conf_adversarial,
+        }
     )

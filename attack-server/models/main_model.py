@@ -1,5 +1,6 @@
 import argparse
 from argparse import Namespace
+from datetime import datetime
 from typing import Optional, Callable, Any
 
 from fastapi import Request
@@ -23,15 +24,15 @@ class SharableVariables(BaseModel):
 
     ########################## PATH ##########################
     path_ds_repo: str = Field(
-        default="/home/andrea/Desktop/StableAI/dataset_repository",
+        default="~/Desktop/StableAI/dataset_repository",
         description="Path to internal storage directory (datasets)"
     )
     path_model_repo: str = Field(
-        default="/home/andrea/Desktop/StableAI/model_repository",
+        default="~/Desktop/StableAI/model_repository",
         description="Path to internal storage directory (models)"
     )
     path_model_report_repo: str = Field(
-        default="/home/andrea/Desktop/StableAI/benchmark_repository",
+        default="~/Desktop/StableAI/benchmark_repository",
         description="Path to the storage folder for benchmarks and reports."
     )
     ##########################################################
@@ -69,8 +70,8 @@ class ServerConfig(SharableVariables):
     )
     ################################################################
 
-    benchmark_output_dir: str = Field(
-        default="benchmark_results",
+    path_tmp_files: str = Field(
+        default=f"./tmp",
         deascription="Path to benchmark output directory"
     )
     max_model_size_upload: int = Field(
