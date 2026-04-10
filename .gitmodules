@@ -2,19 +2,11 @@
 	path = image-attack/submodules/nn_trust
 	url = https://github.com/LeoPhilosophers/nn_trust.git
 	branch = develop
-[submodule "benchmarking/submodules/nn_trust"]
-	path = benchmarking/submodules/nn_trust
-	url = https://github.com/LeoPhilosophers/nn_trust.git
-	branch = develop
-[submodule "attack-server/submodules/nn_trust"]
-	path = attack-server/submodules/nn_trust
-	url = https://github.com/LeoPhilosophers/nn_trust.git
-	branch = develop
-[submodule "report/submodules/nn_trust"]
-	path = attack-server/submodules/nn_trust
+
+[submodule "submodules/data_quality"]
+	path = submodules/data_quality
+	url = git@github.com:LeoPhilosophers/data-quality.git
+[submodule "submodules/nn_trust"]
+	path = submodules/nn_trust
 	url = git@github.com:LeoPhilosophers/nn_trust.git
 	branch = develop
-[submodule "attack-server/submodules/data-quality_gui"]
-	path = attack-server/submodules/data-quality_gui
-	url = https://github.com/LeoPhilosophers/data-quality_gui.git
-	branch = dev/embplot

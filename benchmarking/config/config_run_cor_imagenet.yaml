@@ -54,7 +54,7 @@ models:
     knowledge: "white"
     input_size: 224
 
-  - model_path: "/home/bru/Documents/codes/nn_trust_apps/attack-server/models_repo/hf1_test"
+  - model_path: "/home/bru/Documents/codes/nn_trust_apps/attack_server/models_repo/hf1_test"
 
 attacks:
   - name: 'fgsm'

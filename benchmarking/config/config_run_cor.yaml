@@ -37,9 +37,9 @@ datasets:
 
 models:
 
-  - model_path: "/home/bru/Documents/codes/nn_trust_apps/attack-server/models_repo/timm@convnextv2_base.fcmae_ft_in1k"
+  - model_path: "/home/bru/Documents/codes/nn_trust_apps/attack_server/models_repo/timm@convnextv2_base.fcmae_ft_in1k"
 
-  - model_path: "/home/bru/Documents/codes/nn_trust_apps/attack-server/models_repo/timm@vit_base_patch16_224.augreg2_in21k_ft_in1k"
+  - model_path: "/home/bru/Documents/codes/nn_trust_apps/attack_server/models_repo/timm@vit_base_patch16_224.augreg2_in21k_ft_in1k"
 
 attacks:
   - name: 'fgsm'

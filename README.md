@@ -44,7 +44,7 @@ From a subproject folder (for example `attack-server/`):
 
 ```bash
 # create & activate a venv, then
-pip install -e submodules/nn_trust
+pip install -e submodules/nn_trust/
 pip install -r requirements.txt  # or use the subproject's pyproject / uv workflow
 ```
 
@@ -57,14 +57,14 @@ export BENCHMARK_OUTPUT_DIR="/path/to/benchmark_out"
 export INTERNAL_MODEL_STORAGE="/path/to/model_metadata"
 export INTERNAL_DS_STORAGE="/path/to/dataset_metadata"
 export RAY_NUM_ACTORS=1
-# other env vars are read from the attack-server code (see Important env vars section)
+# other env vars are read from the attack_server code (see Important env vars section)
 ```
 
 2. Start the FastAPI server inside `attack-server/`:
 
 ```bash
 # from repository root
-cd attack-server
+cd attack_server
 uvicorn app:app --reload --host 0.0.0.0 --port 8000
 ```
 
