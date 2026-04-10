@@ -11,6 +11,7 @@
       <excludeFolder url="file://$MODULE_DIR$/attack_server/.venv" />
       <excludeFolder url="file://$MODULE_DIR$/report/.venv" />
       <excludeFolder url="file://$MODULE_DIR$/attack_server/.venv" />
+      <excludeFolder url="file://$MODULE_DIR$/report/submodules" />
       <excludeFolder url="file://$MODULE_DIR$/submodules/nntrust/.venv" />
     </content>
     <orderEntry type="jdk" jdkName="uv (nn_trust_apps)" jdkType="Python SDK" />

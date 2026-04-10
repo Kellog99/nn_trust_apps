@@ -13,3 +13,9 @@
 __pycache__
 
 */submodules/
+*/benchmark_out/
+*/assets/
+!docs/*.jpg
+*/datasets_repo/
+*/models_repo/
+*/benchmark_out/*
