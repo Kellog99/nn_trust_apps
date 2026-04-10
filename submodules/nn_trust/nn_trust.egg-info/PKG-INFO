@@ -1,0 +1,87 @@
+Metadata-Version: 2.4
+Name: nn_trust
+Version: 0.1.0
+Author-email: Andrea Chelini <andrea.chelini@leonardo.it>, Giorgio Susanna <giorgio.susanna@leonardo.it>, Bruno Papa <bruno.papa@leonardo.it>
+Requires-Python: ~=3.11.0
+Description-Content-Type: text/markdown
+License-File: LICENSE
+Requires-Dist: torch~=2.4.0
+Requires-Dist: torchmetrics==1.4.1
+Requires-Dist: torchvision==0.19.0
+Requires-Dist: tensorboard==2.17.1
+Requires-Dist: tqdm==4.66.5
+Requires-Dist: pydantic==2.9.2
+Requires-Dist: pyyaml>=6.0.2
+Dynamic: license-file
+
+![titann-logo](docs/images/titann-logo.png)
+
+# TITANN: Tool for Inspection and Trustworthiness Assesment of Neural Networks
+
+## Machine Learning Model Attacks
+
+This repository contains various machine learning model attacks, following the structure outlined in the NIST
+Trustworthy and Responsible AI Report.
+
+![](./docs/images/aml.png)
+
+## Deployment
+
+The deployment phase refers to when the target model has been trained and is ready to be used by third-party agents.
+
+![](./docs/images/hierarchy.png)
+
+As shown in the figure above, there are two main attack objectives:
+
+### 1. Privacy Attacks
+
+The attacker aims to extract as much information as possible from the model. There are three types of privacy attacks:
+
+- **Model Inversion**: The attacker attempts to reconstruct the input data or the underlying dataset.
+- **Membership Inference**: The attacker tries to determine whether a particular data point was part of the model’s
+  training dataset.
+- **Model Stealing**: The attacker aims to replicate or steal the model's parameters.
+
+### 2. Evasion Attacks
+
+The attacker aims to manipulate the model's output by introducing perturbations to the input. There are three types of
+evasion attacks:
+
+- **Adversarial Attacks**: Small perturbations are added to the input to cause significant changes in the model's
+  output.
+- **Universal Attacks**: A single small perturbation is generated that, when applied to any element in the dataset,
+  leads to large variations in the model's output.
+- **Backdoor Attacks**: A specific patch or trigger is embedded in the input, causing the model to produce incorrect or
+  targeted outputs.
+
+### Evasion attacks
+
+All the evasion attack available in this library are listed [here](./nn_trust/attack/README.md).
+
+# Running ONNX Inference
+
+If running from virtual environemnt in order to make cuda libraries available to ONNX runtime, its possible we need to export librarie directories.
+For example
+```
+export LD_LIBRARY_PATH=$VIRTUAL_ENV/lib64/python3.12/site-packages/nvidia/cuda_nvrtc/lib:$VIRTUAL_ENV/lib64/python3.12/site-packages/nvidia/cudnn/lib:$LD_LIBRARY_PATH```
+
+Otherwise Onnxruntime (onnxruntime-gpu) may fallback silently to CPUExecutionProvider.
+
+```
+
+### Supported Models
+
+At the moment the tool support the following way to provide a model.
+1. Pytorch Torchscript model e.g.: a model.pt file that that was saved after applying `torch.jit.trace`
+	1. Supported attack knowledge scenario: [WhiteBox, BlackBox]
+2. Pytorch exported program with `torch.export` (Dynamo) e.g. torch.export.export(model)
+	1. Supported attack knowledge scenario: [WhiteBox, BlackBox]
+3. Pytorch model state_dict
+	1. For custom provided models from trusted sources the model can be provided in a folder containing two files (model_state_dict.pth, model_definition.py::Model)
+	2. Supported attack knowledge scenario: [WhiteBox, BlackBox]
+4. ONNX
+	1. Supported attack knowledge scenario: [BlackBox]
+5. API Model (a model provided as an api exposing a `/forward`  and optionally a `/backward` route if the model has to be used in a whitebox setting.
+	1. Supported attack knowledge scenario: [WhiteBox, BlackBox]
+6. Custom models available online from mainstream resources like Huggingface
+	1. For huggingface standars support applied to model implemented following `AutoModelForImageClassification` 
