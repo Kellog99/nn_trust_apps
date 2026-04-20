@@ -3,12 +3,11 @@
   <component name="VcsDirectoryMappings">
     <mapping directory="" vcs="Git" />
     <mapping directory="$PROJECT_DIR$/attack-server/submodules/data-quality_gui" vcs="Git" />
-    <mapping directory="$PROJECT_DIR$/attack-server/submodules/nn_trust" vcs="Git" />
-    <mapping directory="$PROJECT_DIR$/attack_server/submodules/data-quality_gui" vcs="Git" />
-    <mapping directory="$PROJECT_DIR$/attack_server/submodules/nn_trust" vcs="Git" />
     <mapping directory="$PROJECT_DIR$/benchmarking/submodules/nn_trust" vcs="Git" />
-    <mapping directory="$PROJECT_DIR$/image-attack/submodules/nn_trust" vcs="Git" />
     <mapping directory="$PROJECT_DIR$/report/submodules/data-quality_gui" vcs="Git" />
     <mapping directory="$PROJECT_DIR$/report/submodules/nn_trust" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/submodules/data_quality" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/submodules/data_quality/data-quality_gui" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/submodules/nn_trust" vcs="Git" />
   </component>
 </project>
