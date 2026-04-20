@@ -1,81 +1,37 @@
-import argparse
-import os.path
-import pathlib
+import os
 from pathlib import Path
-from typing import Optional
 
-import torch.nn
-import torchvision.transforms
-import yaml
+import torchvision
+import torchvision.transforms as T
+from torch.utils.data import Dataset, Subset, DataLoader
+from PIL import Image as PILImage
+import numpy
+import torch
+import random
 
+class ImageDatasetFolder(torchvision.datasets.ImageFolder):
+    def __init__(self, root: str, transform=None, target_transform=None, is_valid_file=None):
+        super().__init__(root=root, transform=transform, target_transform=target_transform, is_valid_file=is_valid_file)
+        self.data_root = root
 
-class StoreTrueIfSet(argparse.Action):
-    def __init__(self, option_strings, dest, nargs=0, **kwargs):
-        super().__init__(option_strings, dest, nargs=nargs, **kwargs)
+    def __getitem__(self, index):
+        path, target = self.samples[index]
+        sample = PILImage.open(path).convert("RGB")
+        if self.transform is not None:
+            sample = self.transform(sample)
+        if self.target_transform is not None:
+            target = self.target_transform(target)
 
-    def __call__(self, parser, namespace, values, option_string=None):
-        setattr(namespace, self.dest, True)
+        element_info = {"path": str(Path(path).relative_to(self.data_root))}
 
-
-abbrev = []  # list of all the abbreviation for showing in the Help command
-
-
-def get_abbreviation(name) -> str:
-    i = 0
-    abr = name[:i]
-    while abr in abbrev:
-        i += 1
-        abr = name[:i]
-    abbrev.append(abr)
-    return abr
-
-
-def get_parser(model_fields):
-    """
-    Using the Pydantic model for creating the associated argparser.
-    """
-
-    parser = argparse.ArgumentParser()
-    for name, field in model_fields.items():
-        abr = get_abbreviation(name)
-        hlp = field.description
-        if field.default is not None:
-            hlp = hlp + f" Default {field.default}."
-        arguments = {"dest": name, "help": hlp}
-        if field.annotation is bool:
-            arguments["action"] = StoreTrueIfSet
-
-        if field.annotation in [int, str, float]:
-            arguments["type"] = field.annotation
-
-        elif field.annotation is list:
-            arguments["nargs"] = "*"
-
-        parser.add_argument(f"--{name}", f"-{abr}", **arguments)
-    return parser.parse_args()
-
-
-def read_config_file(config_filename: str) -> dict:
-    """
-    Read the configuration file and return the content as a dictionary.
-    """
-    if not os.path.exists(config_filename):
-        raise ValueError(f"File not found: {config_filename}")
-
-    if config_filename.endswith((".yaml", ".yml")):
-        with open(config_filename, "r") as f:
-            config_data = yaml.safe_load(f)
-    else:
-        raise ValueError(f"Unsupported file format: {config_filename}")
-    return config_data
-
+        return sample, target, element_info
 
 def get_data_transformation_config(
     transform_id: str,
-    size: int|None = None,
-    crop: Optional[int] = None,
-    mean: Optional[list[float]] = None,
-    std: Optional[list[float]] = None
+    size: int | None = None,
+    crop: int | None = None,
+    mean: list[float] | None = None,
+    std: list[float] | None = None
 ):
     """
     An utility function providing the transformation and inverse transformation
@@ -152,7 +108,68 @@ def get_data_transformation_config(
 
     return transform, inverse_transform
 
-if __name__ == "__main__":
-    config = get_config()
-    print(str(config))
-    print(config.inverse_transformation)
+
+
+def get_dataloader(
+    dataset: str,
+    batch: int,
+    subset: int,
+    type_dataset: int,
+    transform: T.Compose,
+    num_workers: int = 4,
+    name: str | None = None,
+    **kwargs,
+) -> DataLoader:
+    """
+    Return the dataloader to use and the inverse transformation to use for displaying the images
+    """
+
+    if not os.path.exists(dataset):
+        raise ValueError(f"The dataset --------{dataset} does not exists.")
+    if type_dataset == 1:
+        raise NotImplementedError("This dataset type is not implemented")
+    elif type_dataset == 2:
+
+        def check_valid_image(filename: str):
+            try:
+                with PILImage.open(filename) as img:
+                    img.verify()  # Verify that the image is valid
+                return True
+            except Exception:
+                return False
+
+        dataset = ImageDatasetFolder(dataset, transform=transform, is_valid_file=check_valid_image)
+    else:
+        raise ValueError(f"The type of the dataset {type_dataset} is not valid.")
+
+    if name is not None:
+        dataset.name = name
+    else:
+        dataset.name = Path(dataset).name
+
+
+    if subset is None or subset < 0:
+        subset = list(range(len(dataset)))
+    else:
+        subset = list(range(min(subset, len(dataset))))
+    subdataset = Subset(dataset, subset)
+
+    def seed_worker(worker_id):
+        worker_seed = torch.initial_seed() % 2**32
+        numpy.random.seed(worker_seed)
+        random.seed(worker_seed)
+
+    g = torch.Generator()
+    g.manual_seed(1234)
+
+    dataloader = DataLoader(
+        subdataset,
+        batch_size=batch,
+        shuffle=False,
+        num_workers=num_workers,
+        worker_init_fn=seed_worker,
+        generator=g,
+        pin_memory=True,
+    )
+
+    return dataloader

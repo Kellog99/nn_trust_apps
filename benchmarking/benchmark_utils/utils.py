@@ -1,20 +1,34 @@
 import os
-import random
+import copy
+import yaml
 from pathlib import Path
-import numpy
-import timm
-from PIL import Image as PILImage
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
-from torch.utils.data import DataLoader, Subset
-from torchvision import transforms
-from torchvision.datasets import ImageFolder
-from torchvision.models import resnet50
-from nn_trust.core import ModelAdapter
-from .imagenet2012_loader import ImageNetTrainDataset
-from .model_library import models_library
-from nn_trust.models.hf_model import HFModel
+import json
+from datetime import datetime
+import traceback
+
+import ray
+
+from nn_trust.evaluation.composer import StatisticComposer, ConfigStatisticComposer
+from .evaluation_utils import read_results_from_diskV2, aggregate_attacks_statistics
+from .pdf_report import create_benchmark_report
+from .pydantic_models import BenchmarkConfig
+from .execution import LocalRayExecutor, LocalSerialExecutor
+
+
+def read_config_file(config_filename: str) -> BenchmarkConfig:
+    """
+    Read the configuration file and return the content as a dictionary.
+    """
+    if not os.path.exists(config_filename):
+        raise ValueError(f"File not found: {config_filename}")
+
+    if config_filename.endswith((".yaml", ".yml")):
+        with open(config_filename, "r") as f:
+            config_data = yaml.safe_load(f)
+    else:
+        raise ValueError(f"Unsupported file format: {config_filename}")
+    
+    return BenchmarkConfig(**config_data)
 
 def resolve_path(path: str) -> str:
     """
@@ -29,22 +43,7 @@ def resolve_path(path: str) -> str:
     return os.path.join(root, path)
 
 
-class ImageDatasetFolder(ImageFolder):
-    def __init__(self, root: str, transform=None, target_transform=None, is_valid_file=None):
-        super().__init__(root=root, transform=transform, target_transform=target_transform, is_valid_file=is_valid_file)
-        self.data_root = root
 
-    def __getitem__(self, index):
-        path, target = self.samples[index]
-        sample = PILImage.open(path).convert("RGB")
-        if self.transform is not None:
-            sample = self.transform(sample)
-        if self.target_transform is not None:
-            target = self.target_transform(target)
-
-        element_info = {"path": str(Path(path).relative_to(self.data_root))}
-
-        return sample, target, element_info
 
 
 def get_structure(path: Path | str) -> dict:
@@ -58,116 +57,6 @@ def get_structure(path: Path | str) -> dict:
         return {"files": path.name}
 
 
-def get_dataloader(
-    dataset: str,
-    batch: int,
-    subset: int,
-    type_dataset: int,
-    transform: transforms.Compose,
-    num_workers: int = 4,
-    name: str | None = None,
-    **kwargs,
-) -> DataLoader:
-    """
-    Return the dataloader to use and the inverse transformation to use for displaying the images
-    """
-    if not os.path.exists(dataset):
-        raise ValueError(f"The dataset --------{dataset} does not exists.")
-    if type_dataset == 1:
-        # get the transformation associated with the model
-        # and its inverse for the display
-        dataset = ImageNetTrainDataset(data_root=dataset, data_transform=transform)
-
-    elif type_dataset == 2:
-
-        def check_valid_image(filename: str):
-            try:
-                with PILImage.open(filename) as img:
-                    img.verify()  # Verify that the image is valid
-                return True
-            except Exception:
-                return False
-
-        dataset = ImageDatasetFolder(dataset, transform=transform, is_valid_file=check_valid_image)
-    else:
-        raise ValueError(f"The type of the dataset {type_dataset} is not valid.")
-
-    if name is not None:
-        dataset.name = name
-    else:
-        dataset.name = Path(dataset).name
-
-    if subset is None or subset < 0:
-        subset = list(range(len(dataset)))
-    else:
-        subset = list(range(min(subset, len(dataset))))
-    subdataset = Subset(dataset, subset)
-
-    def seed_worker(worker_id):
-        worker_seed = torch.initial_seed() % 2**32
-        numpy.random.seed(worker_seed)
-        random.seed(worker_seed)
-
-    g = torch.Generator()
-    g.manual_seed(1234)
-
-    dataloader = DataLoader(
-        subdataset,
-        batch_size=batch,
-        shuffle=False,
-        num_workers=num_workers,
-        worker_init_fn=seed_worker,
-        generator=g,
-        pin_memory=True,
-    )
-
-    return dataloader
-
-
-def get_model(
-    model: ModelAdapter | torch.nn.Module = None,
-    num_labels: int = None,
-    model_name: str = None,
-    model_type: str = None,
-    model_task: str = None,
-    model_weights_path: str | Path = None,
-    mean: float | list[float] = 0.5,
-    std: float | list[float] = 0.5,
-) -> ModelAdapter:
-    """
-    In this function it is set the model in the correct form,
-    independent from the starting point
-    """
-
-    model_type="hf"
-    
-    tt = transforms.Compose(
-        [
-            transforms.Normalize(mean=[-1, -1, -1], std=[2.0, 2.0, 2.0]),
-            transforms.Normalize(mean=mean, std=std),
-        ]
-    )
-
-
-    if model:
-        model = ModelAdapter(model, name=model._get_name(), task=model_task)
-    elif model_name and model_type == "timm":
-        model = ModelAdapter(model=timm.create_model(model_name, pretrained=True), name=model_name, transform=tt, task=model_task)
-    elif model_name and model_type == "saved_model":
-        model = ModelAdapter(model=torch.load(model_weights_path, weights_only=False), name=model_name, transform=tt, task=model_task)
-    elif model_name and model_type == "saved_weights":
-        # model = ResNet50Dirichlet()
-        model = models_library[model_name]()
-        state_dict = torch.load(model_weights_path, map_location="cpu")
-        model.load_state_dict(state_dict)
-        model = ModelAdapter(model=model, name=model_name, transform=tt, task=model_task)
-    elif model_type == "hf" and model_name:
-        model = HFModel(model_name=model_name, checkpoint_path=model_weights_path, device="cpu", task=model_task, num_labels=num_labels)
-    else:
-        raise ValueError("You must provide a model or a model name and type.")
-
-    model.model.eval()
-    return model
 
 
 def config_file_path_selector(config_dir: Path | str = ".") -> Path:
@@ -183,3 +72,127 @@ def config_file_path_selector(config_dir: Path | str = ".") -> Path:
         raise IndexError("Selected index is out of range.")
     selected_config_path = config_dir / config_files[selected_idx]
     return selected_config_path
+
+
+
+def postprocess_benchmark_run_resultsV2(benchmark_run_dir: str | Path, verbose=True):
+    benchmark_run_dir = Path(benchmark_run_dir)
+
+    for data_model_dir in [x for x in benchmark_run_dir.iterdir() if x.is_dir()]:
+        try:
+            results = read_results_from_diskV2(data_model_dir)
+            info = results["info"]
+            with open(data_model_dir / "info.json", "w") as f:
+                json.dump(info, f, indent=4)
+
+            statistics_composer = StatisticComposer(config=ConfigStatisticComposer(
+                statistics=info["statistics"],
+                num_classes=info["model_info"]["num_classes"],
+            ))
+            statistics_composer.aggregator()
+
+            aggregate_statistics = aggregate_attacks_statistics(
+                statistics_composer=statistics_composer,
+                results=results
+            )
+
+            with open(data_model_dir / "aggregate_statistics.json", "w") as fagg_statistics:
+                json.dump(aggregate_statistics, fagg_statistics)
+
+            if verbose:
+                print(f"Postprocessed {data_model_dir.relative_to(benchmark_run_dir)}")
+        except Exception as e:
+            print(f"Failed postprocessing on {data_model_dir.relative_to(benchmark_run_dir)}")
+            print(e)
+            traceback.print_exc()
+
+def validate_configuration(benchmark_config: BenchmarkConfig):
+    # validate configuration (test if model, dataset and attacks all make sense, if paths exists, etc.)
+    config = benchmark_config.model_dump()
+    for dataset in config["datasets"]:
+        if not Path(dataset['source_path']).exists():
+            raise ValueError(f"Dataset source path {dataset['source_path']} does not exist.")
+    for model in config["models"]:
+        if "model_path" in model and not Path(model["model_path"]).exists():
+            raise ValueError(f"Model path {model['model_path']} does not exist.")
+    for attack in config["attacks"]:
+        class_id = attack
+
+def inflate_configuration(benchmark_config: BenchmarkConfig, benchmark_id: str) -> list[dict]:
+    # Inflate configuration
+    # For each attack, model and attack, create a single dict element with all necessary information to execute operation and merge end result.
+    # Create product from (dataset, model, attack) and add evaluation and options to each element, that are constant.
+    # Inject benchmark idenfication element for dretrieval and merging results at the end.
+    # Returns:
+    # List of attack execution configurations sorted in order of MODEL > DATASET > ATTACKS
+    config = benchmark_config.model_dump()
+    inflated_configuration = []
+    for i, model in enumerate(config["models"]):
+        model_identifications = [model.get("name"), model.get("id"), model.get("model_path").split("/")[-1]]
+        model_identification = next(mid for mid in model_identifications if mid is not None)
+        for j, dataset in enumerate(config["datasets"]):       
+            for k, attack in enumerate(config["attacks"]):
+                atk_identifications = [attack.get("name"), attack.get("id")]
+                atk_identification = next(atk_id for atk_id in atk_identifications if atk_id is not None)
+                inflated_configuration.append(copy.deepcopy({
+                    "dataset": dataset,
+                    "model": model,
+                    "attack": attack,
+                    "evaluation": config["evaluation"],
+                    "options": config["options"],
+                    "benchmark_info" : {
+                        "benchmark_id":benchmark_id,
+                        "dataset_id":dataset.get("name"),
+                        "model_id":model_identification,
+                        "atk_id":atk_identification,
+                        "user_id":os.getlogin(),
+                        "host":os.uname().nodename
+                    }
+                }))
+    return inflated_configuration
+
+def generate_benchmark_id():
+    """Generate a unique benchmark id based on current timestamp. Format: YYYYMMDDTHHMMSS"""
+    return datetime.now().strftime("%Y%m%dT%H%M%S")
+
+
+def run_benchmark_with_configuration(config: BenchmarkConfig, verbose=True):
+    """This function take as input a full benchmark configuration and execute the benchmark.
+    """
+    # 1 - validate input configuration
+    validate_configuration(benchmark_config=config)
+    # 2 - if input configuration is a valida configuration prepare for execution
+    # 2.1 - Generate a unique id under which run all benchmark operations
+    benchmark_id = generate_benchmark_id()
+    # 2.2 - Inflate input configuration into long for: Config([datasets], [models], [attacks]) -> [(benchmark_id, dataset_i, model_i, attack_i, ...), ...]
+    inflated_configuration = inflate_configuration(benchmark_config=config, benchmark_id=benchmark_id)
+    # 3 Define an execution strategy for the benchmark at hand i.e. create an executor instance
+    match config.options.mode:
+        case "local_ray":
+            ray.init()
+            executor = LocalRayExecutor(root_path=config.options.output_path)
+            if verbose:
+                print("Using ray with cluster configuration:")
+                print(ray.cluster_resources())
+        case "local_serial":
+            executor = LocalSerialExecutor(root_path=config.options.output_path)
+        case _:
+            raise ValueError(f"Execution mode '{config.options.mode}' is not supported.")
+    print(f"Created executor instance\n{executor}")
+    # 3.1 Start execution
+    results = executor(inflated_configuration)
+
+    # 4 Get output path from results and aggregate statistics for single attacks, for each dataset - model pair
+    postprocess_benchmark_run_resultsV2(results["output_path"])
+
+    # 5 Optionally iterate of completed benchmark folders (postprocessed) and create a pdf report file.
+    if config.options.output_format == "report":
+        for dataset_and_model_dir in Path(results["output_path"]).iterdir():
+            if dataset_and_model_dir.is_dir():
+                print(f"Generating report for {dataset_and_model_dir.name}")
+                create_benchmark_report(
+                    dataset_and_model_dir=dataset_and_model_dir,
+                    filename=dataset_and_model_dir / "report.pdf",
+                    generated_by="Leonardo S.p.A.",
+                    output_mode="pdf"
+                )

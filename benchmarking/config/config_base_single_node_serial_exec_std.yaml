@@ -16,20 +16,20 @@ options:
   gpu: true
   output_path: "./benchmark_out" # Path to the output folder
   output_format: "report" # report or test
-  mode : "single_node_serial"
-  num_workers : 1
-  num_gpus_per_worker : 1
-  executor_type : "ray"
+  mode : "local_serial"
+  num_workers : 2
+  num_gpus_per_worker : 0.4
+  executor_type : "none"
 
 
 datasets:
   - name: "clean-aircraft-crop"             # Dataset name
     num_classes: 36
-    subset: 60
+    subset: 18
     batch: 20
     type_dataset: 2
     num_workers: 2
-    source_path: "/home/bru/Documents/codes/data/aircraft-dataset/clean-aircraft-crop"
+    source_path: "/home/papab/Documents/nn_trust_apps/attack-server/datasets_repo/aircraft"
     transform_config:
       transform_id: "normalize_only"
       mean: [0.485, 0.456, 0.406]
@@ -37,16 +37,17 @@ datasets:
 
 models:
 
-  - model_path: "/home/bru/Documents/codes/nn_trust_apps/attack_server/models_repo/timm@convnextv2_base.fcmae_ft_in1k"
-
-  - model_path: "/home/bru/Documents/codes/nn_trust_apps/attack_server/models_repo/timm@vit_base_patch16_224.augreg2_in21k_ft_in1k"
+  - model_path: "/home/papab/Documents/nn_trust_apps/attack-server/models_repo/convnextv2_base.fcmae_ft_in1k"
+  - model_path: "/home/papab/Documents/nn_trust_apps/attack-server/models_repo/vit_base_patch16_224"
 
 attacks:
   - name: 'fgsm'
     max_iters: 20
+    verbose: true
   - name: 'banditprior'
-    max_iters: 50
-  - name: 'dag'
-    max_iters: 50
+    max_iters: 20
+    verbose: true
+#  - name: 'dag'
+#    max_iters: 50
 
 
