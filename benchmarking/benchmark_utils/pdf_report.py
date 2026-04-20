@@ -871,14 +871,13 @@ class AdversarialReportGenerator:
         return elements
 
 
-def create_benchmark_report(benchmark_run_dir: str | pathlib.Path,
-                            model_name: str,
-                            dataset_name: str,
-                            filename: str | None = None,
-                            generated_by: str = "LDO",
-                            output_mode: Literal["pdf", "json"] = "pdf",
-                            logo: str = './resources/logo_leonardo.png'
-                            ) -> None:
+def create_benchmark_report(
+        dataset_and_model_dir: str | pathlib.Path,
+        filename: str | None = None,
+        generated_by: str = "LDO",
+        output_mode: Literal["pdf", "json"] = "pdf",
+        logo: str = './resources/logo_leonardo.png'
+    ) -> None:
     """
     Generate a benchmark report for a specific model-dataset pair.
 
@@ -899,36 +898,21 @@ def create_benchmark_report(benchmark_run_dir: str | pathlib.Path,
         None
             Writes `report.json` and a PDF report to `output_path`.
     """
-    benchmark_run_dir = pathlib.Path(benchmark_run_dir)
-    dataset_dir = benchmark_run_dir / dataset_name
-    model_dir = dataset_dir / model_name
+    dataset_and_model_dir = pathlib.Path(dataset_and_model_dir)
+    benchmark_run_dir = dataset_and_model_dir.parent
 
-    with open(model_dir / "info.json", "r", encoding="utf-8") as f:
+    with open(dataset_and_model_dir / "info.json", "r", encoding="utf-8") as f:
         info = json.load(f)
-    with open(model_dir / 'aggregate_statistics.json', "r", encoding="utf-8") as f:
-        aggregate = json.load(f)
-        aggregate["params"] = info["parameters"]
-        results = collect_dataset_aggregates_with_info(
-            base_dir=str(benchmark_run_dir.parent),
-            dataset=dataset_name,
-            keep_latest_only=False,
-        )
-        out = transform_to_benchmark(results, task="classification")
-        out = enrich_with_ranks(out)
-        out = extract_rank_metrics(out, model_name)
-        out["total benchmarks"] = len(results)
-        aggregate = aggregate | out
-    statistics = {}
 
-    attacks_info = get_attacks_info()
-    for attack_dir in model_dir.iterdir():
+    statistics = {}
+    for attack_dir in dataset_and_model_dir.iterdir():
         if attack_dir.is_dir():
             stat_file = attack_dir / "statistics.json"
             if stat_file.exists() and stat_file.is_file():
                 try:
                     with open(stat_file, "r", encoding="utf-8") as sf:
                         sf_data = json.load(sf)
-                        sf_data["name"] = attacks_info[attack_dir.name].name if attack_dir.name in attacks_info else attack_dir.name
+                        sf_data["name"] = attack_dir.name
                         sf_data["risk"] = 0.5
                         sf_data["num_queries"] = 1
                         sf_data["power"] = 0.5
@@ -938,13 +922,13 @@ def create_benchmark_report(benchmark_run_dir: str | pathlib.Path,
 
     report_data = {
         "info": info,
-        "metrics": aggregate,
+        "metrics": {},
         "attacks": statistics,
-        "dataset": dataset_name
+        "dataset": info["dataset_info"]["name"]
     }
 
 
-    filename = Path(filename) if filename else model_dir / "report.xxx"  # extension will be adapted below
+    filename = Path(filename) if filename else dataset_and_model_dir / "report.xxx"  # extension will be adapted below
     if output_mode == "pdf":
         generator = AdversarialReportGenerator(logo_path=logo, generated_by_entity=generated_by)
         generator.generate(report_data, str(filename.with_suffix(".pdf")))
