@@ -10,14 +10,10 @@
 ### 1. Intro
 
 This repository represents a collection of applications and tooling that build on top of the `nn_trust` library for
-adversarial machine learning (attacks, benchmarks, and demos).
-
-This repository hosts several related projects in one workspace. The most important subprojects are:
+adversarial machine learning (attacks, benchmarks, and demos). The most important are:
 
 - `attack_server/` — TITANN backend and job manager (FastAPI + Ray + Celery integration)
 - `benchmarking/` — benchmark runner and utilities that orchestrate model evaluations and aggregate results
-- `image-attack/` — Single-image demo (Gradio) showcasing an adversarial attack flow
-- `training-classification/` — utilities and examples for training classification models used in demos
 - `report/` — Creates a PDF report from a json file associate with a benchmark
 
 ### 2. Prerequisites
@@ -45,8 +41,7 @@ Here are all the step for using this repository:
 
     ```bash
     # create & activate a venv, then
-    pip install -e submodules/nn_trust/
-    pip install -r requirements.txt  # or use the subproject's pyproject / uv workflow
+    uv pip install -e submodules/nn_trust/
     ```
 
 ### 3. Execution
