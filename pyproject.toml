@@ -22,4 +22,5 @@ dependencies = [
     "fastapi[standard]>=0.128.7",
     "flask>=3.1.2",
     "uvicorn[standard] >= 0.38.0",
+    "ray>=2.55.0",
 ]

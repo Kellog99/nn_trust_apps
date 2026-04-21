@@ -1,13 +1,11 @@
 # NN Trust Applications
 
-Table of contents:
+## Table of contents:
 
 1. **Intro**
 2. **Prerequisites**
 3. **Execution**
-4. **Single-image demo**
 5. **Development notes and layout**
-6. **Important environment variables**
 
 ### 1. Intro
 
@@ -51,7 +49,7 @@ Here are all the step for using this repository:
     pip install -r requirements.txt  # or use the subproject's pyproject / uv workflow
     ```
 
-### Execution
+### 3. Execution
 
 Now it is possible to execute all the functionalities of the STABLE-AI framework. Here there are all the commands:
 
@@ -62,20 +60,24 @@ Now it is possible to execute all the functionalities of the STABLE-AI framework
     ```
 2. **Benchmarking**: this command is for executing just the benchmarking on a specific `dataset-model`:
     ```bash
-   python benchmark.py
+   python benchmark.py --MODELPATH path/to/model --DATASETPATH path/to/dataset --CONFIGPATH path/to/config
     ```
+   The *configuration path* handles all the attacks' configuration. This avoid to pass all the arguments that could be a
+   lot through terminal.
 
 3. **Report**: to produce a report regarding the benchmark of a specific model:
     ```bash
-   python report.py
+   python report.py --OUTPUTDIR path/to/output_folder
     ```
+   The *OUTPUTDIR* represents the path to the benchmark's output folder. In this folder there are all the information
+   for generating the pdf report.
 
 ### 5. Development notes & repository layout
 
-- `attack-server/` — FastAPI app and routers. Key files:
-    - `attack-server/app.py` — FastAPI application entry
-    - `attack-server/routers/job_router.py` — job endpoints, Ray executor integration
-    - `attack-server/lib/disk_reader.py` — helpers for locating benchmark outputs
+- `attack_server/` — FastAPI app and routers. Key files:
+    - `attack_server/app.py` — FastAPI application entry
+    - `attack_server/routers/job_router.py` — job endpoints, Ray executor integration
+    - `attack_server/lib/disk_reader.py` — helpers for locating benchmark outputs
 
 - `benchmarking/` — benchmark runner and utilities. Key files:
     - `benchmarking/main.py` — postprocessing and runner entrypoints
@@ -86,26 +88,3 @@ Now it is possible to execute all the functionalities of the STABLE-AI framework
 If you edit Python code, prefer editing the module inside the corresponding subfolder and run the local unit tests when
 available. The `nn_trust` submodule contains the core attack implementations.
 
-### 6. Important environment variables
-
-- `BENCHMARK_OUTPUT_DIR` — where benchmark runs are written (default `./benchmark_out`)
-- `INTERNAL_MODEL_STORAGE` — directory holding model metadata JSON and weights
-- `INTERNAL_DS_STORAGE` — directory holding dataset metadata JSON
-- `RAY_NUM_ACTORS` — number of actors used by Ray executor
-- `RAY_PY_MODULES` — optional Python modules path for Ray runtime_env
-
-There are additional flags used by various scripts; search for `os.environ.get(` in the subpackages to see the full
-list.
-
-## Troubleshooting
-
-- If endpoints complain about missing files under `BENCHMARK_OUTPUT_DIR`, confirm the benchmarking run completed and
-  that `info.json` / `aggregate*.json` files exist under the model folder.
-- If Ray initialization fails, ensure a compatible Ray version is installed and that the environment variables are
-  correct.
-
-## Contributing
-
-1. Fork the repo and create a branch for your feature/fix.
-2. Keep changes scoped to the subproject when possible (e.g., only edit `attack-server/` for web/API changes).
-3. Run available tests in `submodules/nn_trust/tests` and local tests in subprojects.

@@ -5,13 +5,15 @@ import pathlib
 import pickle
 import traceback
 from pathlib import Path
+
 import torch
+from tqdm.auto import tqdm
+
 from nn_trust.attack import EvasionAttackFactory
 from nn_trust.core import Task, ModelAdapter
 from nn_trust.evaluation.composer import ConfigStatisticComposer, StatisticComposer
 from nn_trust.loss.loss_composer import LossComposer
 from nn_trust.target import AvoidOnehotTarget
-from tqdm.auto import tqdm
 
 
 def evaluate_attack(

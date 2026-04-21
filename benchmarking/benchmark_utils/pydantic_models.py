@@ -1,9 +1,11 @@
-from typing import Annotated, Literal, List, Dict
+from typing import Literal, List
 
 from pydantic import BaseModel, Field
 
+
 class BenchmarkEvaluationConfig(BaseModel):
     statistics: list[dict] | None = Field(default_factory=lambda x: [])
+
 
 class BenchmarkOptionConfig(BaseModel):
     load_results: bool
