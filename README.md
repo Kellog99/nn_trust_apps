@@ -29,9 +29,12 @@ Here are all the step for using this repository:
     * **Downloading**: download the submodules in the corresponding folder `./submodules/name` from `git`:
 
         ```bash
-        git submodule add git@github.com:LeoPhilosophers/nn_trust.git submodules/nn_trust
-        git submodule add git@github.com:LeoPhilosophers/data-quality.git submodules/data_quality
+        git submodule add https://github.com/LeoPhilosophers/nn_trust.git submodules/nn_trust
+        git submodule add https://github.com/LeoPhilosophers/data_quality.git submodules/data_quality
         ```
+      Due to internal policy all the settings of git are handled through `https` requests. Moreover, the `nn_trust`
+      repository is set on the branch `develop`.
+    *
     * **Initialization**: to initialize the submodules execute
       ```bash
       git submodule init
@@ -43,6 +46,30 @@ Here are all the step for using this repository:
     # create & activate a venv, then
     uv pip install -e submodules/nn_trust/
     ```
+
+#### 2.1 Safe removal of submodules
+
+To remove a submodule from the Git index (and the repository), these are the steps:
+
+```bash
+# 1. Deinitialize the submodule (clears working tree)
+git submodule deinit -f path/to/submodule
+
+# 2. Remove from the index and working tree
+
+git rm -f path/to/submodule
+
+# 3. Remove submodule metadata from .git/modules
+
+rm -rf .git/modules/path/to/submodule
+
+```
+
+Step-by-step explanation:
+
+* `git submodule deinit` - Unregisters the submodule and clears its working directory
+* `git rm` - Removes the submodule from the index and working tree
+* `rm -rf .git/modules/...` - Cleans up Git's internal submodule cache
 
 ### 3. Execution
 

@@ -17,7 +17,7 @@ from attack_server.utils.utils import b64str_to_pil
 from nn_trust import Task
 from nn_trust.attack import EvasionAttack
 from nn_trust.attack.attack_factory import EvasionAttackFactory as EAF
-from nn_trust.attack.utils.logger import PyTorchCheckpointLogger
+from nn_trust.attack.utils.pytorch_logger import PyTorchCheckpointLogger
 from nn_trust.target import AvoidOnehotTarget
 
 router = APIRouter(prefix="/test", tags=["jobs management", "jobs utils"])

@@ -1,7 +1,6 @@
 import argparse
 from argparse import Namespace
-from datetime import datetime
-from typing import Optional, Callable, Any
+from typing import Optional, Callable, Any, get_origin, get_args, Union
 
 from fastapi import Request
 from pydantic import BaseModel, Field
@@ -71,8 +70,8 @@ class ServerConfig(SharableVariables):
     ################################################################
 
     path_tmp_files: str = Field(
-        default=f"./tmp",
-        deascription="Path to benchmark output directory"
+        default='./tmp',
+        description="Path to benchmark output directory"
     )
     max_model_size_upload: int = Field(
         default=5000,
@@ -120,9 +119,30 @@ def parsed_argument(model_class) -> Namespace:
         help_text = field_info.description or f"{field_name} parameter"
         field_type = field_info.annotation
 
-        # Handle Optional types
-        if hasattr(field_type, '__origin__') and field_type.__origin__ is type(Optional):
-            field_type = field_type.__args__[0]
+        # Handle Optional/Union types (both typing.Optional and | syntax)
+        origin = get_origin(field_type)
+        # Check if it's a Union type (including Optional and | syntax)
+        if origin is Union:
+            # Extract the non-None type from the union
+            args = get_args(field_type)
+            # Filter out NoneType and get the first actual type
+            non_none_types = [arg for arg in args if arg is not type(None)]
+            if non_none_types:
+                field_type = non_none_types[0]
+            else:
+                field_type = str  # Default fallback
+
+        # Handle list types separately
+        if get_origin(field_type) is list:
+            # For list types, don't use type parameter, use nargs instead
+            parser.add_argument(
+                f"--{field_name}",
+                nargs='*',
+                default=default,
+                help=help_text
+            )
+            continue
+
         parser.add_argument(
             f"--{field_name}",
             type=field_type,
