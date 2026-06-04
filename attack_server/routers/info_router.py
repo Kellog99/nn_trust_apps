@@ -1,4 +1,5 @@
 import logging
+from typing import Literal, get_origin
 
 import torch
 from fastapi import APIRouter, HTTPException, Request, Depends, Body
@@ -6,40 +7,56 @@ from fastapi import APIRouter, HTTPException, Request, Depends, Body
 from attack_server.lib.model import RegisteredObject
 from attack_server.models.main_model import ServerConfig, SharableVariables, config_field
 from attack_server.utils.utils import get_parameter_prop
-from nn_trust.attack.attack_factory import EvasionAttackFactory as EAF, AttackInfo
+from benchmarking.privacy.contracts import get_privacy_dataset_factory
+from benchmarking.privacy.model_registry import AppPrivacyModelFactory
+from nn_trust.attack.utils.model_building import get_default_model_factory
+from nn_trust.attack.attack_factory import AttackFactory, AttackInfo
 from nn_trust.core import Task
 from nn_trust.evaluation.statistic_factory import StatisticsFactory as SF, InfoStatistic
 
 router = APIRouter(prefix="/info")
 
 
+def _str_enum(v) -> str | None:
+    """Safely stringify an enum value or return None."""
+    if v is None:
+        return None
+    return str(v.value) if hasattr(v, "value") else str(v)
+
+
+def _collect_params(atk: str) -> list:
+    params = []
+    seen: set[str] = set()
+    for type_filter in ((int, float, str), None):
+        for pid, pinfo in AttackFactory.get_config_param(atk, type_filter):
+            if pid in seen:
+                continue
+            seen.add(pid)
+            if type_filter is None and get_origin(pinfo.annotation) is not Literal:
+                continue
+            params.append(get_parameter_prop(id=pid, param_info=pinfo))
+    return params
+
+
 @router.get("/attacks")
 def get_attacks_info(
-        excluded_attacks: list[str] = Depends(config_field(attr_name="excluded_attacks"))
+    excluded_attacks: list[str] = Depends(config_field(attr_name="excluded_attacks")),
 ) -> dict[str, RegisteredObject]:
-    """
-    Get the list of all the available attacks for a specific task.
-    """
+    """List all available attacks for classification."""
     out: dict[str, RegisteredObject] = {}
-    for atk in EAF.get_list_classes(task={Task.Classification}):
+    for atk in AttackFactory.get_list_classes(task={Task.Classification}):
         if atk in excluded_attacks:
             continue
-        atk_info: AttackInfo = AttackInfo.model_validate(EAF.get_information(id=atk, exclude=set()))
-
-        # collecting all the parameters for displaying the configuration
-        parameters = []
-
-        for param_id, param_info in EAF.get_config_param(atk, (int, float)):
-            parameters.append(get_parameter_prop(id=param_id, param_info=param_info))
-
-        # Creating the list of all the attacks
+        info = AttackInfo.model_validate(AttackFactory.get_information(id=atk, exclude=set()))
         out[atk] = RegisteredObject(
-            id=atk_info.id,
-            name=atk_info.name,
+            id=info.id,
+            name=info.name,
             task=Task.Classification.name,
-            knowledge=atk_info.knowledge.name,
-            description=atk_info.description,
-            parameters=parameters
+            knowledge=info.knowledge.name if info.knowledge else None,
+            description=info.description,
+            parameters=_collect_params(atk),
+            objective=_str_enum(getattr(info, "objective", None)),
+            privacy_type=_str_enum(getattr(info, "privacy_type", None)),
         )
     return out
 
@@ -107,6 +124,19 @@ def get_devices() -> list[str]:
         devices.append("mps")
 
     return devices
+
+
+@router.get("/privacy/datasets")
+def get_privacy_datasets() -> list[dict]:
+    return [spec.info() for spec in get_privacy_dataset_factory().list_specs()]
+
+
+@router.get("/privacy/models")
+def get_privacy_models() -> list[dict]:
+    factory = get_default_model_factory()
+    if isinstance(factory, AppPrivacyModelFactory):
+        return [spec.info() for spec in factory.list_specs()]
+    return []  # fallback if factory not yet configured
 
 
 @router.get("/variables")

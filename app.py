@@ -8,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from attack_server.models.main_model import ServerConfig, parsed_argument
 from attack_server.routers import api_router
 from attack_server.routers.info_router import router
+from benchmarking.privacy.loading import ensure_privacy_registries
 
 ########### Environmental variables ###########
 args = parsed_argument(ServerConfig)
@@ -47,6 +48,7 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+    ensure_privacy_registries()
     # Include routers
     app.include_router(api_router)
     app.state.config = config

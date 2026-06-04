@@ -2,6 +2,7 @@ import base64
 import io
 import math
 import os
+from typing import Literal, get_args, get_origin
 
 from PIL import Image
 from annotated_types import Gt, Ge, Le, Lt
@@ -10,89 +11,91 @@ from pydantic_core import PydanticUndefined
 
 from attack_server.lib.model import ParametersProps
 
-
-######################### CONVERSION #########################
 def b64str_to_pil(b64_image_str: str) -> Image.Image:
-    """
-    from a base64 encoded string to a PIL image
-    """
     image_bytes = base64.b64decode(b64_image_str)
-    image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
-    return image
+    return Image.open(io.BytesIO(image_bytes)).convert("RGB")
 
 
 def pil_to_b64str(pil_image: Image.Image) -> str:
-    """
-    from a PIL image to a base64 encoded string
-    """
     buffered = io.BytesIO()
     pil_image.save(buffered, format="PNG")
-    adv_img_base64_str = base64.b64encode(buffered.getvalue()).decode("utf-8")
-    return adv_img_base64_str
+    return base64.b64encode(buffered.getvalue()).decode("utf-8")
 
 
-##############################################################
+def _param_name(id: str, info: FieldInfo) -> str:
+    return getattr(info, "title") or id
 
 
-def get_parameter_prop(
-        id: str,
-        param_info: FieldInfo
-) -> ParametersProps:
-    """
-    This function allows to properly produce a P
-    """
-    max_value = 1000
-    min_value = 1
+def _parse_bounds(metadata: list) -> tuple[float, float, bool, bool]:
+    lo, hi = 0.0, 1000.0
+    has_lo, has_hi = False, False
+    for val in metadata:
+        if isinstance(val, (Gt, Ge)):
+            lo = getattr(val, "ge" if isinstance(val, Ge) else "gt")
+            has_lo = True
+        elif isinstance(val, (Lt, Le)):
+            hi = getattr(val, "le" if isinstance(val, Le) else "lt")
+            has_hi = True
+    return lo, hi, has_lo, has_hi
 
-    if len(param_info.metadata) > 0:
-        # Extracting from the metadata the maximum value and minimum value of the parameters
-        # If there are no constraints than the max value and the min value are the one above indicated
-        for val in param_info.metadata:
-            if isinstance(val, (Gt, Ge)):
-                min_value = getattr(val, 'ge' if isinstance(val, Ge) else 'gt')
-            elif isinstance(val, (Lt, Le)):
-                max_value = getattr(val, 'le' if isinstance(val, Le) else 'lt')
 
-    # Handle infinity values - replace with reasonable defaults
-    if math.isinf(max_value) or max_value > 1e10:
-        max_value = 1000
-    if math.isinf(min_value) or min_value < -1e10:
-        min_value = 0 if param_info.annotation == float else 1
+def _clamp(v: float, lo: float, hi: float) -> float:
+    return max(lo, min(hi, v))
 
-    # Ensure min < max
-    if min_value > max_value:
-        tmp = min_value
-        min_value = max_value
-        max_value = tmp
 
-    # The default value, if not assigned, is the mean of the interval
-    if param_info.default is PydanticUndefined:
-        default = (max_value + min_value) / 2
+def get_parameter_prop(id: str, param_info: FieldInfo) -> ParametersProps:
+    name = _param_name(id, param_info)
+    ann = param_info.annotation
+
+    # --- enum (Literal or str) ---
+    if get_origin(ann) is Literal:
+        options = [str(o) for o in get_args(ann)]
+        default = param_info.default if param_info.default is not PydanticUndefined else options[0]
+        return ParametersProps(id=id, name=name, default=str(default),
+                               description=param_info.description, kind="enum", options=options)
+
+    if ann is str:
+        default = param_info.default if param_info.default is not PydanticUndefined else ""
+        return ParametersProps(id=id, name=name, default=str(default),
+                               description=param_info.description)
+
+    # --- number ---
+    is_int = ann is int
+    lo, hi, has_lo, has_hi = _parse_bounds(param_info.metadata)
+    if is_int and not has_lo:
+        lo = 1
+
+    if math.isinf(hi) or hi > 1e10:
+        hi = 1000
+    if math.isinf(lo) or lo < -1e10:
+        lo = 0
+
+    default = param_info.default
+    if default is PydanticUndefined:
+        default = (hi + lo) / 2
     else:
-        default = param_info.default
-        # Clamp default to valid range
-        default = max(min_value, min(max_value, default))
+        default = float(default)
+        if not has_hi and 0 <= default <= 1:
+            hi = 1
+        if not has_lo and default < lo:
+            lo = min(0, default)
+        if not has_hi and default > hi:
+            hi = default * 2
+        default = _clamp(default, lo, hi)
 
-    if hasattr(param_info, 'step'):
-        step = getattr(param_info, 'step')
-    else:
-        step = (max_value - min_value) / 10000
-        if id == "lr":
-            step = 1e-6
-            max_value = 1
-            min_value = 1e-3
-        if isinstance(param_info.annotation, int) or param_info.annotation == int:
+    if lo > hi:
+        lo, hi = hi, lo
+
+    step = getattr(param_info, "step", None)
+    if step is None:
+        step = (hi - lo) / 10000
+        if is_int:
             step = max(int(step), 1)
 
-    name = getattr(param_info, "title") if hasattr(param_info, "title") and getattr(param_info, "title") != None else id
     return ParametersProps(
-        id=id,
-        name=name,
-        min=float(min_value),
-        max=float(max_value),
-        step=float(step),
-        default=float(default),
-        description=param_info.description
+        id=id, name=name,
+        min=float(lo), max=float(hi), step=float(step),
+        default=float(default), description=param_info.description,
     )
 
 

@@ -12,6 +12,16 @@
 *.sh
 __pycache__
 
+# Runtime artifacts
+data/
+output/
+tmp/
+
+# Test configs / scratch
+test_*.yaml
+test_*.py
+
+# Submodules / build artifacts
 */submodules/
 */benchmark_out/
 */assets/
