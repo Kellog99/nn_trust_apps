@@ -6,19 +6,35 @@ from uuid import uuid4
 
 from attack_server.models.main_model import ServerConfig
 from attack_server.models.privacy import PrivacyAttackProps
-from benchmarking.privacy.execution import execute_privacy_job
 from benchmarking.privacy.job_models import (
     PrivacyAttackPayload,
     PrivacyDatasetConfig,
     PrivacyJobConfig,
     PrivacyTargetModelConfig,
     PrivacyTargetTrainingOverrideConfig,
+    RuntimeOptionConfig,
 )
+from benchmarking.privacy.loading import resolve_privacy_protocol
+from benchmarking.privacy.membership_inference import run_membership_inference_job
+from benchmarking.privacy.model_inversion import run_model_inversion_job
 from benchmarking.privacy.metrics import PrivacyExecutionResult
-from benchmarking.privacy.job_models import RuntimeOptionConfig
+from benchmarking.privacy.persistence import (
+    load_privacy_execution_result,
+    privacy_result_exists,
+    save_privacy_execution_result,
+)
+from benchmarking.privacy.property_inference import run_property_inference_job
+from benchmarking.privacy.reconstruction import run_reconstruction_job
 
 _executor = ThreadPoolExecutor(max_workers=1)
 _jobs_lock = Lock()
+
+_RUNNERS = {
+    "membership_inference": run_membership_inference_job,
+    "model_inversion": run_model_inversion_job,
+    "property_inference": run_property_inference_job,
+    "reconstruction": run_reconstruction_job,
+}
 
 
 @dataclass
@@ -28,6 +44,20 @@ class PrivacyJobRecord:
 
 
 _jobs: dict[str, PrivacyJobRecord] = {}
+
+
+def execute_privacy_job(job: PrivacyJobConfig) -> PrivacyExecutionResult:
+    protocol = resolve_privacy_protocol(job)
+    if job.options.load_results and privacy_result_exists(job, protocol):
+        return load_privacy_execution_result(job, protocol)
+    if privacy_result_exists(job, protocol) and not job.options.overwrite:
+        raise FileExistsError("Result exists. Set overwrite=true or load_results=true.")
+    runner = _RUNNERS.get(protocol.value)
+    if runner is None:
+        raise NotImplementedError(f"Privacy protocol '{protocol.value}' is not implemented.")
+    result = runner(job)
+    save_privacy_execution_result(job, protocol, result)
+    return result
 
 
 def to_privacy_job_config(
@@ -77,12 +107,11 @@ def to_privacy_job_config(
 
 def submit(job_config: PrivacyJobConfig) -> str:
     job_id = uuid4().hex
-    job_record = PrivacyJobRecord(
-        config=job_config,
-        future=_executor.submit(execute_privacy_job, job_config),
-    )
     with _jobs_lock:
-        _jobs[job_id] = job_record
+        _jobs[job_id] = PrivacyJobRecord(
+            config=job_config,
+            future=_executor.submit(execute_privacy_job, job_config),
+        )
     return job_id
 
 

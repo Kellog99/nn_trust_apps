@@ -20,12 +20,14 @@ from nn_trust.attack.privacy import E3DataDependentAttack
 
 from .contracts import PrivacyDatasetHandle, resolve_privacy_model_task
 
-from .job_models import PrivacyJobConfig, PrivacyProtocolId
+from .job_models import MaterializedPrivacySplits, PrivacyJobConfig, PrivacyProtocolId
 from .loading import (
+    build_privacy_attack_kwargs,
     build_privacy_loader,
     build_privacy_metadata,
     init_privacy_job,
     load_privacy_target_model,
+    plan_privacy_split_indices,
     resolve_common_attack_extra_kwargs,
     resolve_surrogate_model_id,
 )
@@ -35,8 +37,6 @@ from .metrics import (
     PrivacyPendingArtifactFormat,
     compute_model_inversion_metrics,
 )
-from .protocol import build_privacy_attack_kwargs
-from .split_planning import MaterializedPrivacySplits, plan_privacy_split_indices
 
 _DEFAULT_EXTRACTION_EVAL_BATCH_SIZE = 256
 

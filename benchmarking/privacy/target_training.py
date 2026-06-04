@@ -20,8 +20,7 @@ from nn_trust.attack.utils.training import (
 
 from .contracts import PrivacyDatasetHandle
 from .persistence import _ensure_dir, _write_json
-from .job_models import PrivacyJobConfig, TargetModelSourceType
-from .split_planning import MaterializedPrivacySplits
+from .job_models import MaterializedPrivacySplits, PrivacyJobConfig, TargetModelSourceType
 
 _TRAINED_MODEL_FILENAME = "best_model.pt"
 _TRAINER_CONFIG_FILENAME = "trainer_config.json"

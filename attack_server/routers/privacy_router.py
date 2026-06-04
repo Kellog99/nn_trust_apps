@@ -10,7 +10,7 @@ from attack_server.models.main_model import ServerConfig, config_field
 from attack_server.models.privacy import PrivacyArtifactRef, PrivacyAttackOutput, PrivacyAttackProps
 from benchmarking.privacy.metrics import PrivacyExecutionResult, PrivacyPendingArtifactFormat
 from benchmarking.privacy.persistence import resolve_privacy_output_dir
-from benchmarking.privacy.protocol import resolve_requested_or_registered_protocol
+from benchmarking.privacy.loading import resolve_privacy_protocol
 
 router = APIRouter(prefix="/privacy", tags=["jobs management", "jobs utils"])
 
@@ -112,7 +112,7 @@ def get_privacy_artifact(job_id: str, artifact_id: str):
     if pending is None:
         raise HTTPException(status_code=404, detail=f"Artifact '{artifact_id}' not found.")
 
-    output_dir = resolve_privacy_output_dir(job.config, resolve_requested_or_registered_protocol(job.config))
+    output_dir = resolve_privacy_output_dir(job.config, resolve_privacy_protocol(job.config))
     output_path = output_dir / pending.filename
     media = _media_type(pending.metadata | {"format": pending.format.value})
 

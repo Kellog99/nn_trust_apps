@@ -15,11 +15,13 @@ from .artifact_rendering import (
     can_render_reconstruction_record,
     encode_reconstruction_png_base64,
 )
-from .job_models import PrivacyJobConfig, PrivacyProtocolId
+from .job_models import MaterializedPrivacySplits, PrivacyJobConfig, PrivacyProtocolId
 from .loading import (
+    build_privacy_attack_kwargs,
     build_privacy_metadata,
     init_privacy_job,
     load_privacy_target_model,
+    plan_privacy_split_indices,
     resolve_common_attack_extra_kwargs,
 )
 from .metrics import (
@@ -28,8 +30,6 @@ from .metrics import (
     PrivacyPendingArtifactFormat,
     compute_reconstruction_metrics,
 )
-from .protocol import build_privacy_attack_kwargs
-from .split_planning import MaterializedPrivacySplits, plan_privacy_split_indices
 
 
 def _resolve_reconstruction_attack_extra_kwargs(

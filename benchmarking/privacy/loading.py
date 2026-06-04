@@ -9,8 +9,10 @@ from pathlib import Path
 from typing import Any
 
 import torch
+
 from torch.utils.data import DataLoader
 
+from nn_trust.attack import AttackFactory
 from nn_trust.attack.privacy import register_privacy_attacks
 from nn_trust.attack.utils.model_building import (
     build_privacy_model,
@@ -24,8 +26,7 @@ from .contracts import (
     register_privacy_resources,
     resolve_privacy_model_task,
 )
-from .job_models import PrivacyJobConfig, PrivacySplitStrategy, TargetModelSourceType
-from .split_planning import MaterializedPrivacySplits
+from .job_models import MaterializedPrivacySplits, PrivacyJobConfig, PrivacyProtocolId, PrivacySplitPlanConfig, PrivacySplitStrategy, TargetModelSourceType
 from .target_training import LoadedPrivacyTargetModel, train_privacy_target_model
 
 
@@ -212,3 +213,55 @@ def build_privacy_metadata(
         "dataset_seed": int(job.dataset.seed),
     }
     return target_meta, dataset_meta
+
+
+def plan_privacy_split_indices(
+    dataset_size: int,
+    split_plan: PrivacySplitPlanConfig,
+) -> MaterializedPrivacySplits:
+    """Create deterministic shadow/target/train/val/test splits."""
+    if dataset_size < 4:
+        raise ValueError("dataset_size must be >= 4 for shadow/train/val/test splits.")
+    gen = torch.Generator().manual_seed(split_plan.seed)
+    perm = torch.randperm(dataset_size, generator=gen).tolist()
+    shadow_sz = max(1, min(dataset_size - 3, int(dataset_size * split_plan.shadow_ratio)))
+    pool = perm[:dataset_size - shadow_sz]
+    shadow = perm[dataset_size - shadow_sz:]
+    train_sz = min(max(1, int(len(pool) * split_plan.target_train_ratio)), len(pool) - 2)
+    remainder = len(pool) - train_sz
+    val_sz = max(1, remainder // 2)
+    return MaterializedPrivacySplits(
+        shadow=[int(i) for i in shadow],
+        target_train=[int(i) for i in pool[:train_sz]],
+        target_val=[int(i) for i in pool[train_sz:train_sz + val_sz]],
+        target_test=[int(i) for i in pool[train_sz + val_sz:]],
+    )
+
+
+def resolve_privacy_protocol(job: PrivacyJobConfig) -> PrivacyProtocolId:
+    """Resolve the privacy protocol from registered attack metadata."""
+    info = AttackFactory.get_info(job.attack.attack_id)
+    return PrivacyProtocolId(str(getattr(info.privacy_type, "value", info.privacy_type)))
+
+
+def build_privacy_attack_kwargs(
+    job: PrivacyJobConfig,
+    *,
+    model: torch.nn.Module,
+    device: torch.device,
+    task,
+    verbose: bool = False,
+    extra_attack_kwargs: dict | None = None,
+) -> dict:
+    """Build kwargs for AttackFactory.create(...)."""
+    params = dict(job.attack.attack_params)
+    if extra_attack_kwargs:
+        params.update(extra_attack_kwargs)
+    return {
+        "class_id": job.attack.attack_id,
+        "model": model,
+        "device": device,
+        "task": task,
+        "verbose": verbose,
+        **params,
+    }
