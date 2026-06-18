@@ -1,7 +1,0 @@
-[submodule "submodules/data_quality"]
-	path = submodules/data_quality
-	url = git@github.com:LeoPhilosophers/data-quality.git
-[submodule "submodules/nn_trust"]
-	path = submodules/nn_trust
-	url = https://github.com/LeoPhilosophers/nn_trust.git
-	branch=develop
