@@ -1,0 +1,3 @@
+[submodule "submodules/nn_trust"]
+	path = submodules/nn_trust
+	url = https://github.com/Kellog99/nn_trust.git
