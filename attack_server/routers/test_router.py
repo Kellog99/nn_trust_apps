@@ -17,8 +17,8 @@ from attack_server.utils.utils import b64str_to_pil
 from nn_trust import Task
 from nn_trust.attack import EvasionAttack
 from nn_trust.attack.attack_factory import AttackFactory as EAF
-from nn_trust.attack.utils.pytorch_logger import PyTorchCheckpointLogger
 from nn_trust.target import AvoidOnehotTarget
+from nn_trust.utils.logger import PyTorchCheckpointLogger
 
 router = APIRouter(prefix="/test", tags=["jobs management", "jobs utils"])
 
@@ -79,6 +79,7 @@ async def single_attack(
     ###########################################
 
     ################## IMAGE ##################
+    print(f"image = {body.image}")
     pil_image = b64str_to_pil(body.image)
     input_dimensionality = model_info.input_dimensionality
 

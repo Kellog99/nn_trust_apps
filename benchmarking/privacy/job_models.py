@@ -2,11 +2,12 @@
 
 from enum import Enum
 from pathlib import Path
-from typing import Any, Literal, Union
-from pydantic_core import core_schema
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
-from nn_trust.attack.utils.training import OptimizerType
+from pydantic_core import core_schema
+
+from nn_trust.utils.training import OptimizerType
 
 
 class RuntimeOptionConfig(BaseModel):

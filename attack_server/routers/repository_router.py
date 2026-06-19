@@ -8,10 +8,10 @@ This router handles all the repositories:
 import json
 import os
 from pathlib import Path
-from typing import Literal, Union
+from typing import Literal, Union, Optional
 
 from fastapi import APIRouter, Query, Depends, Request, Body
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 from attack_server.models.info import ModelInfo, DatasetInfo
 from attack_server.models.main_model import config_field
@@ -44,7 +44,6 @@ def get_info(
             description="It tells what file has to be check and load inside the repository."
         ),
         repo_path: str | Path = Depends(get_path),
-        base_model: type[BaseModel] = None
 ):
     """
     Get all models or dataset that are saved in the `repo_path` that satisfy the filter given by the `tasks`.
@@ -54,7 +53,6 @@ def get_info(
         tasks (str | list[str] | None )
         file_checker
         repo_path
-        base_model
     """
 
     ################### Validating the path ###################
@@ -85,19 +83,18 @@ def get_info(
             info_json["repository"] = root
 
             ############################ Instance of the base model ############################
-            if base_model is None:
+
+            def get_model(data: dict):
                 for model in [DatasetInfo, ModelInfo, ModelReportProps, DatasetReportProps]:
                     try:
-                        model.model_validate(info_json)
-                        base_model = model
-                        break
-                    except:
-                        print(f"Exclusion of the model {model}")
-                if base_model is None:
-                    raise ValueError("No model among the possible models is valid. Please retry.")
+                        return model.model_validate(data)
+                    except ValidationError:
+                        continue
+                raise ValueError("No model among the possible models is valid. Please retry.")
+
             ####################################################################################
 
-            info = base_model.model_validate(info_json)
+            info = get_model(info_json)
             info_task = info.info.task if isinstance(info, (ModelReportProps, DatasetReportProps)) else info.task
             if tasks is None or info_task in tasks:
                 out.append(info)

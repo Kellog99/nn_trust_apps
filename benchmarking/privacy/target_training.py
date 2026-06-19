@@ -1,7 +1,5 @@
 """App-side privacy target-model training and provenance resolution."""
 
-from __future__ import annotations
-
 import hashlib
 import json
 from dataclasses import dataclass
@@ -12,15 +10,14 @@ import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader, Dataset
 
-from nn_trust.attack.utils.model_building import build_privacy_model
-from nn_trust.attack.utils.training import (
+from nn_trust.utils.model_building import build_privacy_model
+from nn_trust.utils.training import (
     TrainerConfig,
     build_trainer,
 )
-
 from .contracts import PrivacyDatasetHandle
-from .persistence import _ensure_dir, _write_json
 from .job_models import MaterializedPrivacySplits, PrivacyJobConfig, TargetModelSourceType
+from .persistence import _ensure_dir, _write_json
 
 _TRAINED_MODEL_FILENAME = "best_model.pt"
 _TRAINER_CONFIG_FILENAME = "trainer_config.json"
@@ -67,11 +64,11 @@ def resolve_trained_target_output_dir(job: PrivacyJobConfig) -> Path:
         return Path(job.target_model.checkpoint_path).parent
 
     return (
-        Path(job.dataset.root)
-        / job.dataset.dataset_id
-        / "models"
-        / job.target_model.model_id
-        / compute_privacy_target_model_fingerprint(job)
+            Path(job.dataset.root)
+            / job.dataset.dataset_id
+            / "models"
+            / job.target_model.model_id
+            / compute_privacy_target_model_fingerprint(job)
     )
 
 
@@ -92,9 +89,9 @@ def _resolve_target_training_seed(job: PrivacyJobConfig) -> int:
 
 
 def resolve_target_trainer_config(
-    job: PrivacyJobConfig,
-    *,
-    device: torch.device,
+        job: PrivacyJobConfig,
+        *,
+        device: torch.device,
 ) -> TrainerConfig:
     """Resolve the trainer configuration for one train-backed privacy target model."""
     seed = _resolve_target_training_seed(job)
@@ -121,11 +118,11 @@ def resolve_target_trainer_config(
 
 
 def _build_loader_from_dataset(
-    dataset: Dataset,
-    *,
-    batch_size: int,
-    shuffle: bool,
-    device: torch.device,
+        dataset: Dataset,
+        *,
+        batch_size: int,
+        shuffle: bool,
+        device: torch.device,
 ) -> DataLoader:
     return DataLoader(
         dataset,
@@ -137,10 +134,10 @@ def _build_loader_from_dataset(
 
 
 def _build_target_train_and_val_datasets(
-    job: PrivacyJobConfig,
-    *,
-    dataset: PrivacyDatasetHandle,
-    split_plan: MaterializedPrivacySplits,
+        job: PrivacyJobConfig,
+        *,
+        dataset: PrivacyDatasetHandle,
+        split_plan: MaterializedPrivacySplits,
 ) -> tuple[Dataset, Dataset]:
     train_indices = list(split_plan.target_train)
     if job.target_model.property_ratio is None:
@@ -176,12 +173,12 @@ def _build_target_train_and_val_datasets(
 
 
 def train_privacy_target_model(
-    job: PrivacyJobConfig,
-    *,
-    dataset: PrivacyDatasetHandle,
-    split_plan: MaterializedPrivacySplits,
-    device: torch.device,
-    model_kwargs: dict[str, Any] | None = None,
+        job: PrivacyJobConfig,
+        *,
+        dataset: PrivacyDatasetHandle,
+        split_plan: MaterializedPrivacySplits,
+        device: torch.device,
+        model_kwargs: dict[str, Any] | None = None,
 ) -> LoadedPrivacyTargetModel:
     """Train or load one target model owned by the app-side privacy executor."""
     if job.target_model.source_type != TargetModelSourceType.TRAIN:

@@ -9,7 +9,6 @@ from attack_server.models.main_model import ServerConfig, SharableVariables, con
 from attack_server.utils.utils import get_parameter_prop
 from benchmarking.privacy.contracts import get_privacy_dataset_factory
 from benchmarking.privacy.model_registry import AppPrivacyModelFactory
-from nn_trust.attack.utils.model_building import get_default_model_factory
 from nn_trust.attack.attack_factory import AttackFactory, AttackInfo
 from nn_trust.core import Task
 from nn_trust.evaluation.statistic_factory import StatisticsFactory as SF, InfoStatistic
@@ -40,7 +39,7 @@ def _collect_params(atk: str) -> list:
 
 @router.get("/attacks")
 def get_attacks_info(
-    excluded_attacks: list[str] = Depends(config_field(attr_name="excluded_attacks")),
+        excluded_attacks: list[str] = Depends(config_field(attr_name="excluded_attacks")),
 ) -> dict[str, RegisteredObject]:
     """List all available attacks for classification."""
     out: dict[str, RegisteredObject] = {}

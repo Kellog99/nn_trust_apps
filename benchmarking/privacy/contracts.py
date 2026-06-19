@@ -1,21 +1,12 @@
 """App-side protocol contracts for privacy datasets, models, and training."""
 
-from __future__ import annotations
-
 from pathlib import Path
-from typing import Any, Protocol
+from typing import Protocol, Optional
 
 import torch
-import torch.nn as nn
 from torch.utils.data import Dataset, Subset
 
 from nn_trust import Task
-from nn_trust.attack.utils.model_building import (
-    build_privacy_model,
-    get_default_model_factory,
-    set_default_model_factory,
-)
-
 from .dataset_registry import AppPrivacyDatasetFactory, build_app_privacy_dataset_factory
 from .model_registry import build_app_privacy_model_factory
 
@@ -40,10 +31,10 @@ class PrivacyAttributeDatasetHandle(PrivacyDatasetHandle, Protocol):
     """Public extension for privacy datasets exposing binary attributes."""
 
     def get_binary_attribute_values(
-        self,
-        attribute_name: str,
-        *,
-        indices: list[int] | tuple[int, ...] | None = None,
+            self,
+            attribute_name: str,
+            *,
+            indices: Optional[list[int] | tuple[int, ...]] = None,
     ) -> torch.Tensor:
         """Return binary attribute values for the requested dataset indices."""
 
@@ -58,7 +49,7 @@ def register_privacy_resources() -> None:
     Apps should call this before using model-building helpers.
     """
     global _default_dataset_factory
-    set_default_model_factory(build_app_privacy_model_factory())
+    #set_default_model_factory(build_app_privacy_model_factory())
     _default_dataset_factory = build_app_privacy_dataset_factory()
 
 
@@ -70,10 +61,10 @@ def get_privacy_dataset_factory() -> AppPrivacyDatasetFactory:
 
 
 def get_privacy_binary_attribute_values(
-    dataset: PrivacyDatasetHandle,
-    *,
-    attribute_name: str,
-    indices: list[int] | tuple[int, ...] | None = None,
+        dataset: PrivacyDatasetHandle,
+        *,
+        attribute_name: str,
+        indices: list[int] | tuple[int, ...] | None = None,
 ) -> torch.Tensor:
     """Return one binary attribute column through the public privacy dataset API."""
     getter = getattr(dataset, "get_binary_attribute_values", None)
@@ -93,10 +84,11 @@ def get_privacy_binary_attribute_values(
 
 
 def resolve_privacy_model_task(model_id: str) -> Task:
-    info = get_default_model_factory().get_model_info(model_id)
+    info = {}#get_default_model_factory().get_model_info(model_id)
     task_value = info.get("task")
     if not isinstance(task_value, set) or not all(isinstance(t, Task) for t in task_value):
-        raise ValueError(f"Privacy target model '{model_id}' must expose a task set of Task values, got {task_value!r}.")
+        raise ValueError(
+            f"Privacy target model '{model_id}' must expose a task set of Task values, got {task_value!r}.")
     tasks = frozenset(task_value)
     if len(tasks) != 1:
         raise ValueError(
@@ -107,14 +99,14 @@ def resolve_privacy_model_task(model_id: str) -> Task:
 
 
 def load_privacy_dataset(
-    *,
-    dataset_id: str,
-    root: Path,
-    seed: int = 42,
-    task_attr: str | None = None,
-    use_embeddings: bool = True,
-    max_samples: int | None = None,
-    **kwargs,
+        *,
+        dataset_id: str,
+        root: Path,
+        seed: int = 42,
+        task_attr: str | None = None,
+        use_embeddings: bool = True,
+        max_samples: int | None = None,
+        **kwargs,
 ) -> PrivacyDatasetHandle:
     """Load one registered privacy dataset wrapper.
 
@@ -130,14 +122,3 @@ def load_privacy_dataset(
         max_samples=max_samples,
         **kwargs,
     )
-
-
-__all__ = [
-    "PrivacyAttributeDatasetHandle",
-    "PrivacyDatasetHandle",
-    "get_privacy_dataset_factory",
-    "get_privacy_binary_attribute_values",
-    "load_privacy_dataset",
-    "register_privacy_resources",
-    "resolve_privacy_model_task",
-]

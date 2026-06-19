@@ -6,14 +6,8 @@ from uuid import uuid4
 
 from attack_server.models.main_model import ServerConfig
 from attack_server.models.privacy import PrivacyAttackProps
-from benchmarking.privacy.job_models import (
-    PrivacyAttackPayload,
-    PrivacyDatasetConfig,
-    PrivacyJobConfig,
-    PrivacyTargetModelConfig,
-    PrivacyTargetTrainingOverrideConfig,
-    RuntimeOptionConfig,
-)
+from benchmarking.privacy.job_models import PrivacyAttackPayload, PrivacyDatasetConfig, PrivacyJobConfig, \
+    PrivacyTargetModelConfig, PrivacyTargetTrainingOverrideConfig, RuntimeOptionConfig
 from benchmarking.privacy.loading import resolve_privacy_protocol
 from benchmarking.privacy.membership_inference import run_membership_inference_job
 from benchmarking.privacy.model_inversion import run_model_inversion_job
@@ -61,10 +55,10 @@ def execute_privacy_job(job: PrivacyJobConfig) -> PrivacyExecutionResult:
 
 
 def to_privacy_job_config(
-    body: PrivacyAttackProps,
-    config: ServerConfig,
-    *,
-    device: str = "cpu",
+        body: PrivacyAttackProps,
+        config: ServerConfig,
+        *,
+        device: str = "cpu",
 ) -> PrivacyJobConfig:
     model = body.model
     return PrivacyJobConfig(

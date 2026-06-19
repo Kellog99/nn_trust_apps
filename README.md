@@ -29,8 +29,8 @@ Here are all the step for using this repository:
     * **Downloading**: download the submodules in the corresponding folder `./submodules/name` from `git`:
 
         ```bash
-        git submodule add https://github.com/LeoPhilosophers/nn_trust.git submodules/nn_trust
-        git submodule add https://github.com/LeoPhilosophers/data_quality.git submodules/data_quality
+        git submodule add https://github.com/Kellog99/nn_trust.git submodules/nn_trust
+        git submodule add https://github.com/Kellog99/data_quality.git submodules/data_quality
         ```
       Due to internal policy all the settings of git are handled through `https` requests. Moreover, the `nn_trust`
       repository is set on the branch `develop`.

@@ -7,7 +7,7 @@ import timm
 import torch
 
 from nn_trust import ModelAdapter, Task
-from nn_trust.models.api_model import APIModel
+from nn_trust.models.api_model import APICVModel
 
 
 def load_model(
@@ -129,7 +129,7 @@ def load_model(
         case "api":
             if model_api is None:
                 raise ValueError("The model's is not given.")
-            model = APIModel(
+            model = APICVModel(
                 api_url=model_api,
                 task=task
             )

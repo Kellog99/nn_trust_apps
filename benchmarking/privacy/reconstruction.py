@@ -6,7 +6,6 @@ import torch
 
 from nn_trust import ModelAdapter
 from nn_trust.attack import AttackFactory
-from nn_trust.attack.privacy import MIFaceAttack
 
 from .contracts import PrivacyDatasetHandle, resolve_privacy_model_task
 
@@ -80,7 +79,7 @@ def _create_reconstruction_attack(
     target_model: torch.nn.Module,
     dataset: PrivacyDatasetHandle,
     device: torch.device,
-) -> MIFaceAttack:
+) -> "MIFaceAttack":
     """Instantiate one app-side reconstruction attack."""
     task = resolve_privacy_model_task(job.target_model.model_id)
     attack_kwargs = build_privacy_attack_kwargs(
@@ -92,7 +91,7 @@ def _create_reconstruction_attack(
         extra_attack_kwargs=_resolve_reconstruction_attack_extra_kwargs(job, dataset=dataset),
     )
     attack = AttackFactory.create(**attack_kwargs)
-    if not isinstance(attack, MIFaceAttack):
+    if not isinstance(attack, "MIFaceAttack"):
         raise TypeError(
             "The current app-side reconstruction executor only supports MIFaceAttack, "
             f"got {type(attack).__name__}."
@@ -110,7 +109,7 @@ def _infer_reconstruction_input_shape(dataset: PrivacyDatasetHandle) -> tuple[in
 
 
 def _collect_reconstruction_outputs(
-    attack: MIFaceAttack,
+    attack: "MIFaceAttack",
     *,
     num_classes: int,
     input_shape: tuple[int, ...],

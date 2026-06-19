@@ -13,8 +13,7 @@ import torch
 from torch.utils.data import DataLoader
 
 from nn_trust.attack import AttackFactory
-from nn_trust.attack.privacy import register_privacy_attacks
-from nn_trust.attack.utils.model_building import (
+from nn_trust.utils.model_building import (
     build_privacy_model,
     get_default_model_factory,
     infer_data_derived_model_kwargs,
@@ -26,14 +25,14 @@ from .contracts import (
     register_privacy_resources,
     resolve_privacy_model_task,
 )
-from .job_models import MaterializedPrivacySplits, PrivacyJobConfig, PrivacyProtocolId, PrivacySplitPlanConfig, PrivacySplitStrategy, TargetModelSourceType
+from .job_models import MaterializedPrivacySplits, PrivacyJobConfig, PrivacyProtocolId, PrivacySplitPlanConfig, \
+    PrivacySplitStrategy, TargetModelSourceType
 from .target_training import LoadedPrivacyTargetModel, train_privacy_target_model
 
 
 def ensure_privacy_registries() -> None:
     """Import privacy datasets, models, and attacks so factories are populated."""
     register_privacy_resources()
-    register_privacy_attacks()
 
 
 def load_privacy_dataset_wrapper(job: PrivacyJobConfig) -> PrivacyDatasetHandle:
@@ -54,11 +53,11 @@ def load_privacy_dataset_wrapper(job: PrivacyJobConfig) -> PrivacyDatasetHandle:
 
 
 def load_privacy_target_model(
-    job: PrivacyJobConfig,
-    *,
-    dataset: PrivacyDatasetHandle,
-    split_plan: MaterializedPrivacySplits,
-    device: torch.device,
+        job: PrivacyJobConfig,
+        *,
+        dataset: PrivacyDatasetHandle,
+        split_plan: MaterializedPrivacySplits,
+        device: torch.device,
 ) -> LoadedPrivacyTargetModel:
     """Load one target model for a privacy job.
 
@@ -121,12 +120,12 @@ def resolve_surrogate_model_id(job: PrivacyJobConfig) -> str:
 
 
 def build_privacy_loader(
-    dataset: PrivacyDatasetHandle,
-    indices: list[int],
-    *,
-    batch_size: int,
-    shuffle: bool,
-    device: torch.device,
+        dataset: PrivacyDatasetHandle,
+        indices: list[int],
+        *,
+        batch_size: int,
+        shuffle: bool,
+        device: torch.device,
 ) -> DataLoader:
     """Materialize one dataloader from caller-owned dataset indices."""
     subset = dataset.build_subset(indices)
@@ -151,8 +150,8 @@ def init_privacy_job(job: PrivacyJobConfig) -> tuple[torch.device, PrivacyDatase
 
 
 def resolve_common_attack_extra_kwargs(
-    job: PrivacyJobConfig,
-    dataset: PrivacyDatasetHandle,
+        job: PrivacyJobConfig,
+        dataset: PrivacyDatasetHandle,
 ) -> dict[str, Any]:
     """Resolve num_classes validation and seed injection shared across protocols."""
     extra_attack_kwargs: dict[str, Any] = {}
@@ -172,16 +171,16 @@ def resolve_common_attack_extra_kwargs(
 
 
 def build_privacy_metadata(
-    job: PrivacyJobConfig,
-    loaded_target: LoadedPrivacyTargetModel,
-    dataset: PrivacyDatasetHandle,
-    split_plan: MaterializedPrivacySplits,
-    device: torch.device,
-    *,
-    split_names: tuple[str, str, str, str] = ("shadow", "target_train", "target_val", "target_test"),
-    split_strategy: str | None = None,
-    task_attr: str | None = None,
-    **extra_target_meta: Any,
+        job: PrivacyJobConfig,
+        loaded_target: LoadedPrivacyTargetModel,
+        dataset: PrivacyDatasetHandle,
+        split_plan: MaterializedPrivacySplits,
+        device: torch.device,
+        *,
+        split_names: tuple[str, str, str, str] = ("shadow", "target_train", "target_val", "target_test"),
+        split_strategy: str | None = None,
+        task_attr: str | None = None,
+        **extra_target_meta: Any,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     """Build target_metadata and dataset_metadata dicts shared by all protocols."""
     target_meta = {
@@ -216,8 +215,8 @@ def build_privacy_metadata(
 
 
 def plan_privacy_split_indices(
-    dataset_size: int,
-    split_plan: PrivacySplitPlanConfig,
+        dataset_size: int,
+        split_plan: PrivacySplitPlanConfig,
 ) -> MaterializedPrivacySplits:
     """Create deterministic shadow/target/train/val/test splits."""
     if dataset_size < 4:
@@ -245,13 +244,13 @@ def resolve_privacy_protocol(job: PrivacyJobConfig) -> PrivacyProtocolId:
 
 
 def build_privacy_attack_kwargs(
-    job: PrivacyJobConfig,
-    *,
-    model: torch.nn.Module,
-    device: torch.device,
-    task,
-    verbose: bool = False,
-    extra_attack_kwargs: dict | None = None,
+        job: PrivacyJobConfig,
+        *,
+        model: torch.nn.Module,
+        device: torch.device,
+        task,
+        verbose: bool = False,
+        extra_attack_kwargs: dict | None = None,
 ) -> dict:
     """Build kwargs for AttackFactory.create(...)."""
     params = dict(job.attack.attack_params)
