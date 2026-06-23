@@ -1,7 +1,6 @@
 import datetime
 import time
 from pathlib import Path
-from pprint import pprint
 
 import torch
 from fastapi import APIRouter, Body, Query, HTTPException
@@ -56,7 +55,6 @@ async def single_attack(
     try:
         # Your existing code...
         model_info: ModelInfo = body.model
-        pprint(model_info.model_dump())
     except ValidationError as e:
         print("=== VALIDATION ERROR ===")
         print(e.json())
@@ -76,10 +74,11 @@ async def single_attack(
     )
     model = model.to(device)
     model.eval()
+    print(" Model loaded ".center(40, "#"))
+
     ###########################################
 
     ################## IMAGE ##################
-    print(f"image = {body.image}")
     pil_image = b64str_to_pil(body.image)
     input_dimensionality = model_info.input_dimensionality
 
@@ -106,16 +105,19 @@ async def single_attack(
     if x.dim() == 3:
         x = x.unsqueeze(0)
     x = x.to(device)
+    print(" Image loaded ".center(40, "#"))
+
     ###############################################
 
     ################## ATTACK ##################
     attack: RegisteredObject = body.attack
     attack: EvasionAttack = EAF.create(
-        model=model,
+        model=model.to(device),
         class_id=attack.id,
         task=Task.from_str(model_info.task),
         **{param.id: param.default for param in attack.parameters}
     )
+    print(" Attack Created ".center(40, "#"))
     ############################################
 
     ################## Results ##################
@@ -129,6 +131,7 @@ async def single_attack(
         states=["conf_adversarial", "conf_original"],
         path=out_path
     )
+    print(" Executing the Attack ".center(40, "#"))
 
     start = time.time()
     x_adv = attack.generate(
@@ -137,13 +140,17 @@ async def single_attack(
         logger=logger
     )
     end = time.time()
+    print(" Attack Completed ".center(40, "#"))
 
     y_adv = model(x_adv).argmax(-1)
     ssim_measure = ssim_metric(x, x_adv.cpu()).item()
     conf_original, conf_adversarial = {}, {}
     if logger:
-        conf_original: dict = logger.get_logging(tag="conf_original", state="generate")
-        conf_adversarial: dict = logger.get_logging(tag="conf_adversarial", state="generate")
+        conf_original: dict = logger.get_log(tag="conf_original", state="generate")
+        conf_adversarial: dict = logger.get_log(tag="conf_adversarial", state="generate")
+
+        print(conf_original)
+        print(conf_adversarial)
     ############################################
 
     ################## Invert transform ################
