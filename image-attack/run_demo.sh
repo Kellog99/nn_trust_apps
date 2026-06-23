@@ -1,1 +1,0 @@
-uv run main.py --labels_path assets/data/birds_plane_classes.json
