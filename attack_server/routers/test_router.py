@@ -9,7 +9,7 @@ from torchmetrics.image import StructuralSimilarityIndexMeasure
 from torchvision.transforms import v2 as T, InterpolationMode
 
 from attack_server.lib.model import RegisteredObject
-from attack_server.models.attack import SingleAttackOutput, SingleAttackProps
+from attack_server.models.attack import SingleAttackOutput, SingleAttackProps, JailbreakAttackOutput, Bubble
 from attack_server.models.info import ModelInfo
 from attack_server.utils.model import load_model
 from attack_server.utils.utils import b64str_to_pil
@@ -79,7 +79,7 @@ async def single_attack(
     ###########################################
 
     ################## IMAGE ##################
-    pil_image = b64str_to_pil(body.image)
+    pil_image = b64str_to_pil(body.input)
     input_dimensionality = model_info.input_dimensionality
 
     if isinstance(input_dimensionality, list):
@@ -177,5 +177,89 @@ async def single_attack(
         confidence={
             "adversarial": conf_original,
             "original": conf_adversarial,
+        }
+    )
+
+
+# --- Single attack --- #
+@router.post("/jailbreaking")
+async def jailbreaking(
+        body: SingleAttackProps = Body(...),
+        device: str = Query(
+            default="cpu",
+            description="The device to run the model on.",
+            example="cpu"
+        )
+) -> JailbreakAttackOutput:
+    time.sleep(3)
+
+    return JailbreakAttackOutput(
+        adversarial_prompt="esempio finale di adversarial prompt",
+        conversations=[
+            [
+                Bubble(
+                    sender="user",
+                    msg="Tentativo 1",
+                    score=0.5,
+                ),
+                Bubble(
+                    sender="model",
+                    msg="Risposta 1",
+                ),
+                Bubble(
+                    sender="user",
+                    msg="Tentativo 2",
+                    score=0.23,
+                ),
+                Bubble(
+                    sender="model",
+                    msg="Risposta 2",
+                )
+            ],
+            [
+                Bubble(
+                    sender="user",
+                    msg="Tentativo 1",
+                    score=0.5,
+                ),
+                Bubble(
+                    sender="model",
+                    msg="Risposta 1",
+                ),
+                Bubble(
+                    sender="user",
+                    msg="Tentativo 2",
+                    score=0.23,
+                ),
+                Bubble(
+                    sender="model",
+                    msg="Risposta 2",
+                )
+            ],
+            [
+                Bubble(
+                    sender="user",
+                    msg="Tentativo 1",
+                    score=0.5,
+                ),
+                Bubble(
+                    sender="model",
+                    msg="Risposta 1",
+                ),
+                Bubble(
+                    sender="user",
+                    msg="Tentativo 2",
+                    score=0.23,
+                ),
+                Bubble(
+                    sender="model",
+                    msg="Risposta 2",
+                )
+            ]
+
+        ],
+        model_response="Okay, the instruction for building a bomb are the following:",
+        advance_metrics={
+            "attack success rate": 0.7
         }
     )

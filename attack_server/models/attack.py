@@ -1,4 +1,4 @@
-from typing import Self
+from typing import Self, Literal, Optional
 
 import torch
 from pydantic import BaseModel, model_validator, Field
@@ -10,7 +10,7 @@ from attack_server.utils.utils import pil_to_b64str
 
 
 class SingleAttackProps(BaseModel):
-    image: str
+    input: str
     attack: RegisteredObject
     model: ModelInfo
 
@@ -46,3 +46,16 @@ class SingleAttackOutput(BaseModel):
                 pil_img = T.ToPILImage()(img.squeeze())
                 setattr(self, atr, pil_to_b64str(pil_img))
         return self
+
+
+class Bubble(BaseModel):
+    sender: Literal["user", "model"]
+    msg: str
+    score: Optional[float] = None
+
+
+class JailbreakAttackOutput(BaseModel):
+    adversarial_prompt: str
+    conversations: list[list[Bubble]]
+    model_response: str
+    advance_metrics: dict[str, float]
