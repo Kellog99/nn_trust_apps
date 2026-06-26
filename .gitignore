@@ -29,3 +29,4 @@ test_*.py
 */datasets_repo/
 */models_repo/
 */benchmark_out/*
+frontend/

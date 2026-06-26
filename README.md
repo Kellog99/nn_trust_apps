@@ -105,7 +105,7 @@ Now it is possible to execute all the functionalities of the STABLE-AI framework
     - `benchmarking/main.py` — postprocessing and runner entrypoints
     - `benchmarking/benchmark_utils/` — executor, evaluator, and helpers
 
-- `image-attack/` — demo UI and static assets.
+- `frontend/` — demo UI and static assets.
 
 If you edit Python code, prefer editing the module inside the corresponding subfolder and run the local unit tests when
 available. The `nn_trust` submodule contains the core attack implementations.

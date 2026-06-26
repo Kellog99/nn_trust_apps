@@ -1,0 +1,1 @@
+- [NLP Attack Integration](.claude/projects/-home-user-Desktop-nn-trust-apps/memory/nlp-attack-integration.md) — Backend refactoring to support NLP tasks.

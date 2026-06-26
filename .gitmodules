@@ -1,3 +1,7 @@
 [submodule "submodules/nn_trust"]
 	path = submodules/nn_trust
 	url = https://github.com/Kellog99/nn_trust.git
+	branch = develop
+[submodule "image-attack"]
+	path = image-attack
+	url = https://github.com/Kellog99/stable_ai_gui.git

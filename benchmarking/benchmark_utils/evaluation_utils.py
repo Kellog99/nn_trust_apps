@@ -199,3 +199,50 @@ def save_attack_result_to_disk_v2(
         pickle.dump(atk_result["statistics_states"], f)
     with open(output_path / "info.json", 'w') as f:
         json.dump(atk_result["info"], f)
+
+import nn_trust.attack.nlp.gcg
+import nn_trust.attack.nlp.pair
+from nn_trust.attack import AttackFactory
+from nn_trust.core import Task
+
+def evaluate_attack_nlp(
+        dataloader: torch.utils.data.DataLoader,
+        model: ModelAdapter,
+        attack_config: dict,
+        statistics: list[dict],
+        device: torch.device,
+        verbose: bool = False,
+        tracker=None,
+        benchmark_id: str = None,
+        num_tasks: str = None
+    ) -> dict:
+    """
+    Evaluate the NLP model on the attack that is passed.
+    """
+    try:
+        # Load the attack using the factory
+        atk_name = attack_config.pop("name")
+        atk_id = attack_config.pop("id", atk_name)
+
+        # Build config
+        config_class = AttackFactory.get_information(atk_id, exclude=set()).class_type.CONFIG_T
+        # We need to map parameters correctly from the flat dict to the Pydantic config
+        # This is a simplification; a more robust approach might be needed
+        config = config_class(model=model, **attack_config)
+
+        # Create attack
+        atk = AttackFactory.create(atk_id, config=config)
+
+        # Run attack on all goals in dataloader
+        results = []
+        for goal, _, _ in dataloader:
+            # goal is a single string here
+            state = atk.generate(goal=goal)
+            results.append(state)
+
+        # Return results (placeholder for statistics)
+        return {"statistics": {}, "statistics_states": {}, "info": {}}
+    except Exception as e:
+        logging.error(f"Error during NLP evaluation: {e}")
+        traceback.print_exc()
+        raise e

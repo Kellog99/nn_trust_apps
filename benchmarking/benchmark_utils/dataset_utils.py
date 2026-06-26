@@ -1,6 +1,25 @@
+from .nlp_dataset import NLPGoalDataset
 import os
-import random
 from pathlib import Path
+import json
+
+def get_dataloader_nlp(dataset: str, batch: int, name: str | None = None) -> DataLoader:
+    """
+    Return the dataloader to use for NLP tasks.
+    """
+    json_path = os.path.join(dataset, f"{name}.json")
+    if not os.path.exists(json_path):
+        raise ValueError(f"The dataset {json_path} does not exist.")
+
+    dataset = NLPGoalDataset(json_path)
+
+    dataloader = DataLoader(
+        dataset,
+        batch_size=batch,
+        shuffle=False,
+        pin_memory=True,
+    )
+    return dataloader
 
 import numpy
 import torch

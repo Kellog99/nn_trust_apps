@@ -33,6 +33,7 @@ class ExecutionConfig(BaseModel):
     model: str
     attacks: Any
     metrics: Any
+    task_type: Literal["classification", "nlp"] = "classification"
 
 
 class BenchmarkModelProps(BaseModel):
