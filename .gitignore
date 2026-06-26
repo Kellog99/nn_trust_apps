@@ -30,3 +30,8 @@ test_*.py
 */models_repo/
 */benchmark_out/*
 frontend/
+
+# Claude
+.claude/
+CLAUDE.md
+MEMORY.md
