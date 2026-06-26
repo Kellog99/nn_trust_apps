@@ -56,6 +56,6 @@ class Bubble(BaseModel):
 
 class JailbreakAttackOutput(BaseModel):
     adversarial_prompt: str
-    conversations: list[list[Bubble]]
+    conversations: Optional[list[list[Bubble]]] = None
     model_response: str
     advance_metrics: dict[str, float]

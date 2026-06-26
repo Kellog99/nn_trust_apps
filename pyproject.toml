@@ -23,4 +23,5 @@ dependencies = [
     "flask>=3.1.2",
     "uvicorn[standard] >= 0.38.0",
     "ray>=2.55.0",
+    "docutils>=0.23"
 ]
