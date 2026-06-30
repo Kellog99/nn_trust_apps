@@ -2,6 +2,7 @@ import datetime
 import time
 from pathlib import Path
 from pprint import pprint
+import yaml
 
 import torch
 from fastapi import APIRouter, Body, Query, HTTPException
@@ -16,8 +17,6 @@ from attack_server.utils.model import load_model
 from attack_server.utils.utils import b64str_to_pil
 from nn_trust import Task
 from nn_trust.attack import EvasionAttack
-from nn_trust.attack.nlp.pair import PAIRAttack, PAIRAttackConfig
-from nn_trust.attack.nlp.adapters.huggingface_nlp_adapter import HuggingFaceNLPAdapter
 
 # ... existing imports ...
 
@@ -178,53 +177,22 @@ async def single_attack(
 @router.post("/jailbreaking")
 async def jailbreaking(
         body: dict = Body(...),
+        device: str = Query(
+            default="cpu",
+            description="The device to run the model on.",
+            example="cpu"
+        )
+
 ):
     """
     Handle the POST request for executing a jailbreak attack using PAIR.
     """
-    # model_data = body["model"]
-    # print(f"body:")
-    # for key, val in body.items():
-    #     print(f"    {key}: {val}")
-    # print(f"\nmodel_data:")
-    # for key, val in model_data.items():
-    #     print(f"    {key}: {val}")
-    # Force model_type to HuggingFace if it's currently timm (the default)
-    # model_data["model_type"] = "HuggingFace"
-
-    print(f"\nmodel_type={model_data.get('model_type')}")
-        
-    model_info = ModelInfo(**model_data)
-    # Instantiate the adapter
-    model = load_model(
-        model_type=model_info.model_type,
-        model_path=model_info.repository,
-        task=Task.from_str(model_info.task),
-        model_api=model_info.api,
-        model_id=model_info.id,
-    )
-
-    # In a real scenario, you'd use appropriate adapters for attacker/judge.
-    # For now, using a mock setup or the target model as a placeholder if needed.
-    target_adapter = HuggingFaceNLPAdapter(model=model, tokenizer=None) # Assume tokenizer handled or passed
-
-    config = PAIRAttackConfig(
-        model=target_adapter,
-        attacker=target_adapter, # Simplified
-        judge=target_adapter,    # Simplified
-        max_iters=5,
-        target_score=9.0,
-        n_streams=1,
-    )
-    attack = PAIRAttack(config)
-
-    # Run the attack
-    goal = body["input"]
-    state = attack.generate(goal=goal)
+    print(yaml.dump(body, default_flow_style=False, sort_keys=False))
 
     return {
-        "adversarial_prompt": state.attacker_turns[-1].content if state.attacker_turns else "N/A",
-        "conversations": [[{"sender": "user", "msg": turn.content}] for turn in state.dialogue],
-        "model_response": state.last_target_response or "N/A",
-        "advance_metrics": {"score": state.best_score}
+        "adversarial_prompt": "N/A",
+        "conversations": "N/A",
+        "model_response": "N/A",
+        "advance_metrics": "N/A"
     }
+

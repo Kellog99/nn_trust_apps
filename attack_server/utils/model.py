@@ -79,13 +79,16 @@ def load_model(
             llm = AutoModelForCausalLM.from_pretrained(model_id)
             tok = AutoTokenizer.from_pretrained(model_id)
             model = HuggingFaceNLPAdapter(
-                mdoel=llm, 
+                model=llm, 
                 tokenizer=tok,
                 # name=name,
                 # threat_model=Knowledge.Black,
                 # task=Task.Language,
                 **kwargs,
                 )
+            
+            return model
+        
         case "plain":
             if model_path is None:
                 raise ValueError("model_path must be provided for 'plain' model type.")
