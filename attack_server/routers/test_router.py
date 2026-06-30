@@ -187,7 +187,10 @@ async def jailbreaking(
     """
     Handle the POST request for executing a jailbreak attack using PAIR.
     """
-    print(yaml.dump(body, default_flow_style=False, sort_keys=False))
+    # print(yaml.dump(body, default_flow_style=False, sort_keys=False))
+
+    import time 
+    time.sleep(2)
 
     return {
         "adversarial_prompt": "N/A",
