@@ -8,14 +8,20 @@ This router handles all the repositories:
 import json
 import os
 from pathlib import Path
-from typing import Literal, Union, Optional
+from typing import Literal, Union, Optional, Annotated
 
 from fastapi import APIRouter, Query, Depends, Request, Body
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel, Field, TypeAdapter
 
 from attack_server.models.info import ModelInfo, DatasetInfo
 from attack_server.models.main_model import config_field
 from attack_server.models.reports import ModelReportProps, DatasetReportProps
+
+# Define the discriminated union
+InfoUnion = Annotated[
+    Union[DatasetInfo, ModelInfo, ModelReportProps, DatasetReportProps],
+    Field(discriminator='type')
+]
 
 router = APIRouter(prefix="/repository")
 
@@ -82,22 +88,32 @@ def get_info(
             # Dynamically saving all the absolute path for the file
             info_json["repository"] = root
 
+            # print(f"\ninfo_json:{info_json}\n")
+
             ############################ Instance of the base model ############################
 
             def get_model(data: dict):
-                for model in [DatasetInfo, ModelInfo, ModelReportProps, DatasetReportProps]:
-                    try:
-                        return model.model_validate(data)
-                    except ValidationError:
-                        continue
-                raise ValueError("No model among the possible models is valid. Please retry.")
+                adapter = TypeAdapter(InfoUnion)
+                return adapter.validate_python(data)
 
             ####################################################################################
 
             info = get_model(info_json)
+
+            # print(f"\ninfo:")
+            # for key, val in dict(info).items():
+            #     print(f"    {key}: {val}")
+            # print(f"\ninfo_type: {type(info)}\n")
+
             info_task = info.info.task if isinstance(info, (ModelReportProps, DatasetReportProps)) else info.task
+            
+            # print("\ninfo_task: ", info_task, "\n")
+
             if tasks is None or info_task in tasks:
                 out.append(info)
+
+    # print("\nout: ", out, "\n")
+
     return out
 
 

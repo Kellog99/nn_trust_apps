@@ -18,7 +18,7 @@ def convert_csv_to_json(csv_path: Path, json_path: Path):
         json.dump(data, jsonfile, indent=4)
     print(f"Converted {csv_path} to {json_path}")
 
-base_dir = Path("/home/user/Desktop/nn_trust_apps/data/harmbench")
+base_dir = Path("data/harmbench")
 csv_dir = base_dir / "behavior_datasets"
 json_dir = base_dir / "json_datasets"
 

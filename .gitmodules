@@ -2,6 +2,6 @@
 	path = submodules/nn_trust
 	url = https://github.com/Kellog99/nn_trust.git
 	branch = develop
-[submodule "image-attack"]
-	path = image-attack
+[submodule "frontend"]
+	path = frontend
 	url = https://github.com/Kellog99/stable_ai_gui.git

@@ -65,6 +65,7 @@ class Info(BaseModel):
 
 
 class DatasetInfo(Info):
+    type: Literal["dataset"] = "dataset"
     num_sample: Optional[int] = Field(
         default=None,
         title="Number of Samples",
@@ -78,6 +79,7 @@ class DatasetInfo(Info):
 
 
 class ModelInfo(Info):
+    type: Literal["model"] = "model"
     dataset: Optional[str] = Field(
         default=None,
         title="Dataset",
@@ -109,16 +111,17 @@ class ModelInfo(Info):
 
     ######################################################################################
 
-    @model_validator(mode="after")
-    def validate_library_model(self):
-        """
-        Validates the existence of timm model.
-        """
-        if self.model_type in ["timm", "HuggingFace"]:
-            lib = timm if self.model_type == "timm" else timm
-            if self.id not in lib.list_models():
-                raise ValueError(
-                    f"You are trying to use a model, {self.id}, from the library {self.model_type} but it doesn't exists."
-                )
-        return self
+    # @model_validator(mode="after")
+    # def validate_library_model(self):
+    #     """
+    #     Validates the existence of timm model.
+    #     """
+    #     print(f"\nmodel_type: {self.model_type}")
+    #     if self.model_type in ["timm"]:
+    #         lib = timm if self.model_type == "timm" else timm
+    #         if self.id not in lib.list_models():
+    #             raise ValueError(
+    #                 f"You are trying to use a model, {self.id}, from the library {self.model_type} but it doesn't exists."
+    #             )
+    #     return self
 

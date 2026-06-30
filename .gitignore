@@ -30,6 +30,7 @@ test_*.py
 */models_repo/
 */benchmark_out/*
 frontend/
+data/
 
 # Claude
 .claude/

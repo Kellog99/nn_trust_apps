@@ -6,8 +6,8 @@ import torch
 from tqdm.auto import tqdm
 
 from nn_trust.models.model_utils import load_model
-from .dataset_utils import get_data_transformation_config, get_dataloader
-from .evaluation_utils import evaluate_attack, save_attack_result_to_disk_v2
+from .dataset_utils import get_data_transformation_config, get_dataloader, get_dataloader_nlp
+from .evaluation_utils import evaluate_attack, evaluate_attack_nlp, save_attack_result_to_disk_v2
 
 
 def override_keys_if_not_none(base_dict: dict, overriding_dict: dict) -> dict:
@@ -58,6 +58,7 @@ def execute_job(config: dict):
             dataset_default_config = json.load(f)
     with open(Path(model_config["model_path"]) / "info.json") as f:
         model_default_config = json.load(f)
+    model = load_model(**model_config)
 
     model.metadata = override_keys_if_not_none(model_default_config, model_config)
 

@@ -5,8 +5,10 @@ from typing import Optional
 
 import timm
 import torch
+from transformers import AutoModelForCausalLM, AutoTokenizer
 
 from nn_trust import ModelAdapter, Task
+from nn_trust.attack.nlp.adapters import HuggingFaceNLPAdapter
 from nn_trust.models.api_model import APICVModel
 
 
@@ -73,6 +75,17 @@ def load_model(
 
     model = None
     match model_type:
+        case "HuggingFace":
+            llm = AutoModelForCausalLM.from_pretrained(model_id)
+            tok = AutoTokenizer.from_pretrained(model_id)
+            model = HuggingFaceNLPAdapter(
+                mdoel=llm, 
+                tokenizer=tok,
+                # name=name,
+                # threat_model=Knowledge.Black,
+                # task=Task.Language,
+                **kwargs,
+                )
         case "plain":
             if model_path is None:
                 raise ValueError("model_path must be provided for 'plain' model type.")

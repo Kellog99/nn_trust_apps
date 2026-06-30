@@ -20,6 +20,10 @@ class SharableVariables(BaseModel):
         default=1234,
         description="Seed for the random number generator (default: 1234)"
     )
+    reload: bool = Field(
+        default=False,
+        description="Enable auto-reload (default: False)"
+    )
 
     ########################## PATH ##########################
     path_ds_repo: str = Field(
@@ -139,6 +143,15 @@ def parsed_argument(model_class) -> Namespace:
                 f"--{field_name}",
                 nargs='*',
                 default=default,
+                help=help_text
+            )
+            continue
+
+        # Handle bool types (store_true)
+        if field_type is bool:
+            parser.add_argument(
+                f"--{field_name}",
+                action='store_true',
                 help=help_text
             )
             continue
