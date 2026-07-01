@@ -5,5 +5,4 @@ from benchmarking.benchmark_utils import (read_config_file, BenchmarkConfig, Ben
 
 from benchmarking.benchmark_utils.pdf_report import AdversarialReportGenerator, create_benchmark_report
 
-from benchmarking.benchmark_utils.utils import validate_configuration, generate_benchmark_id, inflate_configuration, \
-    postprocess_benchmark_run_resultsV2
+from benchmarking.benchmark_utils.utils import postprocess_results

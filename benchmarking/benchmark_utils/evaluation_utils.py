@@ -27,7 +27,7 @@ def evaluate_attack(
         tracker=None,
         benchmark_id: str = None,
         num_tasks: str = None
-    ) -> dict:
+) -> dict:
     """
     Evaluate the model on the attack that is passed.
 
@@ -74,9 +74,9 @@ def evaluate_attack(
         for idx, (batch, label, element_info) in progress_bar:
             if tracker:
                 tracker.update_progress.remote(f"{atk_id}_{benchmark_id}",
-                                                status="in_progress",
-                                                progress=int((idx / len(dataloader)) * 100),
-                                                message=f"Processing batch {idx + 1}/{len(dataloader)}")
+                                               status="in_progress",
+                                               progress=int((idx / len(dataloader)) * 100),
+                                               message=f"Processing batch {idx + 1}/{len(dataloader)}")
             batch = batch.to(device)
             label = label.to(device)
             y_one_hot = torch.nn.functional.one_hot(label, num_classes=num_classes)
@@ -119,10 +119,11 @@ def evaluate_attack(
             statistics_composer.update(**input_stat)
 
         if tracker:
-            tracker.update_progress.remote(f"{atk_id}_{benchmark_id}", status="completed", progress=100, message=f"Completed attack {atk_id}")
+            tracker.update_progress.remote(f"{atk_id}_{benchmark_id}", status="completed", progress=100,
+                                           message=f"Completed attack {atk_id}")
         return {
             "statistics": statistics_composer.compute(),
-            "statistics_states":statistics_composer.get_raw_state(),
+            "statistics_states": statistics_composer.get_raw_state(),
             "info": {
                 'name': model.name,
                 'parameters': sum([param.numel() for param in model.parameters()]),
@@ -137,11 +138,16 @@ def evaluate_attack(
         logging.error(f"Error during evaluation of attack {attack_config.get('name', 'unknown')} : {e}")
         traceback.print_exc()
         if tracker:
-            tracker.update_progress.remote(f"{atk_id}_{benchmark_id}", status="completed", progress=50,
-                                            message=f"Failed attack {atk_id} with error {e}")
+            tracker.update_progress.remote(
+                f"{atk_id}_{benchmark_id}",
+                status="completed",
+                progress=50,
+                message=f"Failed attack {atk_id} with error {e}"
+            )
         raise e
 
-def read_results_from_diskV2(results_dir: str | pathlib.Path):
+
+def read_results_from_disk(results_dir: str | pathlib.Path):
     """Read from disk back to Evaluator results object structure
     The directory from which results are read are the same kind of the target of `save_`
     self.results = dict(info, attacks=dict(attacks=dict(statistics, statistics_states)), aggregate_statistics:optional)
@@ -178,13 +184,14 @@ def aggregate_attacks_statistics(statistics_composer: StatisticComposer, results
     statistics_composer.reset()
     return aggregate_metrics
 
+
 def save_attack_result_to_disk_v2(
-    benchmark_id: str,
-    atk_result: dict,
-    atk_id: str,
-    dataset_name: str,
-    model_name: str,
-    root_path: str | pathlib.Path) -> None:
+        benchmark_id: str,
+        atk_result: dict,
+        atk_id: str,
+        dataset_name: str,
+        model_name: str,
+        root_path: str | pathlib.Path) -> None:
     """
     Save single attack results from static method -evaluate_attack- to a JSON file
     """

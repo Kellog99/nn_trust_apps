@@ -8,7 +8,7 @@ from pathlib import Path
 import yaml
 
 from nn_trust.evaluation.composer import StatisticComposer, ConfigStatisticComposer
-from .evaluation_utils import read_results_from_diskV2, aggregate_attacks_statistics
+from .evaluation_utils import read_results_from_disk, aggregate_attacks_statistics
 from .pydantic_models import BenchmarkConfig
 
 
@@ -69,12 +69,16 @@ def config_file_path_selector(config_dir: Path | str = ".") -> Path:
     return selected_config_path
 
 
-def postprocess_benchmark_run_resultsV2(benchmark_run_dir: str | Path, verbose=True):
-    benchmark_run_dir = Path(benchmark_run_dir)
+def postprocess_results(benchmark_run_dir: str | Path, verbose=True):
+    """
+    This function has the role to process the results that come from the benchmark procedure.
+
+    """
+    benchmark_run_dir = Path(benchmark_run_dir).expanduser()
 
     for data_model_dir in [x for x in benchmark_run_dir.iterdir() if x.is_dir()]:
         try:
-            results = read_results_from_diskV2(data_model_dir)
+            results = read_results_from_disk(data_model_dir)
             info = results["info"]
             with open(data_model_dir / "info.json", "w") as f:
                 json.dump(info, f, indent=4)
@@ -99,55 +103,3 @@ def postprocess_benchmark_run_resultsV2(benchmark_run_dir: str | Path, verbose=T
             print(f"Failed postprocessing on {data_model_dir.relative_to(benchmark_run_dir)}")
             print(e)
             traceback.print_exc()
-
-
-def validate_configuration(benchmark_config: BenchmarkConfig):
-    # validate configuration (test if model, dataset and attacks all make sense, if paths exists, etc.)
-    config = benchmark_config.model_dump()
-    for dataset in config["datasets"]:
-        if not Path(dataset['source_path']).exists():
-            raise ValueError(f"Dataset source path {dataset['source_path']} does not exist.")
-    for model in config["models"]:
-        if "model_path" in model and not Path(model["model_path"]).exists():
-            raise ValueError(f"Model path {model['model_path']} does not exist.")
-    for attack in config["attacks"]:
-        class_id = attack
-
-
-def inflate_configuration(benchmark_config: BenchmarkConfig, benchmark_id: str) -> list[dict]:
-    # Inflate configuration
-    # For each attack, model and attack, create a single dict element with all necessary information to execute operation and merge end result.
-    # Create product from (dataset, model, attack) and add evaluation and options to each element, that are constant.
-    # Inject benchmark idenfication element for dretrieval and merging results at the end.
-    # Returns:
-    # List of attack execution configurations sorted in order of MODEL > DATASET > ATTACKS
-    config = benchmark_config.model_dump()
-    inflated_configuration = []
-    for i, model in enumerate(config["models"]):
-        model_identifications = [model.get("name"), model.get("id"), model.get("model_path").split("/")[-1]]
-        model_identification = next(mid for mid in model_identifications if mid is not None)
-        for j, dataset in enumerate(config["datasets"]):
-            for k, attack in enumerate(config["attacks"]):
-                atk_identifications = [attack.get("name"), attack.get("id")]
-                atk_identification = next(atk_id for atk_id in atk_identifications if atk_id is not None)
-                inflated_configuration.append(copy.deepcopy({
-                    "dataset": dataset,
-                    "model": model,
-                    "attack": attack,
-                    "evaluation": config["evaluation"],
-                    "options": config["options"],
-                    "benchmark_info": {
-                        "benchmark_id": benchmark_id,
-                        "dataset_id": dataset.get("name"),
-                        "model_id": model_identification,
-                        "atk_id": atk_identification,
-                        "user_id": os.getlogin(),
-                        "host": os.uname().nodename
-                    }
-                }))
-    return inflated_configuration
-
-
-def generate_benchmark_id():
-    """Generate a unique benchmark id based on current timestamp. Format: YYYYMMDDTHHMMSS"""
-    return datetime.now().strftime("%Y%m%dT%H%M%S")
