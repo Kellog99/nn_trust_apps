@@ -1,1 +1,0 @@
-docker run --gpus all -p 7860:7860 -it demonn

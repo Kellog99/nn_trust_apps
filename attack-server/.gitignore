@@ -1,8 +1,0 @@
-assets
-!docs/*.jpg
-datasets_repo
-models_repo
-benchmark_out*
-
-*.sh
-

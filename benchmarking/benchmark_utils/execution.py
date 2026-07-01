@@ -1,25 +1,24 @@
-from pathlib import Path
 import json
+from pathlib import Path
 
-from tqdm.auto import tqdm
-import torch
 import ray
+import torch
+from tqdm.auto import tqdm
 
 from nn_trust.models.model_utils import load_model
-from .evaluation_utils import (
-    evaluate_attack,
-    save_attack_result_to_disk_v2
-)
 from .dataset_utils import get_data_transformation_config, get_dataloader
+from .evaluation_utils import evaluate_attack, save_attack_result_to_disk_v2
+
 
 def override_keys_if_not_none(base_dict: dict, overriding_dict: dict) -> dict:
     """override keys in base dictionary using overriding dict if the latter are not none.
     Or the original dict do not contain the key to begin with"""
     res = dict(base_dict)  # create copy not to modify original element
-    for k,v in overriding_dict.items():
+    for k, v in overriding_dict.items():
         if v is not None or k not in res:
             res[k] = overriding_dict[k]
     return res
+
 
 def execute_job(config: dict):
     """A function that use a full description of benchmark configuration and executor, is tasked to execute benchmark.
@@ -50,19 +49,20 @@ def execute_job(config: dict):
     with open(Path(model_config["model_path"]) / "info.json") as f:
         model_default_config = json.load(f)
 
-
     model.metadata = override_keys_if_not_none(model_default_config, model_config)
-    dataloader.metadata = override_keys_if_not_none(dataset_default_config ,dataset)
-   
+    dataloader.metadata = override_keys_if_not_none(dataset_default_config, dataset)
+
     res = evaluate_attack(
         model=model,
         dataloader=dataloader,
         attack_config=config["attack"],
         statistics=config["evaluation"]["statistics"],
-        device=torch.device("cuda") if (config["options"]["gpu"] and torch.cuda.is_available()) else torch.device("cpu"),
+        device=torch.device("cuda") if (config["options"]["gpu"] and torch.cuda.is_available()) else torch.device(
+            "cpu"),
         num_classes=dataset["num_classes"],
     )
     return {"attack_results": res, "benchmark_job_info": config["benchmark_info"]}
+
 
 class LocalSerialExecutor:
 
@@ -105,7 +105,6 @@ class LocalRayExecutor:
         self.verbose = verbose
         self.execute_job = ray.remote(num_gpus=0.4)(execute_job)
 
-
     def save_results(self, job_output):
         save_attack_result_to_disk_v2(
             benchmark_id=job_output["benchmark_job_info"]["benchmark_id"],
@@ -121,7 +120,7 @@ class LocalRayExecutor:
         jobs_results = ray.get(jobs_futures)
         for job_result in jobs_results:
             self.save_results(job_result)
-        return {"output_path":Path(self.root_path) / jobs_results[0]["benchmark_job_info"]["benchmark_id"]}
+        return {"output_path": Path(self.root_path) / jobs_results[0]["benchmark_job_info"]["benchmark_id"]}
 
     def __repr__(self):
         return f"LocalRayExecutor(root_path='{self.root_path}', verbose='{self.verbose}')"

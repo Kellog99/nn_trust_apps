@@ -6,8 +6,9 @@ Ten prompts the user for
 2. Desired dataset
 Communicate output file location
 """
-from pathlib import Path
 import argparse
+from pathlib import Path
+
 from benchmark_utils.pdf_report import create_benchmark_report
 
 GENERATION_AUTHORITY = "Ai Lab - Ldo"
