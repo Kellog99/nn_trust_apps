@@ -19,7 +19,7 @@ from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, KeepTogether
 
-from nn_trust.attack.attack_factory import EvasionAttackFactory as EAF
+from nn_trust.attack.attack_factory import AttackFactory as EAF
 
 
 class BenchmarkModelProps(BaseModel):

@@ -5,7 +5,7 @@ import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from attack_server.models.main_model import ServerConfig, parsed_argument
+from models.main_model import ServerConfig, parsed_argument
 from attack_server.routers import api_router
 from attack_server.routers.info_router import router
 from benchmarking.privacy.loading import ensure_privacy_registries

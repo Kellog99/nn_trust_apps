@@ -4,7 +4,7 @@ import torch
 from pydantic import BaseModel, Field, model_validator
 from torchvision.transforms import v2 as T
 
-from attack_server.lib.model import RegisteredObject
+from models.model import RegisteredObject
 from attack_server.utils.utils import pil_to_b64str
 
 

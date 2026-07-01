@@ -6,7 +6,7 @@ from fastapi import Request
 from pydantic import BaseModel, Field
 
 
-# These are the variables that can be seen by the user
+# These are the variables that can be seen by the user, i.e. they are sent to the front end
 class SharableVariables(BaseModel):
     host: str = Field(
         default="localhost",

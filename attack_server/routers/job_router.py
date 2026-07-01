@@ -11,7 +11,7 @@ from fastapi import Body, Query
 from fastapi.responses import JSONResponse
 
 from lib.disk_reader import find_model_and_task_dir
-from lib.model import ExecutionConfig
+from models.model import ExecutionConfig
 from utils.utils import find_image
 
 benchmarking = importlib.import_module("benchmarking")
@@ -57,7 +57,7 @@ def get_jobs(id: str = Query(None)):
                 for k, v in tasks.items():
                     output_dict = {}
                     if v["benchmark_id"] == id:
-                        atk_id = k.split(f"_{v["benchmark_id"]}")[0]
+                        atk_id = k.split(f"_{v['benchmark_id']}")[0]
                         output_dict["id"] = atk_id
                         output_dict["name"] = router.state.attacks[
                             atk_id].name if atk_id != "reference" else "Reference (Identity Attack)"
@@ -241,5 +241,3 @@ async def start_benchmark_job(body: ExecutionConfig = Body(...)) -> str | Respon
     except Exception as e:
         logging.error(f"Unexpected error during job start: {str(e)}")
         raise e
-
-

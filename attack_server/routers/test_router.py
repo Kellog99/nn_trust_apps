@@ -8,9 +8,9 @@ from pydantic import ValidationError
 from torchmetrics.image import StructuralSimilarityIndexMeasure
 from torchvision.transforms import v2 as T, InterpolationMode
 
-from attack_server.lib.model import RegisteredObject
-from attack_server.models.attack import SingleAttackOutput, SingleAttackProps, JailbreakAttackOutput, Bubble
-from attack_server.models.info import ModelInfo
+from models.model import RegisteredObject
+from models.attack import SingleAttackOutput, SingleAttackProps, JailbreakAttackOutput, Bubble
+from models.info import ModelInfo
 from attack_server.utils.model import load_model
 from attack_server.utils.utils import b64str_to_pil
 from nn_trust import Task
@@ -35,11 +35,10 @@ async def single_attack(
     """
     This function handle the POST request for executing a single image attack given:
         1. an image: str
-        2. an attack: RegisterdObject
+        2. an attack: RegisteredObject
         3. a model: ModelInfo
     Args:
         body: Body of the request
-        out_path: Path for saving eventually temporary files due to the logger
         device: device where the computations are done.
 
     Returns:

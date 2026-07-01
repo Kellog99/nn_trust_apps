@@ -9,9 +9,9 @@ from pathlib import Path
 
 from fastapi import APIRouter, Query, Body, Depends
 
-from attack_server.lib.model import BenchmarkModelProps
-from attack_server.models.main_model import config_field
-from attack_server.models.reports import ModelReportProps
+from models.model import BenchmarkModelProps
+from models.main_model import config_field
+from models.reports import ModelReportProps
 from attack_server.routers.repository_router import get_info
 
 router = APIRouter(prefix="/report", tags=["datasets and models"])

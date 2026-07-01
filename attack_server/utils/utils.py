@@ -9,7 +9,7 @@ from annotated_types import Gt, Ge, Le, Lt
 from pydantic.fields import FieldInfo
 from pydantic_core import PydanticUndefined
 
-from attack_server.lib.model import ParametersProps
+from models.model import ParametersProps
 
 def b64str_to_pil(b64_image_str: str) -> Image.Image:
     image_bytes = base64.b64decode(b64_image_str)

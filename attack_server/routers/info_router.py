@@ -4,8 +4,8 @@ from typing import Literal, get_origin
 import torch
 from fastapi import APIRouter, HTTPException, Request, Depends, Body
 
-from attack_server.lib.model import RegisteredObject
-from attack_server.models.main_model import ServerConfig, SharableVariables, config_field
+from models.model import RegisteredObject
+from models.main_model import ServerConfig, SharableVariables, config_field
 from attack_server.utils.utils import get_parameter_prop
 from benchmarking.privacy.contracts import get_privacy_dataset_factory
 from benchmarking.privacy.model_registry import AppPrivacyModelFactory

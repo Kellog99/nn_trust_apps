@@ -2,7 +2,7 @@ from typing import Optional, List
 
 from pydantic import BaseModel, ConfigDict
 
-from attack_server.models.info import ModelInfo, DatasetInfo
+from models.info import ModelInfo, DatasetInfo
 
 
 class ReportMetricsProps(BaseModel):
