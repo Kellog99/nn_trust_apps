@@ -8,11 +8,9 @@ from pydantic import ValidationError
 from torchmetrics.image import StructuralSimilarityIndexMeasure
 from torchvision.transforms import v2 as T, InterpolationMode
 
-from models.model import RegisteredObject
-from models.attack import SingleAttackOutput, SingleAttackProps, JailbreakAttackOutput, Bubble
-from models.info import ModelInfo
 from attack_server.utils.model import load_model
 from attack_server.utils.utils import b64str_to_pil
+from models import RegisteredObject, SingleAttackOutput, SingleAttackProps, JailbreakAttackOutput, Bubble, ModelInfo
 from nn_trust import Task
 from nn_trust.attack import EvasionAttack
 from nn_trust.attack.attack_factory import AttackFactory as EAF

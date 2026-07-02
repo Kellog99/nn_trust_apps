@@ -27,14 +27,6 @@ class RegisteredObject(BaseModel):
     privacy_type: Optional[str] = None
 
 
-#######################################################################
-class ExecutionConfig(BaseModel):
-    dataset: str
-    model: str
-    attacks: Any
-    metrics: Any
-
-
 class BenchmarkModelProps(BaseModel):
     name: str
     param: int

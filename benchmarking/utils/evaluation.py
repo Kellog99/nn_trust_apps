@@ -9,7 +9,7 @@ from pathlib import Path
 import torch
 from tqdm.auto import tqdm
 
-from nn_trust.attack import EvasionAttackFactory
+from nn_trust.attack import AttackFactory as EAF
 from nn_trust.core import Task, ModelAdapter
 from nn_trust.evaluation.composer import ConfigStatisticComposer, StatisticComposer
 from nn_trust.loss.loss_composer import LossComposer
@@ -26,7 +26,6 @@ def evaluate_attack(
         verbose: bool = False,
         tracker=None,
         benchmark_id: str = None,
-        num_tasks: str = None
 ) -> dict:
     """
     Evaluate the model on the attack that is passed.
@@ -35,8 +34,8 @@ def evaluate_attack(
             atk: the attack that has to be performed.
     """
     try:
-        # INIT MODEL , DATA, STATISTICCOMPOSER, ATTACK
-        ## 1. STATISTICCOMPOSER
+        # INIT MODEL , DATA, STATISTIC_COMPOSER, ATTACK
+        ## 1. STATISTIC_COMPOSER
         statistics_composer = StatisticComposer(config=ConfigStatisticComposer(
             statistics=statistics,
             num_classes=num_classes
@@ -50,8 +49,8 @@ def evaluate_attack(
                 loss=attack_config['losses'],
                 loss_weights=attack_config.get('loss_weights', [1.0] * len(attack_config['losses'])),
             )
-        print(attack_config)
-        atk = EvasionAttackFactory.create(
+
+        atk = EAF.create(
             atk_name,
             model=model,
             device=device,
@@ -148,9 +147,15 @@ def evaluate_attack(
 
 
 def read_results_from_disk(results_dir: str | pathlib.Path):
-    """Read from disk back to Evaluator results object structure
+    r"""
+    Read from disk back to Evaluator results object structure
     The directory from which results are read are the same kind of the target of `save_`
-    self.results = dict(info, attacks=dict(attacks=dict(statistics, statistics_states)), aggregate_statistics:optional)
+
+    >>>results = dict(
+    ...     info,
+    ...     results=dict(attacks=dict(statistics, statistics_states)),
+    ...     aggregate_statistics=optional
+    ...)
     """
     results_dir = Path(results_dir)
     results = {"attacks": {}}
@@ -172,10 +177,13 @@ def read_results_from_disk(results_dir: str | pathlib.Path):
     return results
 
 
-def aggregate_attacks_statistics(statistics_composer: StatisticComposer, results: dict) -> dict:
-    """Use statistic composer in aggregation mode to aggregate statistics states and 
+def aggregate_attacks_statistics(
+        statistics_composer: StatisticComposer,
+        results: dict
+) -> dict:
+    """
+    Use statistic composer in aggregation mode to aggregate statistics states and
     compute aggregated results
-
     """
     for attack, attack_results in results['attacks'].items():
         if not attack == "reference":
@@ -185,7 +193,7 @@ def aggregate_attacks_statistics(statistics_composer: StatisticComposer, results
     return aggregate_metrics
 
 
-def save_attack_result_to_disk_v2(
+def save_attack_result(
         benchmark_id: str,
         atk_result: dict,
         atk_id: str,
@@ -197,7 +205,6 @@ def save_attack_result_to_disk_v2(
     """
     output_path = Path(benchmark_id) / f"{model_name}_{dataset_name}" / atk_id
     if root_path:
-        # Same folder structure, but eventually specify a root dir depending on the environment
         output_path = Path(root_path) / output_path
     os.makedirs(output_path, exist_ok=True)
     with open(output_path / "statistics.json", 'w') as f:

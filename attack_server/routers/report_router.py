@@ -10,7 +10,7 @@ from pathlib import Path
 from fastapi import APIRouter, Query, Body, Depends
 
 from models.model import BenchmarkModelProps
-from models.main_model import config_field
+from models import config_field
 from models.reports import ModelReportProps
 from attack_server.routers.repository_router import get_info
 
@@ -44,8 +44,7 @@ def get_benchmarks(
     list_reports: list[ModelReportProps] = get_info(
         tasks=tasks,
         repo_path=repo_path,
-        file_checker="report.json",
-        base_model=ModelReportProps
+        file_checker="report.json"
     )
     print("num of reports ", len(list_reports))
 

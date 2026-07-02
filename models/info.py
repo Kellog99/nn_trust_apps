@@ -1,4 +1,4 @@
-from typing import Optional, List, Literal
+from typing import Optional, List, Literal, Any
 
 import timm
 from pydantic import BaseModel, Field, model_validator
@@ -65,16 +65,33 @@ class Info(BaseModel):
 
 
 class DatasetInfo(Info):
-    num_sample: Optional[int] = Field(
+    num_samples: Optional[int] = Field(
         default=None,
         title="Number of Samples",
         description="Number of samples, i.e. length of the dataset"
+    )
+    batch_size: int = Field(
+        default=32,
+        title="Batch Size",
+        description="Batch size to use during the Benchmark."
+    )
+    num_workers: int = Field(
+        default=-1,
+        title="Number of Workers",
+        description="Number of workers for handling the dataset's loading."
     )
     label_dict: Optional[dict[int, str]] = Field(
         default=None,
         title="Label Dictionary",
         description="It represent the Label dictionary for extracting the name of the index that the model predicts."
     )
+
+
+class Transformation(BaseModel):
+    mean: list[float]
+    std: list[float]
+    crop: Optional[int | Any] = None
+    size: Optional[int] = None
 
 
 class ModelInfo(Info):
@@ -87,6 +104,10 @@ class ModelInfo(Info):
         default=None,
         title="Parameters",
         description="Number of the model's parameters"
+    )
+    transformation: Transformation = Field(
+        default={},
+        title="Transformation",
     )
     ################################# Where the model is #################################
     api: Optional[str] = Field(
@@ -121,4 +142,3 @@ class ModelInfo(Info):
                     f"You are trying to use a model, {self.id}, from the library {self.model_type} but it doesn't exists."
                 )
         return self
-

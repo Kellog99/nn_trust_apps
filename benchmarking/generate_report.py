@@ -9,7 +9,7 @@ Communicate output file location
 import argparse
 from pathlib import Path
 
-from benchmark_utils.pdf_report import create_benchmark_report
+from utils.pdf_report import create_benchmark_report
 
 GENERATION_AUTHORITY = "Ai Lab - Ldo"
 

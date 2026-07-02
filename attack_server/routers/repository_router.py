@@ -13,9 +13,7 @@ from typing import Literal, Union
 from fastapi import APIRouter, Query, Depends, Request, Body
 from pydantic import BaseModel, ValidationError
 
-from models.info import ModelInfo, DatasetInfo
-from models.main_model import config_field
-from models.reports import ModelReportProps, DatasetReportProps
+from models import config_field, ModelReportProps, DatasetReportProps, ModelInfo, DatasetInfo
 
 router = APIRouter(prefix="/repository")
 

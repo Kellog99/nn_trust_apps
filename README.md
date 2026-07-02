@@ -91,10 +91,50 @@ Now it is possible to execute all the functionalities of the STABLE-AI framework
     ```bash
    python report.py --OUTPUTDIR path/to/output_folder
     ```
-   The *OUTPUTDIR* represents the path to the benchmark's output folder. In this folder there are all the information
+   The **OUTPUTDIR** represents the path to the benchmark's output folder. In this folder there are all the information
    for generating the pdf report.
 
-### 5. Development notes & repository layout
+#### 3.1 Output organization
+The output of the benchmark is a json structured in the following way:
+
+```python
+from typing import Optional, List
+
+from pydantic import BaseModel
+
+from models.info import ModelInfo
+
+
+class ReportMetricsProps(BaseModel):
+    accuracy: Optional[float] = None
+    precision: Optional[float] = None
+    f1score: Optional[float] = None
+    confusion_matrix: Optional[List[List[int | float]]] = None
+    robustness: Optional[float] = None
+    wobbliness: Optional[float] = None
+
+
+class ReportAttacksProps(BaseModel):
+    name: str
+    risk: float
+    accuracy: Optional[float] = None
+    precision: Optional[float] = None
+    f1score: Optional[float] = None
+    misclassification: Optional[float] = None
+    power: Optional[float] = None
+    num_queries: Optional[int] = None
+    robustness: Optional[float] = None
+    confusion_matrix: Optional[List[List[int]]] = None
+
+
+############## Model ##############
+class ModelReportProps(BaseModel):
+    info: ModelInfo
+    metrics: ReportMetricsProps
+    attacks: dict[str, ReportAttacksProps]
+```
+
+### 4. Development notes & repository layout
 
 - `attack_server/` — FastAPI app and routers. Key files:
     - `attack_server/app.py` — FastAPI application entry
@@ -102,7 +142,7 @@ Now it is possible to execute all the functionalities of the STABLE-AI framework
     - `attack_server/lib/disk_reader.py` — helpers for locating benchmark outputs
 
 - `benchmarking/` — benchmark runner and utilities. Key files:
-    - `benchmarking/main.py` — postprocessing and runner entrypoints
+    - `benchmarking/main.py` — postprocessing and runner entry points
     - `benchmarking/benchmark_utils/` — executor, evaluator, and helpers
 
 - `image-attack/` — demo UI and static assets.

@@ -1,13 +1,15 @@
-from pathlib import Path
-from typing import Optional, Tuple, Union
-import logging
+import json
+import logging as logger
 import os
+from pathlib import Path
+from typing import List, Dict, Any, Optional, Tuple, Union
+
 
 def find_model_and_task_dir(
-    base_dir: Union[str, Path],
-    dataset: Optional[str] = None,
-    model: Optional[str] = None,
-    task_id: Optional[str] = None,
+        base_dir: Union[str, Path],
+        dataset: Optional[str] = None,
+        model: Optional[str] = None,
+        task_id: Optional[str] = None,
 ) -> Tuple[str, str]:
     """
     Find the model directory and the task-id directory.
@@ -35,7 +37,7 @@ def find_model_and_task_dir(
     """
     try:
         base = Path(base_dir).expanduser().resolve()
-        bench = base 
+        bench = base
         if not bench.exists() or not bench.is_dir():
             raise FileNotFoundError(f"'benchmark_out' not found under base_dir: {base}")
 
@@ -96,18 +98,12 @@ def find_model_and_task_dir(
         raise
 
 
-from pathlib import Path
-import json
-import logging as logger
-from typing import List, Dict, Any
-
-
 def collect_dataset_aggregates_with_info(
-    base_dir: str,
-    dataset: str,
-    *,
-    filenames_pattern: str = "aggregate*.json",
-    keep_latest_only: bool = True,
+        base_dir: str,
+        dataset: str,
+        *,
+        filenames_pattern: str = "aggregate*.json",
+        keep_latest_only: bool = True,
 ) -> List[Dict[str, Any]]:
     """
     Traverses base_dir for aggregate files for a given dataset.

@@ -1,6 +1,6 @@
 import argparse
 from argparse import Namespace
-from typing import Optional, Callable, Any, get_origin, get_args, Union
+from typing import Optional, Callable, Any, get_origin, get_args, Union, Literal, List
 
 from fastapi import Request
 from pydantic import BaseModel, Field
@@ -58,6 +58,12 @@ class SharableVariables(BaseModel):
 
 
 class ServerConfig(SharableVariables):
+    ########################## FUNCTIONAL ##########################
+    function: Literal["app", "benchmark", "report"] = Field(
+        default="app",
+        description="This represent the function to run."
+    )
+    ################################################################
     ########################## EXPERIMENT ##########################
     excluded_attacks: list[str] = Field(
         default=[],
@@ -103,7 +109,7 @@ def config_field(
     return dependency
 
 
-def parsed_argument(model_class) -> Namespace:
+def parsed_argument(model_class: BaseModel) -> Namespace:
     """Add all fields from a Pydantic model to an argument parser"""
     parser = argparse.ArgumentParser()
 
@@ -117,36 +123,40 @@ def parsed_argument(model_class) -> Namespace:
     for field_name, field_info in model_class.model_fields.items():
         default = field_info.default
         help_text = field_info.description or f"{field_name} parameter"
-        field_type = field_info.annotation
+        required: bool = field_info.is_required()
+        field_type: type | None = field_info.annotation
 
         # Handle Optional/Union types (both typing.Optional and | syntax)
         origin = get_origin(field_type)
         # Check if it's a Union type (including Optional and | syntax)
         if origin is Union:
-            # Extract the non-None type from the union
-            args = get_args(field_type)
-            # Filter out NoneType and get the first actual type
-            non_none_types = [arg for arg in args if arg is not type(None)]
-            if non_none_types:
-                field_type = non_none_types[0]
-            else:
-                field_type = str  # Default fallback
+            args = [a for a in get_args(field_type) if a is not type(None)]
+            field_type = args[0] if len(args) == 1 else str
+            origin = get_origin(field_type)
 
-        # Handle list types separately
-        if get_origin(field_type) is list:
-            # For list types, don't use type parameter, use nargs instead
-            parser.add_argument(
-                f"--{field_name}",
-                nargs='*',
-                default=default,
-                help=help_text
-            )
-            continue
+        kwargs = {
+            "default": default,
+            "help": help_text,
+            "required": required
+        }
 
-        parser.add_argument(
-            f"--{field_name}",
-            type=field_type,
-            default=default,
-            help=help_text
-        )
-    return parser.parse_args()
+        if origin is Literal:
+            choices = get_args(field_type)
+            kwargs.update(choices=choices, type=type(choices[0]))
+        elif field_type is bool:
+            kwargs["action"] = argparse.BooleanOptionalAction
+            kwargs.pop("required", None) if not required else None
+        elif origin in (list, List):
+            (elem_type,) = get_args(field_type) or (str,)
+            kwargs.update(nargs="*", type=elem_type)
+        else:
+            kwargs["type"] = field_type
+
+        parser.add_argument(f"--{field_name}", **kwargs)
+
+    args = parser.parse_args()
+    # Optional: validate through the model itself
+    data = {k: v for k, v in vars(args).items() if k != "configuration_file"}
+    model_class.model_validate({k: v for k, v in data.items() if v is not None})
+
+    return args

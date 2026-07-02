@@ -1,46 +1,39 @@
 import base64
-import importlib
 import json
 import logging
 import os
 
 import ray
 import requests
-from fastapi import APIRouter, Response
-from fastapi import Body, Query
-from fastapi.responses import JSONResponse
+from fastapi import APIRouter, Response, Body, Query
 
-from lib.disk_reader import find_model_and_task_dir
-from models.model import ExecutionConfig
-from utils.utils import find_image
-
-benchmarking = importlib.import_module("benchmarking")
+from attack_server.utils.utils import find_image
+from benchmarking import run_benchmark
+from models import BenchmarkExecutionConfig, DatasetInfo, ModelInfo, RegisteredObject
 
 router = APIRouter(prefix="/job", tags=["jobs management", "jobs utils"])
 
-if not hasattr(router, "state"):
-    class _RouterState:
-        pass
 
+@router.post("/start_benchmark", response_model=str)
+async def start_benchmark_job(body: BenchmarkExecutionConfig = Body(...)) -> str | Response:
+    """
+    Start a new TITANN benchmark job.
+    """
 
-    router.state = _RouterState()
+    dataset: DatasetInfo = body.dataset
+    model: ModelInfo = body.model
+    attacks: list[RegisteredObject] = body.attacks
+    metrics: list[RegisteredObject] = body.metrics
+    options: BenchmarkExecutionConfig = body.options
 
-if not hasattr(router.state, "attacks"):
-    router.state.attacks = benchmarking.get_attacks_info()
+    return run_benchmark(
+        models=[model],
+        datasets=[dataset],
+        attacks=attacks,
+        metrics=metrics,
+        options=options
+    )
 
-# Setting up number of actors and executor
-num_actors = int(os.environ.get("RAY_NUM_ACTORS", 1))
-num_gpu_per_actors = float(os.environ.get("FRACTION_FOR_GPU_ACTOR", 1))
-modules = os.environ.get("RAY_PY_MODULES", None)
-if modules:
-    ray.init(ignore_reinit_error=True, runtime_env={
-        "py_modules": [modules]
-    })
-executor = benchmarking.benchmark_utils.executor.RayActorPoolExecutor(num_actors=num_actors,
-                                                                      num_gpus_per_actor=num_gpu_per_actors)
-
-
-# ----------------- SERVICES --------------------------
 
 # --- Progress --- #
 @router.get("/getJobs")
@@ -101,7 +94,7 @@ def get_jobs_results(
     """
     try:
 
-        model_dir, task_dir = find_model_and_task_dir(os.environ.get("BENCHMARK_OUTPUT_DIR"), dataset, model, id)
+        model_dir, task_dir = "s", "aa"  # find_model_and_task_dir(os.environ.get("BENCHMARK_OUTPUT_DIR"), dataset, model, id)
         benchmark_id = task_dir.split(os.sep)[-1]
         tasks = {k: v for k, v in ray.get(executor.tracker.list_tasks.remote()).items() if
                  v["benchmark_id"] == benchmark_id}
@@ -175,69 +168,3 @@ def get_jobs_results(
             status_code=500,
             content=f"Unexpected error during get result"
         )
-
-
-# --- Start --- #
-@router.post("/start", response_model=str)
-async def start_benchmark_job(body: ExecutionConfig = Body(...)) -> str | Response:
-    """
-    Start a new TITANN benchmark job.
-    """
-    try:
-        dataset_name = body.dataset
-        model_name = body.model
-        file_path = os.path.join(os.environ.get('DATASETS_REPO'), dataset_name, f"{dataset_name}.json")
-
-        if os.path.exists(file_path) and os.path.isfile(file_path):
-            with open(file_path, "r", encoding="utf-8") as f:
-                config_dataset = json.load(f)  # load into dict
-                config_dataset["name"] = dataset_name
-            logging.info("Loaded JSON metadata")
-        else:
-            logging.error(f"Can't find dataset metadata in the repository for dataset:{dataset_name}")
-            return Response(
-                status_code=404,
-                content=f"Can't find dataset metadata in the repository for dataset:{dataset_name}"
-            )
-
-        benchmark_config = {}
-        benchmark_config['options'] = {
-            "load_results": os.environ.get("BENCHMARK_LOAD_RESULTS", "False").lower() == "true",
-            "overwrite": os.environ.get("BENCHMARK_OVERWRITE", "True").lower() == "true",
-            "num_images_to_save": int(os.environ.get("BENCHMARK_NUM_IMAGES_TO_SAVE", "-1")),
-            "save_perturbation": os.environ.get("BENCHMARK_SAVE_PERTURBATION", "False").lower() == "true",
-            "gpu": os.environ.get("BENCHMARK_GPU", "True").lower() == "true",
-            "output_path": os.environ.get("BENCHMARK_OUTPUT_DIR", "./benchmark_out"),
-            "output_format": os.environ.get("BENCHMARK_OUTPUT_FORMAT", "report")
-        }
-
-        model_file_path = os.path.join(os.environ.get('MODEL_REPO'), model_name)
-        config_models = {
-            "model_path": model_file_path
-        }
-
-        config_dataset["source_path"] = os.path.join(dataset_name, "data")
-
-        benchmark_config['datasets'] = [config_dataset]
-        benchmark_config['models'] = [config_models]
-        benchmark_config['attacks'] = [
-            {
-                "name": attack["id"],
-                **{param["id"]: param["default"] for param in attack.get("parameters", [])}
-            }
-            for attack in body.attacks
-        ]
-        benchmark_config['evaluation'] = {}
-        benchmark_config["evaluation"]["statistics"] = [
-            {
-                "name": metric["id"],
-                **{param["id"]: param["default"] for param in metric.get("parameters", [])}
-            }
-            for metric in body.metrics
-        ]
-        task_id = benchmarking.benchmark(benchmark_config, executor)
-        return JSONResponse(status_code=200, content=task_id)
-
-    except Exception as e:
-        logging.error(f"Unexpected error during job start: {str(e)}")
-        raise e

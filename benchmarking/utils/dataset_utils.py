@@ -1,0 +1,98 @@
+import os
+import random
+from pathlib import Path
+
+import numpy
+import torch
+import torchvision
+import torchvision.transforms as T
+from PIL import Image as PILImage
+from torch.utils.data import Subset, DataLoader
+
+
+class ImageDatasetFolder(torchvision.datasets.ImageFolder):
+    def __init__(
+            self,
+            root: str,
+            transform=None,
+            target_transform=None,
+            is_valid_file=None
+    ):
+        super().__init__(
+            root=root,
+            transform=transform,
+            target_transform=target_transform,
+            is_valid_file=is_valid_file
+        )
+        self.data_root = root
+
+    def __getitem__(self, index):
+        path, target = self.samples[index]
+        sample = PILImage.open(path).convert("RGB")
+        if self.transform is not None:
+            sample = self.transform(sample)
+        if self.target_transform is not None:
+            target = self.target_transform(target)
+
+        element_info = {"path": str(Path(path).relative_to(self.data_root))}
+
+        return sample, target, element_info
+
+
+def get_dataloader(
+        dataset_path: str,
+        batch: int,
+        subset: int,
+        transform: T.Compose,
+        num_workers: int = 4,
+        name: str | None = None,
+        **kwargs,
+) -> DataLoader:
+    """
+    Return the dataloader to use and the inverse transformation to use for displaying the images
+    """
+
+    if not os.path.exists(dataset_path):
+        raise ValueError(f"The dataset --------{dataset_path} does not exists.")
+
+    def check_valid_image(filename: str):
+        try:
+            with PILImage.open(filename) as img:
+                img.verify()  # Verify that the image is valid
+            return True
+        except Exception:
+            return False
+
+    dataset = ImageDatasetFolder(
+        dataset_path,
+        transform=transform,
+        is_valid_file=check_valid_image
+    )
+
+    dataset.name = name if name is not None else Path(dataset).name
+
+    if subset is None or subset < 0:
+        subset = list(range(len(dataset)))
+    else:
+        subset = list(range(min(subset, len(dataset))))
+    subdataset = Subset(dataset, subset)
+
+    def seed_worker(worker_id):
+        worker_seed = torch.initial_seed() % 2 ** 32
+        numpy.random.seed(worker_seed)
+        random.seed(worker_seed)
+
+    g = torch.Generator()
+    g.manual_seed(1234)
+
+    dataloader = DataLoader(
+        subdataset,
+        batch_size=batch,
+        shuffle=False,
+        num_workers=num_workers,
+        worker_init_fn=seed_worker,
+        generator=g,
+        pin_memory=True,
+    )
+
+    return dataloader
