@@ -16,7 +16,8 @@ from attack_server.models.info import ModelInfo
 from attack_server.utils.model import load_model
 from attack_server.utils.utils import b64str_to_pil
 from nn_trust import Task
-from nn_trust.attack import EvasionAttack
+from nn_trust.attack import EvasionAttack, AttackFactory as EAF, NLPAttack
+
 
 # ... existing imports ...
 
@@ -173,29 +174,59 @@ async def single_attack(
         }
     )
 
-# --- Jailbreaking --- #
 @router.post("/jailbreaking")
 async def jailbreaking(
         body: dict = Body(...),
         device: str = Query(
-            default="cpu",
+            default="cuda",
             description="The device to run the model on.",
             example="cpu"
         )
 
-):
+) -> dict:
     """
-    Handle the POST request for executing a jailbreak attack using PAIR.
+    Handle the POST request for executing a jailbreak attack.
     """
-    # print(yaml.dump(body, default_flow_style=False, sort_keys=False))
+    if device in ["cpu", "cuda"]:
+        device = torch.device(device)
+    else:
+        device = torch.device("cpu")
 
-    import time 
-    time.sleep(2)
+    model_info = body.get("model")
+    attack_info = body.get("attack")
+    goal = body.get("input")
 
+    # 1. Load the model (target)
+    model = load_model(
+        model_type=model_info.get("model_type"),
+        model_path=model_info.get("repository"),
+        task=Task.from_str(model_info.get("task")),
+        model_api=model_info.get("api"),
+        model_id=model_info.get("id"),
+    )
+    model = model.to(device)
+    model.eval()
+
+    # 2. Instantiate the attack
+    # Assuming the attacker model and judge are part of the attack parameters
+    # or should be initialized within the factory.
+    # For now, following the pattern:
+    attack = EAF.create(
+        class_id=attack_info.get("id"),
+        model=model,
+        device=device,
+        **{param.get("id"): param.get("default") for param in attack_info.get("parameters", [])}
+    )
+
+    # 3. Execution
+    # logger = ConsoleLogger(states=["generate"])
+    state = attack.generate(goal=goal)
+
+    # 4. Extract results
     return {
         "adversarial_prompt": "N/A",
-        "conversations": "N/A",
-        "model_response": "N/A",
-        "advance_metrics": "N/A"
+        "conversations": state.dialogue,
+        "model_response": state.best_response or "N/A",
+        "advance_metrics": {"iterations": state.metadata.get("iterations", 0)}
     }
 
