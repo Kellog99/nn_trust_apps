@@ -88,26 +88,12 @@ def get_info(
             # Dynamically saving all the absolute path for the file
             info_json["repository"] = root
 
-            # print(f"\ninfo_json:{info_json}\n")
-
-            ############################ Instance of the base model ############################
-
             def get_model(data: dict):
                 adapter = TypeAdapter(InfoUnion)
                 return adapter.validate_python(data)
-
-            ####################################################################################
-
-            info = get_model(info_json)
-
-            # print(f"\ninfo:")
-            # for key, val in dict(info).items():
-            #     print(f"    {key}: {val}")
-            # print(f"\ninfo_type: {type(info)}\n")
-
-            info_task = info.info.task if isinstance(info, (ModelReportProps, DatasetReportProps)) else info.task
             
-            # print("\ninfo_task: ", info_task, "\n")
+            info = get_model(info_json)
+            info_task = info.info.task if isinstance(info, (ModelReportProps, DatasetReportProps)) else info.task
 
             if tasks is None or info_task in tasks:
                 out.append(info)

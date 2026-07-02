@@ -3,6 +3,7 @@ from typing import Optional, List, Literal
 import timm
 from pydantic import BaseModel, Field, model_validator
 
+TIMM_MODELS = frozenset(timm.list_models())
 
 class Info(BaseModel):
     """
@@ -66,6 +67,7 @@ class Info(BaseModel):
 
 class DatasetInfo(Info):
     type: Literal["dataset"] = "dataset"
+
     num_sample: Optional[int] = Field(
         default=None,
         title="Number of Samples",
@@ -80,6 +82,7 @@ class DatasetInfo(Info):
 
 class ModelInfo(Info):
     type: Literal["model"] = "model"
+    
     dataset: Optional[str] = Field(
         default=None,
         title="Dataset",
@@ -109,19 +112,20 @@ class ModelInfo(Info):
         title="Library where the model has been taken from.",
     )
 
-    ######################################################################################
+    @model_validator(mode="after")
+    def validate_library_model(self):
+        """
+        Validates the existence of timm model.
+        """
+        if self.model_type == "timm":
+            if self.id not in TIMM_MODELS:
+                raise ValueError(
+                    f"You are trying to use a model, {self.id}, from the library {self.model_type} but it doesn't exists."
+                )
+        elif self.model_type == "HuggingFace" and "/" not in self.id:
+            raise ValueError(
+                "HuggingFace models should have an id like 'owner/model'"
+            )
 
-    # @model_validator(mode="after")
-    # def validate_library_model(self):
-    #     """
-    #     Validates the existence of timm model.
-    #     """
-    #     print(f"\nmodel_type: {self.model_type}")
-    #     if self.model_type in ["timm"]:
-    #         lib = timm if self.model_type == "timm" else timm
-    #         if self.id not in lib.list_models():
-    #             raise ValueError(
-    #                 f"You are trying to use a model, {self.id}, from the library {self.model_type} but it doesn't exists."
-    #             )
-    #     return self
+        return self
 
