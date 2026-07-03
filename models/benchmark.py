@@ -5,11 +5,10 @@ from models.model import RegisteredObject
 
 
 class BenchmarkOptionConfig(BaseModel):
-    load_results: bool
-    overwrite: bool
-    num_images_to_save: int
-    save_perturbation: bool
-    gpu: bool
+    overwrite: bool = True
+    num_images_to_save: int = 10
+    save_perturbation: bool = True
+    gpu: bool = True
     output_path: str
     use_ray: bool = False
     num_workers: int = 1

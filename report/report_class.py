@@ -1,4 +1,3 @@
-import json
 from pathlib import Path
 from typing import Optional
 
@@ -9,7 +8,7 @@ from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle
 from reportlab.platypus import SimpleDocTemplate
 
-from pdf_sections import (
+from report.pdf_sections import (
     AttackSection,
     AttackRisk,
     HeaderFooter,
@@ -96,9 +95,9 @@ class AdversarialReportGenerator:
 
     def __init__(
             self,
-            style: AdversarialReportStyle,
             benchmark: Optional[dict] = None,
             excluded_metrics: Optional[list[str]] = None,
+            style: AdversarialReportStyle = AdversarialReportStyle(),
     ):
         """
         Initialize report generator
@@ -153,14 +152,13 @@ class AdversarialReportGenerator:
 
     def generate(
             self,
-            data: Optional[ModelReportProps | dict] = None,
-            file_path: Optional[str | Path] = None,
+            data: ModelReportProps | dict,
             output_path: Optional[str | Path] = None,
             output_file_name: Optional[str] = None,
             header_logo_path: Optional[str | Path] = None
     ):
         """
-        Generate PDF report from JSON data
+        Generate PDF report from data that could be in a proper format or in a dict format
 
         Args:
             data: data associated with a model's security assessment
@@ -171,21 +169,9 @@ class AdversarialReportGenerator:
         """
 
         ############################# FILE PATH VALIDATION #############################
-        if data is None and file_path is None:
+        if data is None:
             raise ValueError("Either file_path or data must be provided.")
-        if not data:
-            if isinstance(file_path, str):
-                file_path = Path(file_path).expanduser()
-            if file_path.exists():
-                if file_path.is_file():
-                    with open(file_path, 'rb') as f:
-                        data: dict = json.load(f)
-                else:
-                    raise ValueError(
-                        f"The path that has been provided, {file_path}, does not lead to a valid json file."
-                    )
-            else:
-                raise ValueError("The file path does not exist.")
+
         if isinstance(data, dict):
             try:
                 data: ModelReportProps = ModelReportProps.model_validate(data)

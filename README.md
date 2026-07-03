@@ -82,19 +82,52 @@ Now it is possible to execute all the functionalities of the STABLE-AI framework
     ```
 2. **Benchmarking**: this command is for executing just the benchmarking on a specific `dataset-model`:
     ```bash
-   python benchmark.py --MODELPATH path/to/model --DATASETPATH path/to/dataset --CONFIGPATH path/to/config
+   python benchmark.py --model_path path/to/model/info.json --dataset_path path/to/dataset/info.json
     ```
    The *configuration path* handles all the attacks' configuration. This avoid to pass all the arguments that could be a
    lot through terminal.
 
 3. **Report**: to produce a report regarding the benchmark of a specific model:
     ```bash
-   python report.py --OUTPUTDIR path/to/output_folder
+   python report_class.py --OUTPUTDIR path/to/output_folder
     ```
    The **OUTPUTDIR** represents the path to the benchmark's output folder. In this folder there are all the information
    for generating the pdf report.
 
+#### 3.1 Benchmark
+
+The benchmark file accepts multiple input from command line:
+
+```commandline
+python benchmark.py --help
+```
+
+These are the actual parameters that accepts
+
+```terminaloutput
+usage: Attack benchmark. [-h] --model_path MODEL_PATH --dataset_path DATASET_PATH [--attacks ATTACKS] [--metrics METRICS]
+                         [--output_path OUTPUT_PATH] [--use_ray]
+
+options:
+  -h, --help            show this help message and exit
+  --model_path MODEL_PATH, -mp MODEL_PATH
+                        Path to the model's information.
+  --dataset_path DATASET_PATH, -dp DATASET_PATH
+                        Path to the dataset's information.
+  --attacks ATTACKS, -atk ATTACKS
+                        List of attacks to run. By default all attacks are run.
+  --metrics METRICS, -m METRICS
+                        List of metric to use. By default all metrics are used.
+  --output_path OUTPUT_PATH, -op OUTPUT_PATH
+                        Path where to store all the information from the benchmark.
+  --use_ray, -ray       Whether to use ray or not. Hence, whether to parallelize the attacks or not.
+
+```
+
+The keys to the model and dataset path refer to the `info.json` file that is mandatory in each folder.
+
 #### 3.1 Output organization
+
 The output of the benchmark is a json structured in the following way:
 
 ```python

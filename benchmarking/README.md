@@ -8,12 +8,6 @@ There are several way to import and benchmark a model:
 * From a local model saved as a `.pth` file with weights and model;
 * From a local model saved as weights in a file `.pt` and the inference of the model specified in a Python3 file.
 
-To run the benchmarking routine, run
-
-```commandline
-python main.py
-```
-
 with the configurations stored in `config` as YAML.
 
 ### Configuration File

@@ -2,7 +2,7 @@ from datetime import datetime
 
 from reportlab.lib.pagesizes import A4
 
-from pdf_sections.utils import CorporateColors
+from report.pdf_sections.utils import CorporateColors
 
 
 class HeaderFooter:

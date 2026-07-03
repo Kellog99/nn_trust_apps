@@ -4,8 +4,8 @@ from typing import Optional
 from reportlab.lib.styles import ParagraphStyle
 from reportlab.platypus import Paragraph, Spacer
 
-from pdf_sections.pdf_section import PDFSection
-from pdf_sections.utils import ModelInfo
+from report.pdf_sections.pdf_section import PDFSection
+from report.pdf_sections.utils import ModelInfo
 
 
 class Title(PDFSection):

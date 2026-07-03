@@ -5,8 +5,8 @@ from reportlab.lib.colors import Color
 from reportlab.lib.styles import ParagraphStyle
 from reportlab.platypus import Paragraph, Spacer, Table, TableStyle, Image
 
-from pdf_sections.pdf_section import PDFSection
-from pdf_sections.utils import ReportMetricsProps, CorporateColors
+from report.pdf_sections.pdf_section import PDFSection
+from report.pdf_sections.utils import ReportMetricsProps, CorporateColors
 
 
 class MetricsSection(PDFSection):

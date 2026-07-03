@@ -3,17 +3,18 @@ from datetime import datetime
 from pathlib import Path
 from typing import List
 
-from benchmarking import postprocess_results, create_benchmark_report
 from benchmarking.executor import BenchmarkExecutor
+from benchmarking.utils.utils import postprocess_results
 from models import BenchmarkOptionConfig, ModelInfo, DatasetInfo, RegisteredObject
 from nn_trust.attack import AttackFactory as EAF
+from report import AdversarialReportGenerator
 
 
 def run_benchmark(
         models: List[ModelInfo],
         datasets: List[DatasetInfo],
         attacks: List[RegisteredObject],
-        metrics: List[RegisteredObject],
+        metrics: List[str],
         options: BenchmarkOptionConfig,
 ) -> dict:
     """
@@ -21,13 +22,17 @@ def run_benchmark(
     """
     #################################### 1. Valid Dataset ####################################
     for dataset in datasets:
+        if dataset.repository is None:
+            raise ValueError("The path to the dataset repository is required.")
         if not Path(dataset.repository).exists():
-            raise ValueError(f"Dataset source path {dataset.repository} does not exist.")
-        for model in models:
-            if not Path(model.repository).exists():
-                raise ValueError(f"Model path {model.repository} does not exist.")
-        for attack in attacks:
-            EAF.get_info(attack.id)
+            raise FileNotFoundError(f"Dataset source path {dataset.repository} does not exist.")
+    for model in models:
+        if model.repository is None:
+            raise ValueError("The path to the model repository is required.")
+        if not Path(model.repository).exists():
+            raise FileNotFoundError(f"Model path {model.repository} does not exist.")
+    for attack in attacks:
+        EAF.get_info(attack.id)
     ##########################################################################################
 
     #################################### 2. Prepare Execution ####################################
@@ -74,15 +79,13 @@ def run_benchmark(
     #################################### 5. PDF generation ####################################
     # Optionally, after the benchmark, it could be created the PDF report of the vulnerabilities
     if options.create_pdf:
-        for dataset_and_model_dir in Path(results["output_path"]).iterdir():
-            if dataset_and_model_dir.is_dir():
-                print(f"Generating report for {dataset_and_model_dir.name}")
-                create_benchmark_report(
-                    dataset_and_model_dir=dataset_and_model_dir,
-                    filename=dataset_and_model_dir / "report.pdf",
-                    generated_by="Leonardo S.p.A.",
-                    output_mode="pdf"
-                )
+        report = AdversarialReportGenerator()
+        report.generate(
+            data=results,
+            output_path=options.output_path,
+            output_file_name=f"report_something.pdf",
+            header_logo_path=None,
+        )
     ###########################################################################################
 
     return results

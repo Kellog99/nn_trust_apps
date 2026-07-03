@@ -1,0 +1,1 @@
+from report.report_class import AdversarialReportGenerator, AdversarialReportStyle

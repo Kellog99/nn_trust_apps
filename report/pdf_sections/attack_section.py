@@ -5,8 +5,8 @@ from typing import Optional
 from reportlab.lib.styles import ParagraphStyle
 from reportlab.platypus import Paragraph, Table, TableStyle, Spacer, Image
 
-from pdf_sections.pdf_section import PDFSection
-from pdf_sections.utils import CorporateColors, ReportAttacksProps
+from report.pdf_sections.pdf_section import PDFSection
+from report.pdf_sections.utils import CorporateColors, ReportAttacksProps
 
 
 class AttackSection(PDFSection):

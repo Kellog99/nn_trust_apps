@@ -4,8 +4,8 @@ from reportlab.lib import colors
 from reportlab.lib.styles import ParagraphStyle
 from reportlab.platypus import Paragraph, Spacer, Table, TableStyle
 
-from pdf_sections.pdf_section import PDFSection
-from pdf_sections.utils import ReportAttacksProps
+from report.pdf_sections.pdf_section import PDFSection
+from report.pdf_sections.utils import ReportAttacksProps
 
 
 class AttackRisk(PDFSection):
