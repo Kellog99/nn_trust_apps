@@ -28,7 +28,7 @@ if __name__ == "__main__":
     ########## 2) Generating the report ##########
 
     report = AdversarialReportGenerator()
-    report.generate_report(
+    report.generate(
         data=data,
         output_path=args.output_path,
         output_file_name=f"report_something.pdf",

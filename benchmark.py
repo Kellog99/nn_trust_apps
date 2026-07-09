@@ -1,7 +1,6 @@
 import argparse
 import json
 from pathlib import Path
-from pprint import pprint
 
 from benchmarking import run_benchmark
 from models import BenchmarkOptionConfig, ModelInfo, DatasetInfo

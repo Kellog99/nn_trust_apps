@@ -126,9 +126,9 @@ options:
 
 The keys to the model and dataset path refer to the `info.json` file that is mandatory in each folder.
 
-#### 3.1 Output organization
+#### 3.2 Report
 
-The output of the benchmark is a json structured in the following way:
+The output of the benchmark is a JSON structured in the following way:
 
 ```python
 from typing import Optional, List
