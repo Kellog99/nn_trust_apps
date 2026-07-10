@@ -14,6 +14,7 @@ class BenchmarkOptionConfig(BaseModel):
     num_workers: int = 1
     num_gpus_per_worker: float = 1.0
     create_pdf: bool = False
+    targeted: bool = False
 
 
 # This class is for handling the type of the benchmark's service input

@@ -32,6 +32,7 @@ def run_benchmark(
         if not Path(model.repository).exists():
             raise FileNotFoundError(f"Model path {model.repository} does not exist.")
     for attack in attacks:
+        # checks that attack is registered
         EAF.get_info(attack.id)
     ##########################################################################################
 
@@ -73,7 +74,8 @@ def run_benchmark(
 
     #################################### 4. Aggregate Results ####################################
     # Get output path from results and aggregate statistics for single attacks, for each dataset and model
-    postprocess_results(results["output_path"])
+    # removing do to critical issues
+    #postprocess_results(results["output_path"])
     ###############################################################################################
 
     #################################### 5. PDF generation ####################################

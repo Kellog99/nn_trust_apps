@@ -5,6 +5,9 @@ from benchmarking.utils import get_dataloader, evaluate_attack
 from models import DatasetInfo, ModelInfo, RegisteredObject
 from nn_trust import ModelAdapter, AttackFactory
 from nn_trust.models.model_utils import load_model
+from nn_trust.core import Task
+import torch
+from nn_trust.evaluation.statistic_factory import StatisticsFactory as SF
 
 
 def override_keys_if_not_none(base_dict: dict, overriding_dict: dict) -> dict:
@@ -16,13 +19,16 @@ def override_keys_if_not_none(base_dict: dict, overriding_dict: dict) -> dict:
             res[k] = overriding_dict[k]
     return res
 
+# The job_config is used so the executor can pass a complete inflated benchmark job, including model, dataset, attack, metrics, options, and benchmark metadata.
+def execute_job(job_config: dict):
+    dataset_cnf = job_config["dataset"]
+    model_cnf = job_config["model"]
+    attack = job_config["attack"]
+    metrics = job_config["evaluation"]
+    options = job_config["options"]
+    benchmark_info = job_config["benchmark_info"]
+    device = torch.device("cuda" if getattr(options, "gpu", False) and torch.cuda.is_available() else "cpu")
 
-def execute_job(
-        attack: RegisteredObject,
-        metrics: list[RegisteredObject],
-        model_cnf: ModelInfo,
-        dataset_cnf: DatasetInfo,
-):
     """
     A function that use a full description of benchmark configuration and executor, is tasked to execute benchmark.
     """
@@ -34,9 +40,9 @@ def execute_job(
             std=getattr(model_cnf.transformation, "std", (0.5, 0.5, 0.5))
         )
     ]
-    if hasattr(model_cnf.transformation, "size"):
+    if getattr(model_cnf.transformation, "size", None) is not None:
         transformation.append(transforms.Resize((model_cnf.transformation.size, model_cnf.transformation.size)))
-    if hasattr(model_cnf.transformation, "crop"):
+    if getattr(model_cnf.transformation, "crop", None) is not None:
         transformation.append(transforms.CenterCrop(model_cnf.transformation.crop))
     transformation = transforms.Compose(transformation)
     ##############################################################################################
@@ -51,17 +57,50 @@ def execute_job(
         name=dataset_cnf.name
     )
     model: ModelAdapter = load_model(model_path=model_cnf.repository)
+    model = model.to(device)
+    model.eval()
+
+   # Add metric-specific defaults only when supported
+    statistics = [dict(metric) for metric in metrics]
+    
+    targeted = getattr(options, "targeted", False)
+
+    for metric in statistics:
+        metric_name = metric["name"]
+        config_fields = SF.get_info(metric_name).class_type.CONFIG_T.model_fields
+
+        if "model" in config_fields:
+            metric.setdefault("model", model)
+        
+        if "targeted" in config_fields:
+            metric.setdefault("targeted", targeted)
+
+        if "average_method" in config_fields:
+            metric.setdefault("average_method", "macro")
+    
     ##################################################################################################
 
-    atk_config = AttackFactory.get_config(
-        class_id=attack.id,
-        **{param.id: param.default for param in attack.parameters}
-    )
+    atk_config = {
+      "name": attack.id,
+      "id": attack.id,
+      "targeted": targeted,
+
+      **{
+        param.id: param.default
+        for param in attack.parameters
+        if param.default is not None
+      },
+    }
+
     res = evaluate_attack(
         model=model,
         dataloader=dataloader,
         attack_config=atk_config,
-        statistics=metrics,
+        statistics=statistics,
         num_classes=dataset_cnf.num_classes,
+        device=device,
+        benchmark_id=benchmark_info["benchmark_id"],
     )
-    return {"attack_results": res}
+    return {"attack_results": res,
+            "benchmark_job_info": benchmark_info,
+    }

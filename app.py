@@ -37,7 +37,10 @@ def create_app() -> FastAPI:
     app = FastAPI(
         title='TITANN backend',
         description='This is the TITANN backend.',
-        servers=[{'url': 'https://titann.swagger.io/api/v3'}],
+        #servers=[{'url': 'https://titann.swagger.io/api/v3'}],
+        # run with: PYTHONPATH=.:submodules/nn_trust:/home/antonio-liguori/.cache/torch/hub/chenyaofo_pytorch-cifar-models_master uv run python app.py --host 127.0.0.1 --port 8000
+        servers=[{"url": "http://127.0.0.1:8000"}],
+
     )
     app.add_middleware(
         CORSMiddleware,
