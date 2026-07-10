@@ -16,7 +16,7 @@ from attack_server.models.info import ModelInfo
 from attack_server.utils.model import load_model
 from attack_server.utils.utils import b64str_to_pil
 from nn_trust import Task
-from nn_trust.attack import EvasionAttack, AttackFactory as EAF, NLPAttack
+from nn_trust.attack import EvasionAttack, AttackFactory as AttackFactory
 
 
 # ... existing imports ...
@@ -111,7 +111,7 @@ async def single_attack(
 
     ################## ATTACK ##################
     attack: RegisteredObject = body.attack
-    attack: EvasionAttack = EAF.create(
+    attack: EvasionAttack = AttackFactory.create(
         model=model,
         class_id=attack.id,
         task=Task.from_str(model_info.task),
@@ -208,25 +208,34 @@ async def jailbreaking(
     model.eval()
 
     # 2. Instantiate the attack
-    # Assuming the attacker model and judge are part of the attack parameters
-    # or should be initialized within the factory.
-    # For now, following the pattern:
-    attack = EAF.create(
+    # We need to extract the attacker and judge models if the attack is multi-model.
+    # Currently assuming they might be derived or passed in parameters.
+    # Adjust as needed based on the attack type.
+
+    # FIXME: For now we pass the model as both target and optionally attacker/judge 
+    # if the specific attack requires it, but usually you want separate instances.
+    
+    kwargs = {param.get("id"): param.get("default") for param in attack_info.get("parameters", [])}
+    attack = AttackFactory.create(
         class_id=attack_info.get("id"),
-        model=model,
+        model=model.to(device),
+        attacker=model.to(device), # Example: if using same model for attack
+        judge=model.to(device),    # Example: if using same model for judge
+        verbose=True, 
         device=device,
-        **{param.get("id"): param.get("default") for param in attack_info.get("parameters", [])}
+        **kwargs
     )
 
     # 3. Execution
     # logger = ConsoleLogger(states=["generate"])
     state = attack.generate(goal=goal)
 
-    # 4. Extract results
-    return {
-        "adversarial_prompt": "N/A",
-        "conversations": state.dialogue,
-        "model_response": state.best_response or "N/A",
-        "advance_metrics": {"iterations": state.metadata.get("iterations", 0)}
-    }
+    # 4. Extract results using the unified interface
+    # This matches the frontend expectation by returning the structure 
+    # it is already using, while utilizing get_result internally.
+    result = attack.get_result(state)
+
+    ret = result.model_dump()
+    
+    return ret
 
