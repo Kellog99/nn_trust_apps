@@ -3,11 +3,24 @@ from datetime import datetime
 from pathlib import Path
 from typing import List
 
+import ray
 from benchmarking.executor import BenchmarkExecutor
 from benchmarking.utils.utils import postprocess_results
 from models import BenchmarkOptionConfig, ModelInfo, DatasetInfo, RegisteredObject
 from nn_trust.attack import AttackFactory as EAF
 from report import AdversarialReportGenerator
+
+# Resolve a model or dataset repository path to an absolute path (beginning at the home directory)
+def resolve_repository_path(repository: str | None, project_root: Path) -> str:
+    if repository is None:
+        raise ValueError("The repository path is required.")
+
+    path = Path(repository).expanduser()
+
+    if not path.is_absolute():
+        path = project_root / path
+
+    return str(path.resolve())
 
 
 def run_benchmark(
@@ -36,6 +49,48 @@ def run_benchmark(
         EAF.get_info(attack.id)
     ##########################################################################################
 
+    # Resolve model and dataset repositories before building jobs so local execution and Ray workers receive absolute paths independent of their working directory
+    project_root = Path(__file__).resolve().parents[1]
+
+    datasets = [
+        dataset.model_copy(
+            update={
+                "repository": resolve_repository_path(
+                    dataset.repository,
+                    project_root,
+                )
+            }
+        )
+        for dataset in datasets
+    ]
+
+    models = [
+        model.model_copy(
+            update={
+                "repository": resolve_repository_path(
+                    model.repository,
+                    project_root,
+                )
+            }
+        )
+        for model in models
+    ]
+
+    # Expose the local nn_trust submodule on PYTHONPATH
+    if options.use_ray and not ray.is_initialized():
+        nn_trust_path = project_root / "submodules" / "nn_trust"
+
+        ray.init(
+            runtime_env={
+                "working_dir": str(project_root),
+                "env_vars": {
+                    "PYTHONPATH": (
+                        f"{project_root}:{nn_trust_path}:"
+                        f"{os.environ.get('PYTHONPATH', '')}"
+                    )
+                },
+            }
+        )
     #################################### 2. Prepare Execution ####################################
     # 2.1 - Generate a unique id under which run all benchmark operations
     benchmark_id: str = datetime.now().strftime("%Y%m%dT%H%M%S")
