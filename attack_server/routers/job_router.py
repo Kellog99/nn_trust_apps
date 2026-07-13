@@ -14,8 +14,6 @@ from models import BenchmarkExecutionConfig, DatasetInfo, ModelInfo, RegisteredO
 router = APIRouter(prefix="/job", tags=["jobs management", "jobs utils"])
 
 
-#@router.post("/start_benchmark", response_model=str)
-#async def start_benchmark_job(body: BenchmarkExecutionConfig = Body(...)) -> str | Response:
 @router.post("/start_benchmark")
 async def start_benchmark_job(body: BenchmarkExecutionConfig = Body(...)) -> dict:
     """
@@ -26,11 +24,9 @@ async def start_benchmark_job(body: BenchmarkExecutionConfig = Body(...)) -> dic
     model: ModelInfo = body.model
     attacks: list[RegisteredObject] = body.attacks
     metrics: list[RegisteredObject] = body.metrics
-    #options: BenchmarkExecutionConfig = body.options
     options = body.options
 
 
-    #return run_benchmark(
     result = run_benchmark(
         models=[model],
         datasets=[dataset],

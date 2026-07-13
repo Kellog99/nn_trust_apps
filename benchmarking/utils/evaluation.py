@@ -56,7 +56,6 @@ def evaluate_attack(
             model=model,
             device=device,
             task=Task.Classification,
-            #targeted=False,
             targeted=targeted,
             **attack_config
         )
