@@ -162,7 +162,6 @@ class AdversarialReportGenerator:
 
         Args:
             data: data associated with a model's security assessment
-            file_path: path to the data file
             output_path: Output PDF file path
             output_file_name: name of the PDF file
             header_logo_path: path to the logo
@@ -170,7 +169,7 @@ class AdversarialReportGenerator:
 
         ############################# FILE PATH VALIDATION #############################
         if data is None:
-            raise ValueError("Either file_path or data must be provided.")
+            raise ValueError("It is necessary to pass the data for the report.")
 
         if isinstance(data, dict):
             try:
@@ -180,19 +179,18 @@ class AdversarialReportGenerator:
         ################################################################################
 
         ############## Handling the saving path ##############
-        if not output_path:
-            output_path = Path("report/")
-        if isinstance(output_path, str):
-            output_path = Path(output_path).expanduser()
-            output_path.parent.mkdir(parents=True, exist_ok=True)
-        if not output_file_name:
-            output_file_name: str | None = data.info.name
-            if not output_file_name:
-                output_file_name = "model_adversarial_report.pdf"
-            else:
-                output_file_name = output_file_name.replace(" ", "_").lower()
-                if not output_file_name.endswith(".pdf"):
-                    output_file_name += ".pdf"
+        # 1. Resolve and normalize the output path immediately
+        output_path: Path = Path(output_path or "./tmp/").expanduser()
+        # 2. Get the file name or default it (with fallback)
+        file_name: str = data.info.name or data.info.id or "model_adversarial_report.pdf"
+        file_name = file_name.replace(" ", "_").lower()
+        # Adding the proper extension to the file
+        if not file_name.endswith(".pdf"):
+            file_name = file_name + ".pdf"
+
+        # 3. Combine them, ensure the extension is .pdf, and build the parent directory
+        output_file = output_path / file_name
+        output_file.parent.mkdir(parents=True, exist_ok=True)
 
         ################# Document Creation #################
         doc = SimpleDocTemplate(

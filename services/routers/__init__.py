@@ -1,14 +1,14 @@
 # API Router for all endpoints
 from fastapi import APIRouter
 
-from attack_server.routers.info_router import router as info_router
+from services.routers.info_router import router as info_router
 # Import and include all sub-routers here
 # from .dataset_router import router as dataset_router
-from attack_server.routers.job_router import router as job_router
-from attack_server.routers.model_router import router as model_router
-from attack_server.routers.report_router import router as report_router
-from attack_server.routers.repository_router import router as repository_router
-from attack_server.routers.test_router import router as test_router
+from services.routers.job_router import router as job_router
+from services.routers.model_router import router as model_router
+from services.routers.report_router import router as report_router
+from services.routers.repository_router import router as repository_router
+from services.routers.test_router import router as test_router
 
 # from .privacy_router import router as privacy_router
 

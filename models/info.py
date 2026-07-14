@@ -33,8 +33,8 @@ class Info(BaseModel):
         title="Task",
         description="Task associated with, i.e. classification, detection, etc."
     )
-    domain: str = Field(
-        default=...,
+    domain: Optional[str] = Field(
+        default=None,
         title="Domain",
         description="Domain where the input belongs"
     )
@@ -106,7 +106,12 @@ class ModelInfo(Info):
         description="Number of the model's parameters"
     )
     transformation: Transformation = Field(
-        default={},
+        default=Transformation(
+            mean=[0.485, 0.456, 0.406],
+            std=[0.229, 0.224, 0.225],
+            crop=None,
+            size=254,
+        ),
         title="Transformation",
     )
     ################################# Where the model is #################################
@@ -124,7 +129,7 @@ class ModelInfo(Info):
         "onnx",
         "api"
     ] = Field(
-        default="timm",
+        default="plain",
         title="Library where the model has been taken from.",
     )
 
@@ -135,10 +140,9 @@ class ModelInfo(Info):
         """
         Validates the existence of timm model.
         """
-        if self.model_type in ["timm", "HuggingFace"]:
-            lib = timm if self.model_type == "timm" else timm
-            if self.id not in lib.list_models():
+        if self.model_type == "timm":
+            if self.name not in timm.list_models() and self.id not in timm.list_models():
                 raise ValueError(
-                    f"You are trying to use a model, {self.id}, from the library {self.model_type} but it doesn't exists."
+                    f"You are trying to use a model, {self.name}, from the library {self.model_type} but it doesn't exists."
                 )
         return self

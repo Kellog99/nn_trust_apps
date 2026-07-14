@@ -3,6 +3,7 @@ from typing import Optional, List
 from pydantic import BaseModel, ConfigDict
 
 from models.info import ModelInfo, DatasetInfo
+from models.model import ParametersProps
 
 
 class ReportMetricsProps(BaseModel):
@@ -14,8 +15,7 @@ class ReportMetricsProps(BaseModel):
     wobbliness: Optional[float] = None
 
 
-class ReportAttacksProps(BaseModel):
-    name: str
+class AttackMetricsProps(BaseModel):
     risk: float
     accuracy: Optional[float] = None
     precision: Optional[float] = None
@@ -25,6 +25,12 @@ class ReportAttacksProps(BaseModel):
     num_queries: Optional[int] = None
     robustness: Optional[float] = None
     confusion_matrix: Optional[List[List[int]]] = None
+
+
+class ReportAttackProps(BaseModel):
+    name: str
+    metrics: AttackMetricsProps
+    parameters: list[ParametersProps]
 
 
 class ReportProps(BaseModel):
@@ -40,4 +46,4 @@ class DatasetReportProps(ReportProps):
 class ModelReportProps(ReportProps):
     info: ModelInfo
     metrics: ReportMetricsProps
-    attacks: dict[str, ReportAttacksProps]
+    attacks: dict[str, ReportAttackProps]

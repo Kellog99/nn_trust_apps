@@ -6,13 +6,15 @@ This router handles:
 """
 import json
 from pathlib import Path
+from pprint import pprint
 
 from fastapi import APIRouter, Query, Body, Depends
 
 from models.model import BenchmarkModelProps
 from models import config_field
 from models.reports import ModelReportProps
-from attack_server.routers.repository_router import get_info
+from report import AdversarialReportGenerator
+from services.routers.repository_router import get_info
 
 router = APIRouter(prefix="/report", tags=["datasets and models"])
 
@@ -44,7 +46,7 @@ def get_benchmarks(
     list_reports: list[ModelReportProps] = get_info(
         tasks=tasks,
         repo_path=repo_path,
-        file_checker="report.json"
+        model_type="report_model"
     )
     print("num of reports ", len(list_reports))
 
@@ -103,16 +105,20 @@ def upload_report(
     return report
 
 
+@router.post("/generate_pdf")
 def generate_pdf_report(
-        model_path: str = Query(
-            default=...,
-            description="Path to the repository's folder"
-        )
+        data: dict = Body(...)
 ):
     """
     This function takes all the necessary information for generating the model's report.
     """
-    try:
-        report: ModelReportProps = ModelReportProps.model_validate(report)
-    except Exception as e:
-        raise ValueError("The model that has been uploaded is not valid.")
+    pprint(data.get("report"))
+    info: ModelReportProps = ModelReportProps.model_validate(data.get("report"))
+
+    report = AdversarialReportGenerator()
+    report.generate(
+        data=info,
+        output_path=data.get("output_path", "./out"),
+        output_file_name=f"{data.get('name', 'XXX')}_report.pdf",
+        header_logo_path=None,
+    )

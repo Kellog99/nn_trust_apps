@@ -7,7 +7,7 @@ import ray
 import requests
 from fastapi import APIRouter, Response, Body, Query
 
-from attack_server.utils.utils import find_image
+from services.utils.utils import find_image
 from benchmarking import run_benchmark
 from models import BenchmarkExecutionConfig, DatasetInfo, ModelInfo, RegisteredObject
 

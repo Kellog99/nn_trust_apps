@@ -5,9 +5,9 @@ import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from attack_server.routers import api_router
 from benchmarking.privacy.loading import ensure_privacy_registries
 from models import ServerConfig, parsed_argument
+from services.routers import api_router
 
 ########### Environmental variables ###########
 args = parsed_argument(ServerConfig)

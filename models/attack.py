@@ -6,7 +6,7 @@ from torchvision.transforms import v2 as T
 
 from models.model import RegisteredObject
 from models.info import ModelInfo
-from attack_server.utils.utils import pil_to_b64str
+from services.utils.utils import pil_to_b64str
 
 
 class SingleAttackProps(BaseModel):

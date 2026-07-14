@@ -5,7 +5,7 @@ from fastapi import APIRouter, Body, Depends, HTTPException, Query, Response
 from fastapi.responses import FileResponse
 from pydantic import ValidationError
 
-from attack_server.lib.privacy_jobs import get, submit, to_privacy_job_config
+from services.lib.privacy_jobs import get, submit, to_privacy_job_config
 from models import ServerConfig, config_field
 from models.privacy import PrivacyArtifactRef, PrivacyAttackOutput, PrivacyAttackProps
 from benchmarking.privacy.metrics import PrivacyExecutionResult, PrivacyPendingArtifactFormat

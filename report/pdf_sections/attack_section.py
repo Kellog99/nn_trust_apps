@@ -143,7 +143,10 @@ class AttackSection(PDFSection):
             )
         return out
 
-    def build_example(self, path_root: Optional[str | Path] = None) -> list:
+    def build_example(
+            self,
+            path_root: Optional[str | Path] = None
+    ) -> list:
         """
         This function has to construct the table for the attack's parameters
         """
@@ -242,23 +245,25 @@ class AttackSection(PDFSection):
             path_root: Optional[str | Path] = None,
     ) -> list:
         """
-        Build the attack detail section.
+        It builds the section with all the attack's detail.
+
         Args:
             data: (dict) it contains the information about each attack.
             description (str): description to add after the title section.
             path_root (str | Path): it represents the path where the examples are stored.
         """
-        if path_root and isinstance(path_root, str):
+
+        # If the path_root is none then no example are shown
+        if path_root is not None and isinstance(path_root, str):
             path_root: Path = Path(path_root) / "examples"
 
-        elements = []
-
-        elements.append(
+        elements = [
             Paragraph(
                 text="Adversarial Attacks Analysis",
                 style=self.title_style
             )
-        )
+        ]
+
         if description:
             elements.append(
                 Paragraph(
@@ -286,7 +291,7 @@ class AttackSection(PDFSection):
             elements.extend(self.build_table_parameters(parameters=atk_info.parameters))
             elements.append(Spacer(1, 20))
 
-            elements.extend(self.build_example(path_root=path_root / atk_name))
+            elements.extend(self.build_example(path_root=path_root / atk_name if path_root else None))
             elements.append(Spacer(1, 20))
 
         return elements

@@ -2,6 +2,7 @@
   <dictionary name="project">
     <words>
       <w>dataloader</w>
+      <w>fastapi</w>
       <w>titann</w>
     </words>
   </dictionary>

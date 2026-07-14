@@ -12,7 +12,7 @@ from fastapi import APIRouter, Response, Query
 from fastapi import UploadFile, HTTPException
 from fastapi.responses import JSONResponse
 
-from attack_server.lib.validator import json_safety_check
+from services.lib.validator import json_safety_check
 
 router = APIRouter(prefix="/model", tags=["datasets and models"])
 

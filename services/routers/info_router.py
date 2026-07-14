@@ -6,12 +6,13 @@ from fastapi import APIRouter, HTTPException, Request, Depends, Body
 
 from models.model import RegisteredObject
 from models import ServerConfig, SharableVariables, config_field
-from attack_server.utils.utils import get_parameter_prop
+from services.utils.utils import get_parameter_prop
 from benchmarking.privacy.contracts import get_privacy_dataset_factory
 from benchmarking.privacy.model_registry import AppPrivacyModelFactory
 from nn_trust.attack.attack_factory import AttackFactory, AttackInfo
 from nn_trust.core import Task
 from nn_trust.evaluation.statistic_factory import StatisticsFactory as SF, InfoStatistic
+from nn_trust.utils import get_default_model_factory
 
 router = APIRouter(prefix="/info")
 
