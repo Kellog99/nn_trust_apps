@@ -1,3 +1,4 @@
+from pprint import pprint
 from typing import Optional
 
 import matplotlib.pyplot as plt
@@ -5,8 +6,9 @@ from reportlab.lib.colors import Color
 from reportlab.lib.styles import ParagraphStyle
 from reportlab.platypus import Paragraph, Spacer, Table, TableStyle, Image
 
+from models.reports import ReportMetricsProps
+from report.corporate_colors import CorporateColors
 from report.pdf_sections.pdf_section import PDFSection
-from report.pdf_sections.utils import ReportMetricsProps, CorporateColors
 
 
 class MetricsSection(PDFSection):
@@ -23,7 +25,6 @@ class MetricsSection(PDFSection):
             subtitle_style: Optional[ParagraphStyle] = None,
             description_style: Optional[ParagraphStyle] = None,
             benchmark: Optional[dict] = None,
-            excluded_metrics: Optional[list[str]] = None,
             table_height: Optional[float] = None,
             header_color: Optional[Color] = None,
     ):
@@ -35,7 +36,6 @@ class MetricsSection(PDFSection):
         )
 
         self.benchmark = benchmark
-        self.excluded_metrics = excluded_metrics
 
         # Style settings
         self.table_height = table_height
@@ -59,7 +59,6 @@ class MetricsSection(PDFSection):
               ):
         if isinstance(data, dict):
             data: ReportMetricsProps = ReportMetricsProps.model_validate(data)
-
         elements = []
 
         elements.append(
@@ -84,16 +83,16 @@ class MetricsSection(PDFSection):
         )
         # Metrics table
         table_data = [["Metric", "Value", "Position"]]
-        for param, value in data.model_dump().items():
-            if self.excluded_metrics and param not in self.excluded_metrics:
+        for metric, value in data.model_dump().items():
+            if isinstance(value, (int, float)):
                 value = self._format_value(value)
                 pos = "1/1"
                 if self.benchmark:
                     # counting the models that are better than the targeted model
-                    better_models: int = sum([value < bench for bench in self.benchmark[param]])
+                    better_models: int = sum([value < bench for bench in self.benchmark[metric]])
                     # the " + 1 " is because the benchmark does not include this model
                     pos = f"{better_models + 1}/{len(self.benchmark) + 1}"
-                table_data.append([param.replace('_', ' ').title(), value, pos])
+                table_data.append([metric.replace('_', ' ').title(), value, pos])
 
         # adding the metrics table to the list
         elements.append(

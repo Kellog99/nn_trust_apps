@@ -6,6 +6,7 @@ from models.info import ModelInfo, DatasetInfo
 from models.model import ParametersProps
 
 
+# These are the metrics associated to the model's performance
 class ReportMetricsProps(BaseModel):
     accuracy: Optional[float] = None
     precision: Optional[float] = None
@@ -15,6 +16,7 @@ class ReportMetricsProps(BaseModel):
     wobbliness: Optional[float] = None
 
 
+# These are the metrics that compute the attack's performance
 class AttackMetricsProps(BaseModel):
     risk: float
     accuracy: Optional[float] = None

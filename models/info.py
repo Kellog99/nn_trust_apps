@@ -112,6 +112,7 @@ class ModelInfo(Info):
             crop=None,
             size=254,
         ),
+        description="It represent the transformation to apply to the input.",
         title="Transformation",
     )
     ################################# Where the model is #################################
@@ -130,7 +131,8 @@ class ModelInfo(Info):
         "api"
     ] = Field(
         default="plain",
-        title="Library where the model has been taken from.",
+        title="Source Library",
+        description="Library where the model has been taken from.",
     )
 
     ######################################################################################

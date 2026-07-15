@@ -1,1 +1,2 @@
-from report.report_class import AdversarialReportGenerator, AdversarialReportStyle
+from report.report_class import AdversarialReportGenerator
+from report.report_style import AdversarialReportStyle

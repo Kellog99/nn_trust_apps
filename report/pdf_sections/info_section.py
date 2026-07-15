@@ -1,11 +1,12 @@
 from typing import Optional
 
+from pydantic import BaseModel
 from reportlab.lib import colors
 from reportlab.lib.styles import ParagraphStyle
 from reportlab.platypus import Paragraph, Spacer, Table, TableStyle
 
+from models import ModelInfo
 from report.pdf_sections.pdf_section import PDFSection
-from report.pdf_sections.utils import ModelInfo
 
 
 class ModelInfoSection(PDFSection):
@@ -42,6 +43,21 @@ class ModelInfoSection(PDFSection):
             ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
         ])
 
+        self.sub_table_style = TableStyle([
+            ('BACKGROUND', (0, 0), (0, -1), colors.HexColor('#F5F5F5')),
+            ('TEXTCOLOR', (0, 0), (0, -1), colors.HexColor('#333333')),
+            ('TEXTCOLOR', (1, 0), (1, -1), colors.HexColor('#000000')),
+            ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
+            ('FONTNAME', (1, 0), (1, -1), 'Helvetica'),
+            ('FONTSIZE', (0, 0), (-1, -1), 8),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#CCCCCC')),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('LEFTPADDING', (0, 0), (-1, -1), 7),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 7),
+            ('TOPPADDING', (0, 0), (-1, -1), 4),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+        ])
+
     def build(
             self,
             data: ModelInfo | dict,
@@ -51,7 +67,7 @@ class ModelInfoSection(PDFSection):
             data: ModelInfo = ModelInfo.model_validate(data)
 
         elements = []
-        model_name: str = getattr(data, "name", getattr(data, "id"))
+        model_name: str = data.name or data.id
 
         # Executive summary
         elements.append(
@@ -79,12 +95,60 @@ class ModelInfoSection(PDFSection):
             )
         )
 
+        desc_style = ParagraphStyle(
+            name='FieldDescription',
+            fontName='Helvetica',  # Change to your template's font if needed
+            fontSize=8,  # Smaller font size
+            leading=10,
+            textColor=colors.HexColor('#666666')  # Soft gray color
+        )
+
+        title_style = ParagraphStyle(
+            name='FieldTitle',
+            fontName='Helvetica-Bold',
+            fontSize=10,
+            leading=12,
+            textColor=colors.HexColor('#000000')
+        )
+
         # Model info table
         table_data = []
         for key, fieldInfo in data.model_fields.items():
-            if getattr(data, key):
-                title = getattr(fieldInfo, "title") if getattr(fieldInfo, "title") else key
-                table_data.append([title, str(getattr(data, key, "N/A"))])
+            if hasattr(data, key) and getattr(data, key) is not None:
+                raw_val = getattr(data, key)
+
+                # --- Upgrade 1: Title + Description ---
+                title_text = fieldInfo.title or key
+                if getattr(fieldInfo, 'description', None):
+                    # We use Paragraphs to allow mixed styling and auto-wrapping in the cell
+                    title_cell = [
+                        Paragraph(title_text, title_style),
+                        Paragraph(fieldInfo.description, desc_style)
+                    ]
+                else:
+                    title_cell = Paragraph(title_text, title_style)
+
+                # --- Upgrade 2: Dict to Nested Table ---
+                if isinstance(raw_val, BaseModel):
+                    raw_val: dict = raw_val.model_dump()
+
+                if isinstance(raw_val, dict):
+                    # Recursively build a table for the dictionary
+                    sub_table_data = []
+                    for sub_k, sub_v in raw_val.items():
+                        sub_table_data.append([str(sub_k), str(sub_v)])
+
+                    # Calculate column widths proportional to the available space in the right column
+                    right_col_width = self.corpus_width / 3 * 2 - 20
+                    val_cell = Table(
+                        data=sub_table_data,
+                        colWidths=[right_col_width / 3, right_col_width / 3 * 2],
+                        style=self.sub_table_style
+                    )
+                else:
+                    val_cell = str(raw_val)
+
+                table_data.append([title_cell, val_cell])
 
         elements.append(
             Table(

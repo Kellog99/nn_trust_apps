@@ -1,91 +1,18 @@
 from pathlib import Path
 from typing import Optional
 
-from pydantic import BaseModel, Field, ConfigDict
-from reportlab.lib import colors
-from reportlab.lib.enums import TA_LEFT
-from reportlab.lib.pagesizes import A4
-from reportlab.lib.styles import ParagraphStyle
-from reportlab.platypus import SimpleDocTemplate
+from reportlab.platypus import SimpleDocTemplate, PageBreak, Paragraph, Spacer
 
+from models import ModelReportProps
 from report.pdf_sections import (
     AttackSection,
     AttackRisk,
     HeaderFooter,
     ModelInfoSection,
     MetricsSection,
-    Title,
-    ModelReportProps
+    Title
 )
-
-
-class AdversarialReportStyle(BaseModel):
-    model_config = ConfigDict(arbitrary_types_allowed=True)
-
-    pagesize: tuple[float, float] = A4
-    rightMargin: float = 40
-    leftMargin: float = 40
-    topMargin: float = 80
-    bottomMargin: float = 60
-
-    pdf_title_style: ParagraphStyle = Field(
-        default_factory=lambda: ParagraphStyle(
-            name='CustomTitle',
-            fontSize=28,
-            textColor=colors.HexColor('#000000'),
-            spaceAfter=30,
-            alignment=TA_LEFT,
-            fontName='Helvetica-Bold'
-        ),
-        description="This represent the title's style of the whole PDF, i.e. `Model Trustworthy`."
-    )
-
-    section_title_style: ParagraphStyle = Field(
-        default_factory=lambda: ParagraphStyle(
-            name='CustomHeading1',
-            fontSize=18,
-            textColor=colors.HexColor('#CC0000'),
-            fontName='Helvetica-Bold',
-            borderWidth=2,
-            borderRadius=5,
-            borderColor=colors.HexColor('#CC0000'),
-            borderPadding=5,
-            spaceAfter=20,
-            leftIndent=0,
-            leading=22,
-        ),
-        description="This represent the style of the section's title."
-    )
-
-    section_subtitle_style: ParagraphStyle = Field(
-        default_factory=lambda: ParagraphStyle(
-            name='MetricLabel',
-            fontSize=12,
-            leading=18,
-            textColor=colors.HexColor('#000000'),
-            fontName='Helvetica-Bold'
-        ),
-        description="This represents the style associated with sub title"
-    )
-
-    section_description_style: ParagraphStyle = Field(
-        default_factory=lambda: ParagraphStyle(
-            name='CustomHeading2',
-            fontSize=10,
-            textColor=colors.HexColor('#333333'),
-            fontName='Helvetica'
-        ),
-        description="This represents the style of the description of each section."
-    )
-
-    metric_value: ParagraphStyle = Field(
-        default_factory=lambda: ParagraphStyle(
-            name='MetricValue',
-            fontSize=11,
-            textColor=colors.HexColor('#000000'),
-            fontName='Helvetica'
-        )
-    )
+from report.report_style import AdversarialReportStyle
 
 
 class AdversarialReportGenerator:
@@ -127,7 +54,6 @@ class AdversarialReportGenerator:
         self.global_metrics_section = MetricsSection(
             corpus_width=corpus_width,
             benchmark=benchmark,
-            excluded_metrics=excluded_metrics,
             title_style=style.section_title_style,
             subtitle_style=style.section_subtitle_style,
             description_style=style.section_description_style
@@ -138,8 +64,7 @@ class AdversarialReportGenerator:
             corpus_width=corpus_width,
             title_style=style.section_title_style,
             subtitle_style=style.section_subtitle_style,
-            description_style=style.section_description_style,
-            metrics_to_show=["robustness", "accuracy", "f1score", "precision"]
+            description_style=style.section_description_style
         )
         # single attack section
         self.atk_section = AttackSection(
@@ -208,7 +133,12 @@ class AdversarialReportGenerator:
         story = []
         ##################### Sections #####################
         # 1) Title page
-        story.extend(self.title.build(data=data.info))
+        story.extend(
+            self.title.build(
+                data=data.info,
+                description="ssssssssssssss"
+            )
+        )
 
         # 2) Model information
         story.extend(
@@ -229,18 +159,36 @@ class AdversarialReportGenerator:
         story.extend(
             self.atk_table.build(
                 data=data.attacks,
-                descriptions="This table represents the list of all the attacks that have been performed and the main metrics that have been computed."
+                descriptions="""
+                This table contains all the attacks that have been tested and a subset of all the metrics that have been computed for a global comparison.
+                """
             )
         )
+        story.append(PageBreak())
 
         # 5) Attacks analysis
-        story.extend(
-            self.atk_section.build(
-                data=data.attacks,
-                description="Here below are shown all the specifics about all the attacks that have been performed and their parameters.",
-                path_root=data.info.repository
+        # If the path_root is none then no example are shown
+        if data.info.repository is not None and isinstance(data.info.repository, str):
+            path_root: Path = Path(data.info.repository) / "examples"
+
+        story.append(
+            Paragraph(
+                text="Adversarial Attacks Analysis",
+                style=self.style.section_title_style
             )
         )
+        story.append(
+            Paragraph(
+                text="Here below are shown all the specifics about all the attacks that have been performed and their parameters.",
+                style=self.style.section_description_style
+            )
+        )
+        story.append(Spacer(1, 10))
+
+        for atk_name, atk_info in data.attacks.items():
+            story.extend(self.atk_section.build(
+                data=atk_info
+            ))
 
         ####################################################
 
@@ -262,5 +210,3 @@ class AdversarialReportGenerator:
             )
         else:
             doc.build(story)
-
-        print(f"Report generated: {output_path}")

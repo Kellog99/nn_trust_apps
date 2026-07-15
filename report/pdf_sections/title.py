@@ -4,8 +4,8 @@ from typing import Optional
 from reportlab.lib.styles import ParagraphStyle
 from reportlab.platypus import Paragraph, Spacer
 
+from models import ModelInfo
 from report.pdf_sections.pdf_section import PDFSection
-from report.pdf_sections.utils import ModelInfo
 
 
 class Title(PDFSection):
@@ -55,7 +55,7 @@ class Title(PDFSection):
                 style=self.description_style
             )
         )
-        elements.append(Spacer(1, 30))
+        elements.append(Spacer(1, 15))
 
         # Report metadata
         elements.append(
@@ -69,6 +69,6 @@ class Title(PDFSection):
                 style=self.description_style
             )
         )
-        elements.append(Spacer(1, 50))
+        elements.append(Spacer(1, 25))
 
         return elements

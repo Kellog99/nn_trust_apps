@@ -23,7 +23,11 @@ class PDFSection(abc.ABC):
         self.description_style = description_style
 
     @abc.abstractmethod
-    def build(self, data: BaseModel, description: Optional[str] = None) -> list:
+    def build(
+            self,
+            data: BaseModel,
+            description: Optional[str] = None
+    ) -> list:
         """
         This function has the role to build a section for each component
         """
@@ -37,5 +41,5 @@ class PDFSection(abc.ABC):
         elif isinstance(value, int):
             return f"{value:,}"
         elif isinstance(value, float):
-            return f"{value:.4f}"
+            return f"{value:.3f}"
         return str(value)
