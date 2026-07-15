@@ -14,8 +14,8 @@ from models import BenchmarkExecutionConfig, DatasetInfo, ModelInfo, RegisteredO
 router = APIRouter(prefix="/job", tags=["jobs management", "jobs utils"])
 
 
-@router.post("/start_benchmark", response_model=str)
-async def start_benchmark_job(body: BenchmarkExecutionConfig = Body(...)) -> str | Response:
+@router.post("/start_benchmark")
+async def start_benchmark_job(body: BenchmarkExecutionConfig = Body(...)) -> dict:
     """
     Start a new TITANN benchmark job.
     """
@@ -24,9 +24,10 @@ async def start_benchmark_job(body: BenchmarkExecutionConfig = Body(...)) -> str
     model: ModelInfo = body.model
     attacks: list[RegisteredObject] = body.attacks
     metrics: list[RegisteredObject] = body.metrics
-    options: BenchmarkExecutionConfig = body.options
+    options = body.options
 
-    return run_benchmark(
+
+    result = run_benchmark(
         models=[model],
         datasets=[dataset],
         attacks=attacks,
@@ -34,6 +35,8 @@ async def start_benchmark_job(body: BenchmarkExecutionConfig = Body(...)) -> str
         options=options
     )
 
+    result["output_path"] = str(result["output_path"])
+    return result
 
 # --- Progress --- #
 @router.get("/getJobs")
