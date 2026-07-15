@@ -15,7 +15,6 @@ from nn_trust.evaluation.composer import ConfigStatisticComposer, StatisticCompo
 from nn_trust.loss.loss_composer import LossComposer
 from nn_trust.target import AvoidOnehotTarget
 
-
 def evaluate_attack(
         dataloader: torch.utils.data.DataLoader,
         model: ModelAdapter,
@@ -50,12 +49,14 @@ def evaluate_attack(
                 loss_weights=attack_config.get('loss_weights', [1.0] * len(attack_config['losses'])),
             )
 
+        targeted = attack_config.pop("targeted", False)
+
         atk = EAF.create(
             atk_name,
             model=model,
             device=device,
             task=Task.Classification,
-            targeted=False,
+            targeted=targeted,
             **attack_config
         )
         atk.name = atk_id
@@ -78,8 +79,12 @@ def evaluate_attack(
                                                message=f"Processing batch {idx + 1}/{len(dataloader)}")
             batch = batch.to(device)
             label = label.to(device)
-            y_one_hot = torch.nn.functional.one_hot(label, num_classes=num_classes)
-            target = AvoidOnehotTarget(num_classes=num_classes)(label.tolist())
+            if targeted:
+               target_classes = (label + 1) % num_classes
+               target = torch.nn.functional.one_hot(target_classes,num_classes=num_classes).float().to(batch.device)
+            else:
+               target = AvoidOnehotTarget(num_classes=num_classes)(label.tolist()).to(batch.device)
+
             x_adv = atk.generate(
                 x=batch,
                 y=target
@@ -104,22 +109,38 @@ def evaluate_attack(
                     out_adv = out_adv[correct_mask]
                     y_pred = y_pred[correct_mask]
                     y_pred_adv = y_pred_adv[correct_mask]
+
+                    if targeted:
+                      target_classes = target_classes[correct_mask]
             else:
                 continue  # skip iteration, no statistic update for this batch
+
             input_stat = {
                 'x_adv': x_adv.detach(),
                 'x': batch.detach(),
                 'y': label,
+                "y_target": target_classes if targeted else label,
                 'out': out,
                 'out_adv': out_adv,
                 'y_pred': y_pred,
                 'y_pred_adv': y_pred_adv
             }
+
+            if targeted:
+              input_stat["y_target"] = target_classes
+
             statistics_composer.update(**input_stat)
 
         if tracker:
             tracker.update_progress.remote(f"{atk_id}_{benchmark_id}", status="completed", progress=100,
                                            message=f"Completed attack {atk_id}")
+            
+        saved_statistics = []
+        for metric in statistics:
+            metric = dict(metric)
+            metric.pop("model", None)
+            saved_statistics.append(metric)
+
         return {
             "statistics": statistics_composer.compute(),
             "statistics_states": statistics_composer.get_raw_state(),
@@ -128,9 +149,11 @@ def evaluate_attack(
                 'parameters': sum([param.numel() for param in model.parameters()]),
                 'classes': num_classes,
                 'dimensionality': batch.shape,
-                'statistics': statistics,
-                "model_info": {**model.metadata, 'parameters': sum([param.numel() for param in model.parameters()])},
-                "dataset_info": dataloader.metadata
+                'statistics': saved_statistics,
+                # if model metadata do not exist, save an empty dictionary
+                "model_info": {**getattr(model, "metadata", {}), "num_classes": num_classes,"parameters": sum(param.numel() for param in model.parameters())},
+                # if dataloader metadata do not exist, save an empty dictionary
+                "dataset_info": getattr(dataloader, "metadata", {})
             }
         }
     except Exception as e:
@@ -192,6 +215,41 @@ def aggregate_attacks_statistics(
     statistics_composer.reset()
     return aggregate_metrics
 
+def make_json_serializable(value):
+    
+    if isinstance(value, torch.Tensor):
+        value = value.detach().cpu()
+        if value.numel() == 1:
+            return value.item()
+        return value.tolist()
+
+    if isinstance(value, torch.Size):
+        return list(value)
+    
+    if isinstance(value, torch.device):
+        return str(value)
+    
+    if isinstance(value, Path):
+        return str(value)
+
+    if isinstance(value, dict):
+        return {
+            str(key): make_json_serializable(item)
+            for key, item in value.items()
+        }
+
+    if isinstance(value, list):
+        return [make_json_serializable(item) for item in value]
+
+    if isinstance(value, tuple):
+        return [make_json_serializable(item) for item in value]
+    
+    # if json can already save it, keep it. If not, convert it to a string
+    try:
+        json.dumps(value)
+        return value
+    except TypeError:
+        return str(value)
 
 def save_attack_result(
         benchmark_id: str,
@@ -208,8 +266,8 @@ def save_attack_result(
         output_path = Path(root_path) / output_path
     os.makedirs(output_path, exist_ok=True)
     with open(output_path / "statistics.json", 'w') as f:
-        json.dump(atk_result["statistics"], f)
+        json.dump(make_json_serializable(atk_result["statistics"]), f)
     with open(output_path / "statistics_states.pkl", 'wb') as f:
         pickle.dump(atk_result["statistics_states"], f)
     with open(output_path / "info.json", 'w') as f:
-        json.dump(atk_result["info"], f)
+        json.dump(make_json_serializable(atk_result["info"]), f)
