@@ -6,15 +6,15 @@ This router handles:
 """
 import json
 from pathlib import Path
-from pprint import pprint
 
 from fastapi import APIRouter, Query, Body, Depends
+from fastapi.responses import StreamingResponse
 
-from models.model import BenchmarkModelProps
 from models import config_field
+from models.model import BenchmarkModelProps
 from models.reports import ModelReportProps
 from report import AdversarialReportGenerator
-from services.routers.repository_router import get_info
+from services.repository_router import get_info
 
 router = APIRouter(prefix="/report", tags=["datasets and models"])
 
@@ -112,13 +112,30 @@ def generate_pdf_report(
     """
     This function takes all the necessary information for generating the model's report.
     """
-    pprint(data.get("report"))
-    info: ModelReportProps = ModelReportProps.model_validate(data.get("report"))
 
+    data: ModelReportProps = ModelReportProps.model_validate(data.get("report"))
+
+    file_name: str = data.info.name or data.info.id or "model_adversarial_report.pdf"
+    file_name = file_name.replace(" ", "_").lower()
+    # Adding the proper extension to the file
+    if not file_name.endswith(".pdf"):
+        file_name = file_name + ".pdf"
+
+    output_path: Path = Path(getattr(data, "output_path", "./out")).expanduser() / file_name
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    print(output_path)
     report = AdversarialReportGenerator()
     report.generate(
-        data=info,
-        output_path=data.get("output_path", "./out"),
-        output_file_name=f"{data.get('name', 'XXX')}_report.pdf",
+        data=data,
+        output_path=output_path,
         header_logo_path=None,
+    )
+
+    pdf = report.pdf_to_bytesio(pdf_path=output_path)
+    return StreamingResponse(
+        pdf,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": 'inline; filename="model_report.pdf"'
+        },
     )

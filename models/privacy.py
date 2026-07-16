@@ -5,7 +5,7 @@ from pydantic import BaseModel, Field, model_validator
 from torchvision.transforms import v2 as T
 
 from models.model import RegisteredObject
-from services.utils.utils import pil_to_b64str
+from services.utils.utils import tensor_image_to_b64str
 
 
 class PrivacyDatasetRef(BaseModel):
@@ -60,7 +60,7 @@ class PrivacyAttackOutput(BaseModel):
         out: list[str] = []
         for image in self.reconstructions:
             if isinstance(image, torch.Tensor):
-                out.append(pil_to_b64str(T.ToPILImage()(image.squeeze())))
+                out.append(tensor_image_to_b64str(T.ToPILImage()(image.squeeze())))
             else:
                 out.append(image)
         self.reconstructions = out

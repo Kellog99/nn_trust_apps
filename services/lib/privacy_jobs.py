@@ -4,7 +4,7 @@ from pathlib import Path
 from threading import Lock
 from uuid import uuid4
 
-from models.main_model import ServerConfig
+from models import ServerConfig
 from models.privacy import PrivacyAttackProps
 from benchmarking.privacy.job_models import PrivacyAttackPayload, PrivacyDatasetConfig, PrivacyJobConfig, \
     PrivacyTargetModelConfig, PrivacyTargetTrainingOverrideConfig, RuntimeOptionConfig

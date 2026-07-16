@@ -2,7 +2,7 @@ import datetime
 import json
 from pathlib import Path
 
-from models.main_model import ServerConfig
+from models import ServerConfig
 
 if __name__=="__main__":
     config = ServerConfig()

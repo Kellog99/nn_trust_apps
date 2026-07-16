@@ -257,7 +257,6 @@ class AttackSection(PDFSection):
         elements = []
         if isinstance(data, dict):
             data: ReportAttackProps = ReportAttackProps.model_validate(data)
-        print(data)
 
         name: str = data.name
         metrics: AttackMetricsProps = data.metrics

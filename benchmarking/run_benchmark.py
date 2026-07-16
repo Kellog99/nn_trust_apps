@@ -4,11 +4,12 @@ from pathlib import Path
 from typing import List
 
 import ray
+
 from benchmarking.executor import BenchmarkExecutor
-from benchmarking.utils.utils import postprocess_results
 from models import BenchmarkOptionConfig, ModelInfo, DatasetInfo, RegisteredObject
 from nn_trust.attack import AttackFactory as EAF
 from report import AdversarialReportGenerator
+
 
 # Resolve a model or dataset repository path to an absolute path (beginning at the home directory)
 def resolve_repository_path(repository: str | None, project_root: Path) -> str:
@@ -140,7 +141,6 @@ def run_benchmark(
         report.generate(
             data=results,
             output_path=options.output_path,
-            output_file_name=f"report_something.pdf",
             header_logo_path=None,
         )
     ###########################################################################################

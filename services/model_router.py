@@ -12,7 +12,6 @@ from fastapi import APIRouter, Response, Query
 from fastapi import UploadFile, HTTPException
 from fastapi.responses import JSONResponse
 
-from services.lib.validator import json_safety_check
 
 router = APIRouter(prefix="/model", tags=["datasets and models"])
 
@@ -159,7 +158,7 @@ async def upload_model_check(file: UploadFile):
                 raw_json_metadata = f.read()
 
             # Validate JSON
-            checked_metadata = True  # json_safety_check(raw_json_metadata)
+            checked_metadata = True
 
         except json.JSONDecodeError as e:
             logging.error(f"Invalid JSON metadata: {str(e)}")
@@ -289,12 +288,7 @@ async def upload_model_proceed(
 
         # Read the validated JSON from the temp folder
         with open(json_path, 'r', encoding='utf-8') as f:
-            raw_json_metadata = f.read()
-
-        # Re-parse/re-check the metadata before saving for safety and to get dict form
-        # We assume json_safety_check can handle both string and dict input,
-        # but since we read the file here, it's a string.
-        json_metadata = json_safety_check(raw_json_metadata)
+            json_metadata = f.read()
 
         # Save the JSON metadata
         with open(dest_json_path, "w", encoding="utf-8") as f:

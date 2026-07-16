@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from benchmarking.privacy.loading import ensure_privacy_registries
 from models import ServerConfig, parsed_argument
-from services.routers import api_router
+from services import api_router
 
 ########### Environmental variables ###########
 args = parsed_argument(ServerConfig)

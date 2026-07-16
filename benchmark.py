@@ -2,53 +2,52 @@ import argparse
 import json
 from pathlib import Path
 
+import yaml
+
 from benchmarking import run_benchmark
 from models import BenchmarkOptionConfig, ModelInfo, DatasetInfo
 from nn_trust import AttackFactory as AF, Task
 from nn_trust.loss.loss_factory import LossFactory as LF
 
+
+def valid_dataset_info(data: dict) -> DatasetInfo:
+    """
+    Retrieve the information of the dataset
+    """
+    source_path = data.get('source_path', None)
+    if source_path:
+        source_path = Path(source_path).expanduser() / "info.json"
+        if source_path.exists():
+            with open(source_path, 'rb') as f:
+                info_data = json.load(f)
+
+            # Retrieve the information from the info json
+            return DatasetInfo.model_validate(info_data)
+
+    # Check whether there are information in the configuration file
+    return DatasetInfo.model_validate(data)
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(prog='Attack benchmark.')
 
     parser.add_argument(
-        '--model_path',
-        '-mp',
+        '--config_path',
+        '-cnf',
         required=True,
-        help="Path to the model's information."
+        help="Path to the Benchmark configuration file."
     )
 
-    parser.add_argument(
-        '--dataset_path',
-        '-dp',
-        required=True,
-        help="Path to the dataset's information."
-    )
-    parser.add_argument(
-        '--attacks',
-        '-atk',
-        default=[],
-        help="List of attacks to run. By default all attacks are run."
-    )
-    parser.add_argument(
-        '--metrics',
-        '-m',
-        default=[],
-        help="List of metric to use. By default all metrics are used."
-    )
-    parser.add_argument(
-        '--output_path',
-        '-op',
-        default="./tmp",
-        help="Path where to store all the information from the benchmark."
-    )
-    parser.add_argument(
-        '--use_ray',
-        '-ray',
-        action="store_true",
-        default=False,
-        help="Whether to use ray or not. Hence, whether to parallelize the attacks or not."
-    )
     args = parser.parse_args()
+    config_path: Path = Path(args.config_path).expanduser()
+    if not config_path.exists():
+        raise ValueError(f"The path to the Benchmark configuration file does not exist: {config_path}")
+    with open(args.config_path) as f:
+        config = yaml.safe_load(f)
+
+    import pdb
+
+    pdb.set_trace()
 
     ####################### 1) Getting the models #######################
     model_path: Path = Path(args.model_path).expanduser()

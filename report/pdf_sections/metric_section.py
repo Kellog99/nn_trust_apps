@@ -1,4 +1,4 @@
-from pprint import pprint
+from pathlib import Path
 from typing import Optional
 
 import matplotlib.pyplot as plt
@@ -20,6 +20,7 @@ class MetricsSection(PDFSection):
 
     def __init__(
             self,
+            output_folder: str | Path = "./",
             corpus_width: Optional[float] = None,
             title_style: Optional[ParagraphStyle] = None,
             subtitle_style: Optional[ParagraphStyle] = None,
@@ -36,7 +37,7 @@ class MetricsSection(PDFSection):
         )
 
         self.benchmark = benchmark
-
+        self.output_folder = output_folder
         # Style settings
         self.table_height = table_height
         self.header_color = header_color if header_color else CorporateColors.TABLE_HEADER
@@ -55,7 +56,8 @@ class MetricsSection(PDFSection):
 
     def build(self,
               data: ReportMetricsProps | dict,
-              description: Optional[str] = None
+              description: Optional[str] = None,
+              output_folder: str | Path = "./",
               ):
         if isinstance(data, dict):
             data: ReportMetricsProps = ReportMetricsProps.model_validate(data)
@@ -132,9 +134,9 @@ class MetricsSection(PDFSection):
                    xlabel='Predicted Label')
 
             fig.tight_layout()
-            plt.savefig('./confusion_matrix_matplotlib.png')
+            plt.savefig(f'{output_folder}/confusion_matrix_matplotlib.png')
             img = Image(
-                filename='./confusion_matrix_matplotlib.png',
+                filename=f'{output_folder}/confusion_matrix_matplotlib.png',
                 width=400,
                 height=300,
                 kind='proportional'

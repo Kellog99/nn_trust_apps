@@ -2,10 +2,10 @@ import json
 import os
 from pathlib import Path
 from pprint import pprint
-from typing import Literal, Union
+from typing import Literal
 
 from fastapi import APIRouter, Query, Depends, Request, Body, HTTPException
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel
 
 from models import config_field, ModelReportProps, DatasetReportProps, ModelInfo, DatasetInfo
 

@@ -7,9 +7,9 @@ import ray
 import requests
 from fastapi import APIRouter, Response, Body, Query
 
-from services.utils.utils import find_image
-from benchmarking import run_benchmark
+from benchmarking import run_benchmark, executor
 from models import BenchmarkExecutionConfig, DatasetInfo, ModelInfo, RegisteredObject
+from services.utils.utils import find_image
 
 router = APIRouter(prefix="/job", tags=["jobs management", "jobs utils"])
 
@@ -26,7 +26,7 @@ async def start_benchmark_job(body: BenchmarkExecutionConfig = Body(...)) -> dic
     metrics: list[RegisteredObject] = body.metrics
     options = body.options
 
-
+    print(attacks)
     result = run_benchmark(
         models=[model],
         datasets=[dataset],
@@ -37,6 +37,7 @@ async def start_benchmark_job(body: BenchmarkExecutionConfig = Body(...)) -> dic
 
     result["output_path"] = str(result["output_path"])
     return result
+
 
 # --- Progress --- #
 @router.get("/getJobs")

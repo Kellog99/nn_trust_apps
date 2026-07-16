@@ -4,21 +4,31 @@ import math
 import os
 from typing import Literal, get_args, get_origin
 
+import torch
 from PIL import Image
 from annotated_types import Gt, Ge, Le, Lt
 from pydantic.fields import FieldInfo
 from pydantic_core import PydanticUndefined
+from torchvision.transforms import v2 as T
 
 from models.model import ParametersProps
+
 
 def b64str_to_pil(b64_image_str: str) -> Image.Image:
     image_bytes = base64.b64decode(b64_image_str)
     return Image.open(io.BytesIO(image_bytes)).convert("RGB")
 
 
-def pil_to_b64str(pil_image: Image.Image) -> str:
+def tensor_image_to_b64str(image: torch.Tensor) -> str:
+    """
+    This function allows to transform a proper tensor into a base64 string.
+
+    Tensor -> PIL image -> base64 string
+
+    """
+    pil_img = T.ToPILImage()(image.squeeze())
     buffered = io.BytesIO()
-    pil_image.save(buffered, format="PNG")
+    pil_img.save(buffered, format="PNG")
     return base64.b64encode(buffered.getvalue()).decode("utf-8")
 
 
@@ -51,13 +61,23 @@ def get_parameter_prop(id: str, param_info: FieldInfo) -> ParametersProps:
     if get_origin(ann) is Literal:
         options = [str(o) for o in get_args(ann)]
         default = param_info.default if param_info.default is not PydanticUndefined else options[0]
-        return ParametersProps(id=id, name=name, default=str(default),
-                               description=param_info.description, kind="enum", options=options)
+        return ParametersProps(
+            id=id,
+            name=name,
+            default=str(default),
+            description=param_info.description,
+            kind="enum",
+            options=options
+        )
 
     if ann is str:
         default = param_info.default if param_info.default is not PydanticUndefined else ""
-        return ParametersProps(id=id, name=name, default=str(default),
-                               description=param_info.description)
+        return ParametersProps(
+            id=id,
+            name=name,
+            default=str(default),
+            description=param_info.description
+        )
 
     # --- number ---
     is_int = ann is int

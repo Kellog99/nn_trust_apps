@@ -1,3 +1,4 @@
+from io import BytesIO
 from pathlib import Path
 from typing import Optional
 
@@ -75,60 +76,43 @@ class AdversarialReportGenerator:
             description_style=style.section_description_style
         )
 
-    def generate(
-            self,
-            data: ModelReportProps | dict,
-            output_path: Optional[str | Path] = None,
-            output_file_name: Optional[str] = None,
-            header_logo_path: Optional[str | Path] = None
-    ):
+    def pdf_to_bytesio(self, pdf_path: str | Path) -> BytesIO:
         """
-        Generate PDF report from data that could be in a proper format or in a dict format
+        Load a PDF from disk into a BytesIO object.
 
         Args:
-            data: data associated with a model's security assessment
-            output_path: Output PDF file path
-            output_file_name: name of the PDF file
-            header_logo_path: path to the logo
+            pdf_path: Path to the PDF file.
+
+        Returns:
+            BytesIO containing the PDF data.
+
+        Raises:
+            FileNotFoundError: If the PDF does not exist.
+            ValueError: If the path is not a PDF file.
         """
+        if isinstance(pdf_path, str):
+            pdf_path: Path = Path(pdf_path).expanduser().resolve()
 
-        ############################# FILE PATH VALIDATION #############################
-        if data is None:
-            raise ValueError("It is necessary to pass the data for the report.")
+        if not pdf_path.exists():
+            raise FileNotFoundError(f"PDF not found: {pdf_path}")
 
-        if isinstance(data, dict):
-            try:
-                data: ModelReportProps = ModelReportProps.model_validate(data)
-            except:
-                raise ValueError("The data file provided is not in the format of ModelReportProps.")
-        ################################################################################
+        if not pdf_path.is_file():
+            raise ValueError(f"{pdf_path} is not a file.")
 
-        ############## Handling the saving path ##############
-        # 1. Resolve and normalize the output path immediately
-        output_path: Path = Path(output_path or "./tmp/").expanduser()
-        # 2. Get the file name or default it (with fallback)
-        file_name: str = data.info.name or data.info.id or "model_adversarial_report.pdf"
-        file_name = file_name.replace(" ", "_").lower()
-        # Adding the proper extension to the file
-        if not file_name.endswith(".pdf"):
-            file_name = file_name + ".pdf"
+        if pdf_path.suffix.lower() != ".pdf":
+            raise ValueError(f"{pdf_path} is not a PDF file.")
 
-        # 3. Combine them, ensure the extension is .pdf, and build the parent directory
-        output_file = output_path / file_name
-        output_file.parent.mkdir(parents=True, exist_ok=True)
+        with pdf_path.open("rb") as f:
+            return BytesIO(f.read())
 
-        ################# Document Creation #################
-        doc = SimpleDocTemplate(
-            str(output_path / output_file_name),
-            pagesize=self.style.pagesize,
-            rightMargin=self.style.rightMargin,
-            leftMargin=self.style.leftMargin,
-            topMargin=self.style.topMargin,
-            bottomMargin=self.style.bottomMargin,
-        )
-
-        #############################################
-
+    def build_story(
+            self,
+            data: ModelReportProps,
+            output_folder: str | Path = "./"
+    ) -> list:
+        """
+        It builds the story of the PDF: the pages, the content and the plot
+        """
         # Build content
         story = []
         ##################### Sections #####################
@@ -136,7 +120,6 @@ class AdversarialReportGenerator:
         story.extend(
             self.title.build(
                 data=data.info,
-                description="ssssssssssssss"
             )
         )
 
@@ -151,7 +134,8 @@ class AdversarialReportGenerator:
         story.extend(
             self.global_metrics_section.build(
                 data=data.metrics,
-                description="Here below, it is shown a table containing all the metrics that have been computed during the benchmark and their placement among a benchmark if it exists."
+                description="Here below, it is shown a table containing all the metrics that have been computed during the benchmark and their placement among a benchmark if it exists.",
+                output_folder=output_folder
             )
         )
 
@@ -160,17 +144,13 @@ class AdversarialReportGenerator:
             self.atk_table.build(
                 data=data.attacks,
                 descriptions="""
-                This table contains all the attacks that have been tested and a subset of all the metrics that have been computed for a global comparison.
-                """
+                        This table contains all the attacks that have been tested and a subset of all the metrics that have been computed for a global comparison.
+                        """
             )
         )
         story.append(PageBreak())
 
         # 5) Attacks analysis
-        # If the path_root is none then no example are shown
-        if data.info.repository is not None and isinstance(data.info.repository, str):
-            path_root: Path = Path(data.info.repository) / "examples"
-
         story.append(
             Paragraph(
                 text="Adversarial Attacks Analysis",
@@ -191,6 +171,48 @@ class AdversarialReportGenerator:
             ))
 
         ####################################################
+        return story
+
+    def generate(
+            self,
+            data: ModelReportProps | dict,
+            output_path: Optional[str | Path] = None,
+            header_logo_path: Optional[str | Path] = None
+    ):
+        """
+        Generate PDF report from data that could be in a proper format or in a dict format
+
+        Args:
+            data: data associated with a model's security assessment
+            output_path: Output PDF file path
+            header_logo_path: path to the logo
+        """
+
+        ############################# FILE PATH VALIDATION #############################
+        if data is None:
+            raise ValueError("It is necessary to pass the data for the report.")
+
+        if isinstance(data, dict):
+            try:
+                data: ModelReportProps = ModelReportProps.model_validate(data)
+            except:
+                raise ValueError("The data file provided is not in the format of ModelReportProps.")
+        ################################################################################
+
+        ################# Document Creation #################
+        doc = SimpleDocTemplate(
+            str(output_path),
+            pagesize=self.style.pagesize,
+            rightMargin=self.style.rightMargin,
+            leftMargin=self.style.leftMargin,
+            topMargin=self.style.topMargin,
+            bottomMargin=self.style.bottomMargin,
+        )
+
+        story = self.build_story(
+            data=data,
+            output_folder=output_path.parent
+        )
 
         # Build PDF
         if header_logo_path:
@@ -202,11 +224,13 @@ class AdversarialReportGenerator:
             if not header_logo_path.is_file():
                 raise ValueError("The logo is not a file.")
             ###################################################################
-
-            doc.build(
-                story,
-                onFirstPage=HeaderFooter(logo_path=header_logo_path),
-                onLaterPages=HeaderFooter(logo_path=header_logo_path)
-            )
+            header_footer = HeaderFooter(logo_path=header_logo_path)
         else:
-            doc.build(story)
+            header_footer = HeaderFooter()
+        doc.build(
+            story,
+            onFirstPage=header_footer,
+            onLaterPages=header_footer,
+        )
+
+        #############################################

@@ -14,9 +14,11 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         '--output_path',
-        default=None,
+        default="./out",
+        type=str,
         help="Path to the output report."
     )
+
     args = parser.parse_args()
 
     GENERATION_AUTHORITY = "Ai Lab - Ldo"
@@ -34,11 +36,18 @@ if __name__ == "__main__":
     data = ModelReportProps.model_validate(data)
 
     ########## 3) Generating the report ##########
+    file_name: str = data.info.name or data.info.id or "model_adversarial_report.pdf"
+    file_name = file_name.replace(" ", "_").lower()
+    # Adding the proper extension to the file
+    if not file_name.endswith(".pdf"):
+        file_name = file_name + ".pdf"
+
+    output_path: Path = Path(getattr(data, "output_path", args.output_path)).expanduser() / file_name
+    output_path.parent.mkdir(parents=True, exist_ok=True)
 
     report = AdversarialReportGenerator()
     report.generate(
         data=data,
-        output_path=args.output_path,
-        output_file_name=f"report_something.pdf",
+        output_path=output_path,
         header_logo_path=None,
     )

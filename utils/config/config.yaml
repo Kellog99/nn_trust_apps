@@ -1,0 +1,74 @@
+models:
+  - source_path: "~/Desktop/StableAI/model_repository/resnet50"
+  - source_path: "~/Desktop/StableAI/model_repository/convex_tiny"
+
+datasets:
+  - name: "imagenet" # Name of the dataset
+    num_classes: 1000
+    subset: 50
+    batch: 2
+    type_dataset: 1
+    num_workers: 2
+    source_path: "~/Desktop/StableAI/dataset_repository/imagenet-1k"
+    transform_config:
+      size: 256
+      crop: 224
+      transform_id: "imagenet_like_crop"
+      mean: [ 0.5074, 0.5308, 0.5306 ]
+      std: [ 0.2639, 0.2518, 0.2521 ]
+
+metrics:
+  - id: 'countsamples'
+  - name: 'accuracy'
+    average: 'macro'
+  - name: 'precision'
+    average: 'macro'
+  - name: 'robustness'
+  - name: 'misclassification'
+
+
+
+attacks:
+  - 'zoo'
+  - '_uap'
+  - 'autozoom'
+  - 'daguap'
+  - 'fuap'
+  - 'fgsmuap'
+  - 'boundary'
+  - 'sphereprojection'
+  - 'banditpriorevasion'
+  - 'contrastbaselineevasion'
+  - 'gaussianbaselineevasion'
+  - 'identitybaselineevasion'
+  - 'saltnpeppernoisebaseline'
+  - 'uniformbaselineevasion'
+  - 'binaryevasion'
+  - 'blackboxtransfer'
+  - 'dag'
+  - 'deepfool'
+  - 'duevasion'
+  - 'fom'
+  - 'ofuapevasion'
+  - 'gduapevasion'
+  - 'geodaevasion'
+  - 'hopskipjump'
+  - 'jsm'
+  - 'localsearchevasion'
+  - 'parsimonious'
+  - 'pgdkde'
+  - 'priorgd'
+  - 'signoptevasion'
+
+
+options:
+  load_results: false                 # loading any existing results.
+  overwrite: true                     # overwriting the results if a benchmarking is performed
+  num_images_to_save: 10
+  save_perturbation: false
+  gpu: true
+  output_path: "./benchmark_out" # Path to the output folder
+  output_format: "report" # report or test
+
+
+
