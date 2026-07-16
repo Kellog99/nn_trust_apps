@@ -1,12 +1,14 @@
+from logging import Logger
 from pathlib import Path
-from typing import Iterator
+from typing import Iterator, Optional
 
 import ray
+import torch
 from tqdm import tqdm
 
 from benchmarking.utils.evaluation import save_attack_result
 from benchmarking.utils.execution import execute_job
-from models import ModelReportProps
+from models import ModelReportProps, JobExecutionConfig
 
 
 class BenchmarkExecutor:
@@ -36,23 +38,61 @@ class BenchmarkExecutor:
             root_path=self.root_path,
         )
 
-    def _iter_local(self, input_job_list) -> Iterator[ModelReportProps]:
+    @staticmethod
+    def _describe(job_config: dict) -> str:
+        info = job_config.get("benchmark_job_info", {})
+        return f"""
+            model={info.get('model_id')}\n
+            dataset={info.get('dataset_id')}\n
+             attack={info.get('atk_id')}
+        """
+
+    def _iter_local(
+            self,
+            input_job_list: list[JobExecutionConfig],
+            log: Optional[Logger] = None
+    ) -> Iterator[ModelReportProps]:
         for job_config in tqdm(input_job_list, disable=not self.verbose):
-            yield execute_job(job_config)
+            yield execute_job(
+                dataset_cnf=job_config.dataset,
+                model_cnf=job_config.model,
+                attack=job_config.attack,
+                metrics=job_config.evaluation,
+                options=job_config.options,
+                device=torch.device("cuda" if torch.cuda.is_available() and job_config.options.gpu else "cpu"),
+            )
 
-    def _iter_ray(self, input_job_list) -> Iterator[ModelReportProps]:
-        pending = [self._remote_execute_job.remote(job_config) for job_config in input_job_list]
-        with tqdm(total=len(pending), disable=not self.verbose) as pbar:
+    def _iter_ray(
+            self,
+            input_job_list: list[JobExecutionConfig],
+            log: Optional[Logger] = None
+    ) -> Iterator[ModelReportProps]:
+        pending = {
+            self._remote_execute_job.remote(job_config): job_config
+            for job_config in input_job_list
+        }
+        with tqdm(total=len(pending), disable=not self.verbose, desc="Running jobs") as pbar:
             while pending:
-                done, pending = ray.wait(pending, num_returns=1)
+                done, _ = ray.wait(list(pending.keys()), num_returns=1)
+                ref = done[0]
+                job_config = pending.pop(ref)
                 pbar.update(1)
-                yield ray.get(done[0])
+                try:
+                    yield job_config, ray.get(ref), None
+                except Exception as exc:
+                    if log:
+                        log.exception("Job failed [%s]", self._describe(job_config))
+                    yield job_config, None, exc
 
-    def execute_jobs(self, input_job_list: list[dict]) -> dict:
+    def execute_jobs(
+            self,
+            input_job_list: list[JobExecutionConfig]
+    ) -> dict:
         if not input_job_list:
             raise ValueError("input_job_list must not be empty")
 
-        results_iter: Iterator[ModelReportProps] = self._iter_ray(input_job_list) if self.use_ray else self._iter_local(
+        results_iter: Iterator[ModelReportProps] = self._iter_ray(
+            input_job_list) if self.use_ray else self._iter_local(
             input_job_list)
 
         first_benchmark_id = None

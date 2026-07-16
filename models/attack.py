@@ -1,6 +1,6 @@
 from typing import Literal, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 
 from models.info import ModelInfo
 from models.model import RegisteredObject
@@ -29,8 +29,9 @@ class SingleAttackOutput(BaseModel):
         description="This contain original and adversarial predictions' confidence."
     )
 
-    class Config:
-        arbitrary_types_allowed = True  # Required for torch.Tensor
+    model_config = ConfigDict(
+        arbitrary_types_allowed=True,
+    )
 
 
 class Bubble(BaseModel):

@@ -1,7 +1,7 @@
 from typing import Any, Literal, Self
 
 import torch
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, model_validator, ConfigDict
 from torchvision.transforms import v2 as T
 
 from models.model import RegisteredObject
@@ -50,8 +50,9 @@ class PrivacyAttackOutput(BaseModel):
     target_metadata: dict[str, Any] = Field(default_factory=dict)
     dataset_metadata: dict[str, Any] = Field(default_factory=dict)
 
-    class Config:
-        arbitrary_types_allowed = True
+    model_config = ConfigDict(
+        arbitrary_types_allowed=True,
+    )
 
     @model_validator(mode="after")
     def image_to_base64(self) -> Self:

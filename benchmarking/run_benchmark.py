@@ -1,18 +1,25 @@
 import os
 from datetime import datetime
+from logging import Logger
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 
 import ray
 
 from benchmarking.executor import BenchmarkExecutor
-from models import BenchmarkOptionConfig, ModelInfo, DatasetInfo, RegisteredObject
-from nn_trust.attack import AttackFactory as EAF
+from models import BenchmarkOptionConfig, ModelInfo, DatasetInfo
+from models.benchmark import JobExecutionConfig
+from nn_trust import AttackFactory as AF
 from report import AdversarialReportGenerator
 
 
-# Resolve a model or dataset repository path to an absolute path (beginning at the home directory)
-def resolve_repository_path(repository: str | None, project_root: Path) -> str:
+def resolve_repository_path(
+        repository: str | None,
+        project_root: Path
+) -> str:
+    """
+    Resolve a model or dataset repository path to an absolute path (beginning at the home directory)
+    """
     if repository is None:
         raise ValueError("The repository path is required.")
 
@@ -27,29 +34,39 @@ def resolve_repository_path(repository: str | None, project_root: Path) -> str:
 def run_benchmark(
         models: List[ModelInfo],
         datasets: List[DatasetInfo],
-        attacks: List[RegisteredObject],
-        metrics: List[str],
+        attacks: List[dict],
+        metrics: List[dict],
         options: BenchmarkOptionConfig,
+        log: Optional[Logger] = None,
 ) -> dict:
     """
     This function take as input a full benchmark configuration and execute the benchmark.
     """
-    #################################### 1. Valid Dataset ####################################
+    #################################### 1. Valid Items ####################################
+    ##### 1.1 Datasets
     for dataset in datasets:
         if dataset.repository is None:
             raise ValueError("The path to the dataset repository is required.")
-        if not Path(dataset.repository).exists():
+        if not Path(dataset.repository).expanduser().exists():
             raise FileNotFoundError(f"Dataset source path {dataset.repository} does not exist.")
     for model in models:
         if model.repository is None:
             raise ValueError("The path to the model repository is required.")
-        if not Path(model.repository).exists():
+        if not Path(model.repository).expanduser().exists():
             raise FileNotFoundError(f"Model path {model.repository} does not exist.")
-    for attack in attacks:
-        # checks that attack is registered
-        EAF.get_info(attack.id)
-    ##########################################################################################
 
+    ##### 1.2 Models
+    # Filtering the attacks
+    attacks: list[dict] = [
+        attack
+        for attack in attacks
+        if attack.get("id", None) in AF.get_list_classes()
+    ]
+    if len(attacks) == 0:
+        raise ValueError("No proper attacks have been found.")
+    #######################################################
+
+    """
     # Resolve model and dataset repositories before building jobs so local execution and Ray workers receive absolute paths independent of their working directory
     project_root = Path(__file__).resolve().parents[1]
 
@@ -92,29 +109,31 @@ def run_benchmark(
                 },
             }
         )
+    """
     #################################### 2. Prepare Execution ####################################
     # 2.1 - Generate a unique id under which run all benchmark operations
     benchmark_id: str = datetime.now().strftime("%Y%m%dT%H%M%S")
     # 2.2 - create a single dict element with all necessary information to execute operation and merge end result.
-    inflated_configuration = []
+    inflated_configuration: list[JobExecutionConfig] = []
     for model in models:
         for dataset in datasets:
             for attack in attacks:
-                inflated_configuration.append({
-                    "dataset": dataset,
-                    "model": model,
-                    "attack": attack,
-                    "evaluation": metrics,
-                    "options": options,
-                    "benchmark_info": {
-                        "benchmark_id": benchmark_id,
-                        "dataset_id": dataset.name,
-                        "model_id": model.id,
-                        "atk_id": attack.id,
-                        "user_id": os.getlogin(),
-                        "host": os.uname().nodename
-                    }
-                })
+                inflated_configuration.append(
+                    JobExecutionConfig(
+                        dataset=dataset,
+                        model=model,
+                        attack=attack,
+                        evaluation=metrics,
+                        options=options,
+                        benchmark_id=benchmark_id
+                    )
+                )
+    if log:
+        log.info(
+            "Prepared %d job(s): %d model(s) x %d dataset(s) x %d attack(s).",
+            len(inflated_configuration), len(models), len(datasets), len(attacks),
+        )
+
     ##############################################################################################
 
     #################################### 3. Execution Strategy ####################################
@@ -131,7 +150,7 @@ def run_benchmark(
     #################################### 4. Aggregate Results ####################################
     # Get output path from results and aggregate statistics for single attacks, for each dataset and model
     # removing do to critical issues
-    #postprocess_results(results["output_path"])
+    # postprocess_results(results["output_path"])
     ###############################################################################################
 
     #################################### 5. PDF generation ####################################

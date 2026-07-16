@@ -1,13 +1,12 @@
+import torch
 import torchvision.transforms as transforms
 from torch.utils.data import DataLoader
 
 from benchmarking.utils import get_dataloader, evaluate_attack
-from models import DatasetInfo, ModelInfo, RegisteredObject
-from nn_trust import ModelAdapter, AttackFactory
-from nn_trust.models.model_utils import load_model
-from nn_trust.core import Task
-import torch
+from models import DatasetInfo, ModelInfo, BenchmarkOptionConfig
+from nn_trust import ModelAdapter
 from nn_trust.evaluation.statistic_factory import StatisticsFactory as SF
+from utils.load_model import load_model
 
 
 def override_keys_if_not_none(base_dict: dict, overriding_dict: dict) -> dict:
@@ -19,16 +18,16 @@ def override_keys_if_not_none(base_dict: dict, overriding_dict: dict) -> dict:
             res[k] = overriding_dict[k]
     return res
 
-# The job_config is used so the executor can pass a complete inflated benchmark job, including model, dataset, attack, metrics, options, and benchmark metadata.
-def execute_job(job_config: dict):
-    dataset_cnf = job_config["dataset"]
-    model_cnf = job_config["model"]
-    attack = job_config["attack"]
-    metrics = job_config["evaluation"]
-    options = job_config["options"]
-    benchmark_info = job_config["benchmark_info"]
-    device = torch.device("cuda" if getattr(options, "gpu", False) and torch.cuda.is_available() else "cpu")
 
+# The job_config is used so the executor can pass a complete inflated benchmark job, including model, dataset, attack, metrics, options, and benchmark metadata.
+def execute_job(
+        dataset_cnf: DatasetInfo,
+        model_cnf: ModelInfo,
+        attack: dict,
+        metrics: list[dict],
+        options: BenchmarkOptionConfig,
+        device: torch.device = torch.device("cuda" if torch.cuda.is_available() else "cpu"),
+) -> None:
     """
     A function that use a full description of benchmark configuration and executor, is tasked to execute benchmark.
     """
@@ -56,13 +55,16 @@ def execute_job(job_config: dict):
         num_workers=dataset_cnf.num_workers,
         name=dataset_cnf.name
     )
-    model: ModelAdapter = load_model(model_path=model_cnf.repository)
+
+    model: ModelAdapter = load_model(
+        model_path=model_cnf.repository,
+    )
     model = model.to(device)
     model.eval()
 
-   # Add metric-specific defaults only when supported
+    # Add metric-specific defaults only when supported
     statistics = [dict(metric) for metric in metrics]
-    
+
     targeted = getattr(options, "targeted", False)
 
     for metric in statistics:
@@ -71,25 +73,25 @@ def execute_job(job_config: dict):
 
         if "model" in config_fields:
             metric.setdefault("model", model)
-        
+
         if "targeted" in config_fields:
             metric.setdefault("targeted", targeted)
 
         if "average_method" in config_fields:
             metric.setdefault("average_method", "macro")
-    
+
     ##################################################################################################
 
     atk_config = {
-      "name": attack.id,
-      "id": attack.id,
-      "targeted": targeted,
+        "name": attack.id,
+        "id": attack.id,
+        "targeted": targeted,
 
-      **{
-        param.id: param.default
-        for param in attack.parameters
-        if param.default is not None
-      },
+        **{
+            param.id: param.default
+            for param in attack.parameters
+            if param.default is not None
+        },
     }
 
     res = evaluate_attack(
@@ -103,4 +105,4 @@ def execute_job(job_config: dict):
     )
     return {"attack_results": res,
             "benchmark_job_info": benchmark_info,
-    }
+            }

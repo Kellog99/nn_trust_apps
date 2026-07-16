@@ -76,7 +76,7 @@ class DatasetInfo(Info):
         description="Batch size to use during the Benchmark."
     )
     num_workers: int = Field(
-        default=-1,
+        default=1,
         title="Number of Workers",
         description="Number of workers for handling the dataset's loading."
     )

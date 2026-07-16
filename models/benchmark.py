@@ -1,4 +1,4 @@
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from models.info import ModelInfo, DatasetInfo
 from models.model import RegisteredObject
@@ -121,3 +121,18 @@ class BenchmarkExecutionConfig(BaseModel):
             }
         }
     )
+
+
+class JobExecutionConfig(BaseModel):
+    benchmark_id: str
+    dataset: DatasetInfo
+    model: ModelInfo
+    attack: dict = Field(
+        default=...,
+        description="It is a dictionary with the ID of the attacks and its parameters."
+    )
+    evaluation: list[dict] = Field(
+        default=...,
+        description="It is a dictionary with the ID of the metrics and their parameters."
+    )
+    options: BenchmarkOptionConfig
