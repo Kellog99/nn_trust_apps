@@ -9,11 +9,9 @@ from pathlib import Path
 import torch
 from tqdm.auto import tqdm
 
-from nn_trust.attack import AttackFactory as EAF
-from nn_trust.core import Task, ModelAdapter
-from nn_trust.evaluation.composer import ConfigStatisticComposer, StatisticComposer
-from nn_trust.loss.loss_composer import LossComposer
+from nn_trust import AttackFactory as EAF, Task, ModelAdapter, StatisticComposer, LossComposer
 from nn_trust.target import AvoidOnehotTarget
+
 
 def evaluate_attack(
         dataloader: torch.utils.data.DataLoader,
@@ -30,23 +28,32 @@ def evaluate_attack(
     Evaluate the model on the attack that is passed.
 
         Args:
-            atk: the attack that has to be performed.
+            dataloader
+            model
+            attack_config
+            statistics
+            device
+            num_classes
+            verbose
+            tracker
+            benchmark_id
     """
     try:
-        # INIT MODEL , DATA, STATISTIC_COMPOSER, ATTACK
         ## 1. STATISTIC_COMPOSER
-        statistics_composer = StatisticComposer(config=ConfigStatisticComposer(
+        statistics_composer = StatisticComposer(
             statistics=statistics,
-            num_classes=num_classes
-        ))
+            num_classes=num_classes,
+            device=device
+        )
+
         ## 2. ATTACK
         atk_name = attack_config.pop("name")
         atk_id = attack_config.pop("id", atk_name)
-        if attack_config.get("losses"):
+        if attack_config.get("losses", None) is not None:
             # If losses are specified, convert them to Loss objects
             attack_config['loss'] = LossComposer(
-                loss=attack_config['losses'],
-                loss_weights=attack_config.get('loss_weights', [1.0] * len(attack_config['losses'])),
+                losses=attack_config['losses'],
+                weights=attack_config.get('loss_weights', [1.0] * len(attack_config['losses'])),
             )
 
         targeted = attack_config.pop("targeted", False)
@@ -80,10 +87,10 @@ def evaluate_attack(
             batch = batch.to(device)
             label = label.to(device)
             if targeted:
-               target_classes = (label + 1) % num_classes
-               target = torch.nn.functional.one_hot(target_classes,num_classes=num_classes).float().to(batch.device)
+                target_classes = (label + 1) % num_classes
+                target = torch.nn.functional.one_hot(target_classes, num_classes=num_classes).float().to(batch.device)
             else:
-               target = AvoidOnehotTarget(num_classes=num_classes)(label.tolist()).to(batch.device)
+                target = AvoidOnehotTarget(num_classes=num_classes)(label.tolist()).to(batch.device)
 
             x_adv = atk.generate(
                 x=batch,
@@ -111,7 +118,7 @@ def evaluate_attack(
                     y_pred_adv = y_pred_adv[correct_mask]
 
                     if targeted:
-                      target_classes = target_classes[correct_mask]
+                        target_classes = target_classes[correct_mask]
             else:
                 continue  # skip iteration, no statistic update for this batch
 
@@ -127,14 +134,14 @@ def evaluate_attack(
             }
 
             if targeted:
-              input_stat["y_target"] = target_classes
+                input_stat["y_target"] = target_classes
 
             statistics_composer.update(**input_stat)
 
         if tracker:
             tracker.update_progress.remote(f"{atk_id}_{benchmark_id}", status="completed", progress=100,
                                            message=f"Completed attack {atk_id}")
-            
+
         saved_statistics = []
         for metric in statistics:
             metric = dict(metric)
@@ -151,7 +158,8 @@ def evaluate_attack(
                 'dimensionality': batch.shape,
                 'statistics': saved_statistics,
                 # if model metadata do not exist, save an empty dictionary
-                "model_info": {**getattr(model, "metadata", {}), "num_classes": num_classes,"parameters": sum(param.numel() for param in model.parameters())},
+                "model_info": {**getattr(model, "metadata", {}), "num_classes": num_classes,
+                               "parameters": sum(param.numel() for param in model.parameters())},
                 # if dataloader metadata do not exist, save an empty dictionary
                 "dataset_info": getattr(dataloader, "metadata", {})
             }
@@ -215,8 +223,8 @@ def aggregate_attacks_statistics(
     statistics_composer.reset()
     return aggregate_metrics
 
+
 def make_json_serializable(value):
-    
     if isinstance(value, torch.Tensor):
         value = value.detach().cpu()
         if value.numel() == 1:
@@ -225,10 +233,10 @@ def make_json_serializable(value):
 
     if isinstance(value, torch.Size):
         return list(value)
-    
+
     if isinstance(value, torch.device):
         return str(value)
-    
+
     if isinstance(value, Path):
         return str(value)
 
@@ -243,13 +251,14 @@ def make_json_serializable(value):
 
     if isinstance(value, tuple):
         return [make_json_serializable(item) for item in value]
-    
+
     # if json can already save it, keep it. If not, convert it to a string
     try:
         json.dumps(value)
         return value
     except TypeError:
         return str(value)
+
 
 def save_attack_result(
         benchmark_id: str,

@@ -54,6 +54,7 @@ class BenchmarkExecutor:
     ) -> Iterator[ModelReportProps]:
         for job_config in tqdm(input_job_list, disable=not self.verbose):
             yield execute_job(
+                benchmark_id=job_config.benchmark_id,
                 dataset_cnf=job_config.dataset,
                 model_cnf=job_config.model,
                 attack=job_config.attack,

@@ -3,9 +3,9 @@ models:
   - source_path: "~/Desktop/StableAI/model_repository/convnext_tiny"
 
 datasets:
-  - name: "imagenet" 
+  - name: "imagenet"
     num_classes: 1000
-    subset: 50
+    subset: 500
     batch: 2
     type_dataset: 1
     num_workers: 2
@@ -28,27 +28,22 @@ metrics:
 
 
 attacks:
-  - id: zoo
-    max_iters: 300
-  - id: _uap
-  - id: autozoom
-  - id: daguap
-  - id: fuap
-  - id: fgsmuap
-  - id: boundary
-  - id: sphereprojection
-  - id: banditpriorevasion
-  - id: contrastbaselineevasion
-  - id: gaussianbaselineevasion
-  - id: identitybaselineevasion
-  - id: saltnpeppernoisebaseline
-  - id: uniformbaselineevasion
-  - id: binaryevasion
-  - id: blackboxtransfer
-  - id: dag
-  - id: deepfool
-  - id: duevasion
-  - id: fom
+  - id: "autozoom"
+  - id: "daguap"
+  - id: "fuap"
+  - id: "fgsmuap"
+  - id: "boundary"
+  - id: "contrastbaselineevasion"
+  - id: "gaussianbaselineevasion"
+  - id: "identitybaselineevasion"
+  - id: "saltnpeppernoisebaseline"
+  - id: "uniformbaselineevasion"
+  - id: "binaryevasion"
+  - id: "blackboxtransfer"
+  - id: "dag"
+  - id: "deepfool"
+  - id: "duevasion"
+  - id: "fom"
 
 options:
   load_results: false                 # loading any existing results.

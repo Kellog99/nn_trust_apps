@@ -42,7 +42,9 @@ def _collect_params(atk: str) -> list:
 def get_attacks_info(
         excluded_attacks: list[str] = Depends(config_field(attr_name="excluded_attacks")),
 ) -> dict[str, RegisteredObject]:
-    """List all available attacks for classification."""
+    """
+    List all available attacks for classification.
+    """
     out: dict[str, RegisteredObject] = {}
     for atk in AttackFactory.get_list_classes(task={Task.Classification}):
         if atk in excluded_attacks:

@@ -2,32 +2,21 @@ import torch
 import torchvision.transforms as transforms
 from torch.utils.data import DataLoader
 
-from benchmarking.utils import get_dataloader, evaluate_attack
+from benchmarking.utils import evaluate_attack
 from models import DatasetInfo, ModelInfo, BenchmarkOptionConfig
-from nn_trust import ModelAdapter
-from nn_trust.evaluation.statistic_factory import StatisticsFactory as SF
-from utils.load_model import load_model
+from nn_trust import ModelAdapter, StatisticsFactory as SF
+from utils import load_model, get_dataloader
 
 
-def override_keys_if_not_none(base_dict: dict, overriding_dict: dict) -> dict:
-    """override keys in base dictionary using overriding dict if the latter are not none.
-    Or the original dict do not contain the key to begin with"""
-    res = dict(base_dict)  # create copy not to modify original element
-    for k, v in overriding_dict.items():
-        if v is not None or k not in res:
-            res[k] = overriding_dict[k]
-    return res
-
-
-# The job_config is used so the executor can pass a complete inflated benchmark job, including model, dataset, attack, metrics, options, and benchmark metadata.
 def execute_job(
+        benchmark_id: str,
         dataset_cnf: DatasetInfo,
         model_cnf: ModelInfo,
         attack: dict,
         metrics: list[dict],
         options: BenchmarkOptionConfig,
         device: torch.device = torch.device("cuda" if torch.cuda.is_available() else "cpu"),
-) -> None:
+) -> dict:
     """
     A function that use a full description of benchmark configuration and executor, is tasked to execute benchmark.
     """
@@ -46,7 +35,7 @@ def execute_job(
     transformation = transforms.Compose(transformation)
     ##############################################################################################
 
-    ############################### 2) Loading the DataLoader and Mode ###############################
+    ############################### 2) Loading the DataLoader and Model ###############################
     dataloader: DataLoader = get_dataloader(
         dataset_path=dataset_cnf.repository,
         batch=dataset_cnf.batch_size,
@@ -57,10 +46,13 @@ def execute_job(
     )
 
     model: ModelAdapter = load_model(
+        model_id=model_cnf.id or model_cnf.name,
+        model_type=model_cnf.type,
         model_path=model_cnf.repository,
+        api_url=model_cnf.api,
+        task=model_cnf.task,
+        device=device
     )
-    model = model.to(device)
-    model.eval()
 
     # Add metric-specific defaults only when supported
     statistics = [dict(metric) for metric in metrics]
@@ -68,8 +60,8 @@ def execute_job(
     targeted = getattr(options, "targeted", False)
 
     for metric in statistics:
-        metric_name = metric["name"]
-        config_fields = SF.get_info(metric_name).class_type.CONFIG_T.model_fields
+
+        config_fields = SF.get_info(id=metric.get("id", None)).class_type.CONFIG_T.model_fields
 
         if "model" in config_fields:
             metric.setdefault("model", model)
@@ -83,14 +75,13 @@ def execute_job(
     ##################################################################################################
 
     atk_config = {
-        "name": attack.id,
-        "id": attack.id,
+        "name": attack.get("id", None),
+        "id": attack.get("id", None),
         "targeted": targeted,
-
         **{
-            param.id: param.default
-            for param in attack.parameters
-            if param.default is not None
+            key: value
+            for key, value in attack.items()  # This is for extracting all the eventual parameters that are passed
+            if key != "id"
         },
     }
 
@@ -101,8 +92,9 @@ def execute_job(
         statistics=statistics,
         num_classes=dataset_cnf.num_classes,
         device=device,
-        benchmark_id=benchmark_info["benchmark_id"],
+        benchmark_id=benchmark_id,
     )
-    return {"attack_results": res,
-            "benchmark_job_info": benchmark_info,
-            }
+    return {
+        "attack_results": res,
+        "benchmark_job_info": benchmark_id,
+    }

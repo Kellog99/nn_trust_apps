@@ -41,6 +41,7 @@ class Bubble(BaseModel):
 
 
 class JailbreakAttackOutput(BaseModel):
+    model_config = ConfigDict(protected_namespaces=())
     adversarial_prompt: str
     conversations: Optional[list[list[Bubble]]] = None
     model_response: str
