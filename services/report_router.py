@@ -123,7 +123,6 @@ def generate_pdf_report(
 
     output_path: Path = Path(getattr(data, "output_path", "./out")).expanduser() / file_name
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    print(output_path)
     report = AdversarialReportGenerator()
     report.generate(
         data=data,

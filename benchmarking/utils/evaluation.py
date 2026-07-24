@@ -9,6 +9,7 @@ from pathlib import Path
 import torch
 from tqdm.auto import tqdm
 
+from models.benchmark import AttackEvaluation
 from nn_trust import AttackFactory as EAF, Task, ModelAdapter, StatisticComposer, LossComposer
 from nn_trust.target import AvoidOnehotTarget
 
@@ -23,9 +24,11 @@ def evaluate_attack(
         verbose: bool = False,
         tracker=None,
         benchmark_id: str = None,
-) -> dict:
+        task: Task = Task.Classification,
+) -> AttackEvaluation:
     """
-    Evaluate the model on the attack that is passed.
+    Evaluate the model's vulnerability on the attack that is passed.
+    Since this is for performance purpose, it is assumed that it is not targeted
 
         Args:
             dataloader
@@ -58,18 +61,19 @@ def evaluate_attack(
 
         targeted = attack_config.pop("targeted", False)
 
+        if model.task != task:
+            raise ValueError(
+                f"\U0001F928 Attack {atk_name} does not support Model {model.name} task {model.task}.")
+
         atk = EAF.create(
             atk_name,
             model=model,
             device=device,
-            task=Task.Classification,
+            task=task,
             targeted=targeted,
             **attack_config
         )
         atk.name = atk_id
-        if model.task not in atk.task:
-            raise ValueError(
-                f"\U0001F928 Attack {atk_name} does not support Model {model.name} task {model.task}.")
 
         ### PREPARE EXECUTION
         if verbose:
@@ -86,27 +90,29 @@ def evaluate_attack(
                                                message=f"Processing batch {idx + 1}/{len(dataloader)}")
             batch = batch.to(device)
             label = label.to(device)
-            if targeted:
-                target_classes = (label + 1) % num_classes
-                target = torch.nn.functional.one_hot(target_classes, num_classes=num_classes).float().to(batch.device)
-            else:
-                target = AvoidOnehotTarget(num_classes=num_classes)(label.tolist()).to(batch.device)
 
+            target = AvoidOnehotTarget(num_classes=num_classes)(label.tolist()).to(batch.device)
+
+            ############## Generating the adversarial image ##############
             x_adv = atk.generate(
                 x=batch,
                 y=target
             ).detach()
+            ##############################################################
 
             with torch.no_grad():
                 out = model(batch)
                 out_adv = model(x_adv)
+
             y_pred_adv = out_adv.argmax(dim=-1)
             y_pred = out.argmax(dim=-1)
+
             # adapt metrics counting for reference or standard attack
             is_reference = atk_id == "reference"
             correct_mask = torch.eq(label, y_pred)
             if is_reference:
                 y_pred = label
+
             elif torch.any(correct_mask):
                 if not torch.all(correct_mask):
                     label = label[correct_mask]
@@ -117,8 +123,6 @@ def evaluate_attack(
                     y_pred = y_pred[correct_mask]
                     y_pred_adv = y_pred_adv[correct_mask]
 
-                    if targeted:
-                        target_classes = target_classes[correct_mask]
             else:
                 continue  # skip iteration, no statistic update for this batch
 
@@ -126,15 +130,12 @@ def evaluate_attack(
                 'x_adv': x_adv.detach(),
                 'x': batch.detach(),
                 'y': label,
-                "y_target": target_classes if targeted else label,
+                "y_target": label,
                 'out': out,
                 'out_adv': out_adv,
                 'y_pred': y_pred,
                 'y_pred_adv': y_pred_adv
             }
-
-            if targeted:
-                input_stat["y_target"] = target_classes
 
             statistics_composer.update(**input_stat)
 
@@ -150,20 +151,9 @@ def evaluate_attack(
 
         return {
             "statistics": statistics_composer.compute(),
-            "statistics_states": statistics_composer.get_raw_state(),
-            "info": {
-                'name': model.name,
-                'parameters': sum([param.numel() for param in model.parameters()]),
-                'classes': num_classes,
-                'dimensionality': batch.shape,
-                'statistics': saved_statistics,
-                # if model metadata do not exist, save an empty dictionary
-                "model_info": {**getattr(model, "metadata", {}), "num_classes": num_classes,
-                               "parameters": sum(param.numel() for param in model.parameters())},
-                # if dataloader metadata do not exist, save an empty dictionary
-                "dataset_info": getattr(dataloader, "metadata", {})
-            }
+            "statistics_states": statistics_composer.get_raw_state()
         }
+
     except Exception as e:
         logging.error(f"Error during evaluation of attack {attack_config.get('name', 'unknown')} : {e}")
         traceback.print_exc()

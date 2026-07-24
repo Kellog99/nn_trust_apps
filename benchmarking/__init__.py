@@ -1,3 +1,2 @@
 from benchmarking.executor import BenchmarkExecutor
 from benchmarking.run_benchmark import run_benchmark
-from benchmarking.utils import config_file_path_selector

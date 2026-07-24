@@ -20,7 +20,6 @@ datasets:
 metrics:
   - id: 'countsamples'
   - id: 'accuracy'
-  - id: 'confusionmatrix'
   - id: 'f1score'
   - id: 'misclassification'
   - id: 'precision'
@@ -51,6 +50,7 @@ options:
   num_images_to_save: 10
   num_workers: 1
   save_perturbation: false
+  ray: false
   gpu: true
   output_path: "./benchmark_out" # Path to the output folder
   output_format: "report" # report or test

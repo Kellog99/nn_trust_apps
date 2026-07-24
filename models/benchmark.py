@@ -1,3 +1,5 @@
+from typing import Any, Optional
+
 from pydantic import BaseModel, ConfigDict, Field
 
 from models.info import ModelInfo, DatasetInfo
@@ -136,3 +138,9 @@ class JobExecutionConfig(BaseModel):
         description="It is a dictionary with the ID of the metrics and their parameters."
     )
     options: BenchmarkOptionConfig
+
+
+class AttackEvaluation(BaseModel):
+    id: Optional[Any] = None
+    statistics: dict[str, float | int]
+    statistics_states: dict[str, Any]

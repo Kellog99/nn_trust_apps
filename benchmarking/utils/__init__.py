@@ -1,2 +1,1 @@
-from benchmarking.utils.utils import config_file_path_selector
 from benchmarking.utils.evaluation import evaluate_attack

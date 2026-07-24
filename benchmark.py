@@ -125,7 +125,7 @@ if __name__ == "__main__":
     options = BenchmarkOptionConfig.model_validate(config.get("options", {}))
 
     logger.info(
-        "Running benchmark:\n %d model(s),\n %d dataset(s),\n %d attack(s),\n %d metric(s)",
+        "Running benchmark: %d model(s), %d dataset(s), %d attack(s), %d metric(s)",
         len(models),
         len(datasets),
         len(attacks),

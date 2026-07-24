@@ -4,6 +4,7 @@ from torch.utils.data import DataLoader
 
 from benchmarking.utils import evaluate_attack
 from models import DatasetInfo, ModelInfo, BenchmarkOptionConfig
+from models.benchmark import AttackEvaluation
 from nn_trust import ModelAdapter, StatisticsFactory as SF
 from utils import load_model, get_dataloader
 
@@ -16,7 +17,7 @@ def execute_job(
         metrics: list[dict],
         options: BenchmarkOptionConfig,
         device: torch.device = torch.device("cuda" if torch.cuda.is_available() else "cpu"),
-) -> dict:
+) -> AttackEvaluation:
     """
     A function that use a full description of benchmark configuration and executor, is tasked to execute benchmark.
     """
@@ -53,7 +54,6 @@ def execute_job(
         task=model_cnf.task,
         device=device
     )
-
     # Add metric-specific defaults only when supported
     statistics = [dict(metric) for metric in metrics]
 
@@ -85,7 +85,7 @@ def execute_job(
         },
     }
 
-    res = evaluate_attack(
+    res: AttackEvaluation = evaluate_attack(
         model=model,
         dataloader=dataloader,
         attack_config=atk_config,
@@ -94,7 +94,5 @@ def execute_job(
         device=device,
         benchmark_id=benchmark_id,
     )
-    return {
-        "attack_results": res,
-        "benchmark_job_info": benchmark_id,
-    }
+    res.id = benchmark_id
+    return res
