@@ -10,6 +10,8 @@ class BenchmarkOptionConfig(BaseModel):
     overwrite: bool = True
     num_images_to_save: int = 10
     save_perturbation: bool = True
+    verbose: bool = True
+    subset: Optional[int] = None
     gpu: bool = True
     output_path: str
     use_ray: bool = False
@@ -144,3 +146,11 @@ class AttackEvaluation(BaseModel):
     id: Optional[Any] = None
     statistics: dict[str, float | int]
     statistics_states: dict[str, Any]
+
+
+class JobResult(BaseModel):
+    """Uniform result shape yielded by both local and Ray execution paths."""
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+    error: Optional[Exception] = None
+    job_config: JobExecutionConfig
+    result: Optional[AttackEvaluation]

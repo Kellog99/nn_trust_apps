@@ -1,6 +1,6 @@
 from logging import Logger
 from pathlib import Path
-from typing import Iterator, NamedTuple, Optional
+from typing import Iterator, Optional
 
 import ray
 import torch
@@ -9,14 +9,7 @@ from tqdm import tqdm
 from benchmarking.utils.evaluation import save_attack_result
 from benchmarking.utils.execution import execute_job
 from models import ModelReportProps, JobExecutionConfig
-from models.benchmark import AttackEvaluation
-
-
-class JobResult(NamedTuple):
-    """Uniform result shape yielded by both local and Ray execution paths."""
-    job_config: JobExecutionConfig
-    result: Optional[AttackEvaluation]
-    error: Optional[Exception]
+from models.benchmark import AttackEvaluation, JobResult
 
 
 class BenchmarkExecutor:
@@ -30,7 +23,6 @@ class BenchmarkExecutor:
             verbose: bool = False,
             use_ray: bool = False,
             num_gpus_per_job: float = 0.4,
-            fail_fast: bool = False,
     ):
         """
         Args:
@@ -51,23 +43,18 @@ class BenchmarkExecutor:
                 job when `use_ray=True`. E.g. `0.4` lets ~2 jobs share one GPU.
                 Only used to configure the Ray remote wrapper; ignored when
                 `use_ray=False`.
-            fail_fast: When `True`, re-raises a job's exception immediately after
-                yielding it, aborting the rest of the batch. When `False`
-                (default), failed jobs are recorded and skipped, letting the
-                remaining jobs in the batch continue to run.
+
 
         Attributes set:
             self.root_path: See `root_path` above (normalized to a `Path`).
             self.verbose: See `verbose` above.
             self.use_ray: See `use_ray` above.
-            self.fail_fast: See `fail_fast` above.
             self._remote_execute_job: The Ray remote-wrapped version of
                 `execute_job`, created only when `use_ray=True`; `None` otherwise.
         """
         self.root_path = Path(root_path).expanduser() if isinstance(root_path, str) else root_path
         self.verbose = verbose
         self.use_ray = use_ray
-        self.fail_fast = fail_fast
         self._remote_execute_job = ray.remote(num_gpus=num_gpus_per_job)(execute_job) if use_ray else None
 
     def save_results(self, job_output: ModelReportProps) -> None:
@@ -95,7 +82,6 @@ class BenchmarkExecutor:
     def _iter_local(
             self,
             input_job_list: list[JobExecutionConfig],
-            device: torch.device,
             log: Optional[Logger] = None,
     ) -> Iterator[JobResult]:
         """
@@ -107,23 +93,27 @@ class BenchmarkExecutor:
                     benchmark_id=job_config.benchmark_id,
                     dataset_cnf=job_config.dataset,
                     model_cnf=job_config.model,
-                    attack=job_config.attack,
+                    attack_cnf=job_config.attack,
                     metrics=job_config.evaluation,
-                    options=job_config.options,
-                    device=device
+                    options=job_config.options
                 )
-                yield result
+                yield JobResult(
+                    job_config=job_config,
+                    result=result,
+                    error=None
+                )
             except Exception as exc:
                 if log:
                     log.exception("Job failed [%s]", self._describe(job_config))
-                yield JobResult(job_config, None, exc)
-                if self.fail_fast:
-                    raise
+                yield JobResult(
+                    job_config=job_config,
+                    result=None,
+                    error=exc
+                )
 
     def _iter_ray(
             self,
             input_job_list: list[JobExecutionConfig],
-            device: torch.device,
             log: Optional[Logger] = None,
     ) -> Iterator[JobResult]:
         pending = {
@@ -134,10 +124,10 @@ class BenchmarkExecutor:
                 attack=job_config.attack,
                 metrics=job_config.evaluation,
                 options=job_config.options,
-                device=device,
             ): job_config
             for job_config in input_job_list
         }
+
         with tqdm(total=len(pending), disable=not self.verbose, desc="Running jobs") as pbar:
             while pending:
                 done, _ = ray.wait(list(pending.keys()), num_returns=1)
@@ -145,13 +135,19 @@ class BenchmarkExecutor:
                 job_config = pending.pop(ref)
                 pbar.update(1)
                 try:
-                    yield JobResult(job_config, ray.get(ref), None)
+                    yield JobResult(
+                        job_config=job_config,
+                        result=ray.get(ref),
+                        error=None
+                    )
                 except Exception as exc:
                     if log:
                         log.exception("Job failed [%s]", self._describe(job_config))
-                    yield JobResult(job_config, None, exc)
-                    if self.fail_fast:
-                        raise
+                    yield JobResult(
+                        job_config=job_config,
+                        result=None,
+                        error=exc
+                    )
 
     def execute_jobs(
             self,
@@ -160,20 +156,20 @@ class BenchmarkExecutor:
     ) -> dict:
         if not input_job_list:
             raise ValueError("input_job_list must not be empty")
-        device: torch.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         if self.use_ray:
-            results_iter: Iterator[JobResult] = self._iter_ray(input_job_list, log=log, device=device)
+            results_iter: Iterator[JobResult] = self._iter_ray(input_job_list, log=log)
         else:
-            results_iter: Iterator[JobResult] = self._iter_local(input_job_list, log=log, device=device)
+            results_iter: Iterator[JobResult] = self._iter_local(input_job_list, log=log)
 
         first_benchmark_id = None
         succeeded, failed = 0, 0
-        failures: list[tuple[JobExecutionConfig, Exception]] = []
+        failures: list[JobExecutionConfig] = []
 
         for job_config, result, error in results_iter:
             if error is not None:
+                print(error)
                 failed += 1
-                failures.append((job_config, error))
+                failures.append(error)
                 continue
 
             self.save_results(result)
@@ -185,7 +181,7 @@ class BenchmarkExecutor:
             # Every single job failed — nothing was ever saved.
             raise RuntimeError(
                 f"All {failed} job(s) failed; no results were produced. "
-                f"First error: {failures[0][1]!r}" if failures else "No results produced."
+                f"First error: {failures!r}" if failures else "No results produced."
             )
 
         if self.verbose and failed:

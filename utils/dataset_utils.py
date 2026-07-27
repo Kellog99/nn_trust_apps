@@ -1,6 +1,7 @@
 import os
 import random
 from pathlib import Path
+from typing import Optional
 
 import numpy
 import torch
@@ -34,18 +35,16 @@ class ImageDatasetFolder(torchvision.datasets.ImageFolder):
         if self.target_transform is not None:
             target = self.target_transform(target)
 
-        element_info = {"path": str(Path(path).relative_to(self.data_root))}
-
-        return sample, target, element_info
+        return sample, target
 
 
 def get_dataloader(
         dataset_path: str,
         batch: int,
-        subset: int,
         transform: T.Compose,
+        subset: Optional[int] = None,
         num_workers: int = 4,
-        name: str | None = None,
+        name: Optional[str] = None,
         **kwargs,
 ) -> DataLoader:
     """

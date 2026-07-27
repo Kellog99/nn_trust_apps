@@ -44,6 +44,7 @@ def load_model(
     interface, supporting multiple serialization formats.
 
     Args:
+        model_id
         model_type: type of model to load.
         model_path: Directory containing the eventual model to load.
         api_url:
@@ -52,18 +53,6 @@ def load_model(
         device: Target device. Defaults to CUDA if available, else CPU.
         **kwargs: Overrides merged into the fields loaded from
             `info.json` (e.g. `num_classes=`, `task=`).
-
-    Possible `model_type` to use:
-        - **"plain"**: raw pickled model via `torch.save`. Expects `model.pth`.
-        - **"timm"**: loaded via `timm.create_model(info.id, pretrained=True)`.
-        - **"model_weights"**: `model.py` (defining class `Model`) +
-          `model_state_dict.pth`.
-        - **"torch_script"**: TorchScript module. Expects `model.pt`.
-        - **"torch_dynamo"**: `torch.export`-ed module. Expects `model.pt2`.
-        - **"onnx"**: ONNX model. Expects `model.onnx`.
-        - **"api"**: remote model behind an HTTP API. Requires `info.api_url`.
-        - **"huggingface"**: HF model by name, optionally with a local
-          `model_state_dict.pth` checkpoint.
 
     Returns:
         CVModelAdapter: A unified adapter wrapping the loaded model.
@@ -88,8 +77,7 @@ def load_model(
         api_url=api_url,
         device=device
     )
-
-    if num_classes:
+    if num_classes is not None:
         model.num_classes = num_classes
     model = model.to(device)
     model.eval()

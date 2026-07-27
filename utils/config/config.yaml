@@ -1,12 +1,10 @@
 models:
   - source_path: "~/Desktop/StableAI/model_repository/resnet50"
-  - source_path: "~/Desktop/StableAI/model_repository/convnext_tiny"
 
 datasets:
   - name: "imagenet"
     num_classes: 1000
-    subset: 500
-    batch: 2
+    batch: 20
     type_dataset: 1
     num_workers: 2
     source_path: "~/Desktop/StableAI/dataset_repository/imagenette2/"
@@ -27,20 +25,11 @@ metrics:
 
 
 attacks:
-  - id: "autozoom"
-  - id: "daguap"
-  - id: "fuap"
-  - id: "fgsmuap"
-  - id: "boundary"
   - id: "contrastbaselineevasion"
   - id: "gaussianbaselineevasion"
   - id: "identitybaselineevasion"
   - id: "saltnpeppernoisebaseline"
   - id: "uniformbaselineevasion"
-  - id: "binaryevasion"
-  - id: "blackboxtransfer"
-  - id: "dag"
-  - id: "deepfool"
   - id: "duevasion"
   - id: "fom"
 
@@ -49,6 +38,8 @@ options:
   overwrite: true                     # overwriting the results if a benchmarking is performed
   num_images_to_save: 10
   num_workers: 1
+  verbose: true
+  subset: 50
   save_perturbation: false
   ray: false
   gpu: true
