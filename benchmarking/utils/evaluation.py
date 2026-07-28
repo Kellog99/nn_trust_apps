@@ -33,7 +33,6 @@ def evaluate_attack(
             statistics: The statistic composer that computes all the metrics that are required
             num_classes
             verbose
-            benchmark_id
             device: device where the computation will be done
     """
 
@@ -45,7 +44,6 @@ def evaluate_attack(
     else:
         progress_bar = enumerate(dataloader)
 
-    # tracker.create_task.remote(f"{atk_id}_{benchmark_id}","attack", benchmark_id = benchmark_id, num_tasks=num_tasks)
     for idx, (batch, label) in progress_bar:
 
         batch = batch.to(device)
@@ -68,9 +66,8 @@ def evaluate_attack(
         y_pred = out.argmax(dim=-1)
 
         # adapt metrics counting for reference or standard attack
-        is_reference = atk_id == "reference"
         correct_mask = torch.eq(label, y_pred)
-        if is_reference:
+        if atk_id == "reference":
             y_pred = label
 
         elif torch.any(correct_mask):
@@ -97,11 +94,10 @@ def evaluate_attack(
 
         statistics.update(**input_stat)
 
-    out = AttackEvaluation(
+    return AttackEvaluation(
         statistics=statistics.compute(),
         statistics_states=statistics.get_raw_state()
     )
-    return out
 
 
 def read_results_from_disk(results_dir: str | pathlib.Path):

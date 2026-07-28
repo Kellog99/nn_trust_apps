@@ -167,7 +167,6 @@ class BenchmarkExecutor:
 
         for job_config, result, error in results_iter:
             if error is not None:
-                print(error)
                 failed += 1
                 failures.append(error)
                 continue
