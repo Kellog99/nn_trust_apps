@@ -1,7 +1,7 @@
 import os
 import random
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Any
 
 import numpy
 import torch
@@ -9,6 +9,9 @@ import torchvision
 import torchvision.transforms as T
 from PIL import Image as PILImage
 from torch.utils.data import Subset, DataLoader
+from torchvision.transforms import transforms
+
+from models.info import Transformation
 
 
 class ImageDatasetFolder(torchvision.datasets.ImageFolder):
@@ -36,6 +39,21 @@ class ImageDatasetFolder(torchvision.datasets.ImageFolder):
             target = self.target_transform(target)
 
         return sample, target
+
+
+def get_transformation(transformation: Transformation):
+    out = [
+        transforms.ToTensor(),
+        transforms.Normalize(
+            mean=getattr(transformation, "mean", (0.5, 0.5, 0.5)),
+            std=getattr(transformation, "std", (0.5, 0.5, 0.5))
+        )
+    ]
+    if transformation.size is not None:
+        out.append(transforms.Resize((transformation.size, transformation.size)))
+    if transformation.crop is not None:
+        out.append(transforms.CenterCrop(transformation.crop))
+    return transforms.Compose(out)
 
 
 def get_dataloader(

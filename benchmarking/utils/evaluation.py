@@ -8,20 +8,55 @@ import torch
 from tqdm.auto import tqdm
 
 from models.benchmark import AttackEvaluation
-from nn_trust import ModelAdapter, StatisticComposer
+from nn_trust import ModelAdapter, StatisticComposer, LossComposer, \
+    AttackFactory as EAF, Task
 from nn_trust.attack import EvasionAttack
 from nn_trust.target import AvoidOnehotTarget
+
+
+def _create_atk(
+        attack: dict,
+        model: ModelAdapter,
+        device: torch.device,
+) -> EvasionAttack:
+    atk_id: str = attack.get("id", None) or attack.get("name", None)
+    if atk_id is None:
+        raise ValueError("No id for instantiate the attack")
+
+    atk_config = {
+        "name": attack.get("id", None),
+        "id": attack.get("id", None),
+        **{
+            key: value
+            for key, value in attack.items()  # This is for extracting all the eventual parameters that are passed
+            if key != "id"
+        },
+    }
+    # Checking whether some losses have to be set
+    if atk_config.get("losses", None) is not None:
+        # If losses are specified, convert them to Loss objects
+        atk_config['loss'] = LossComposer(
+            losses=atk_config['losses'],
+            weights=atk_config.get('loss_weights', [1.0] * len(atk_config['losses'])),
+        )
+
+    return EAF.create(
+        class_id=atk_id,
+        model=model,
+        device=device,
+        task=Task.Classification,
+        **atk_config
+    )
 
 
 def evaluate_attack(
         dataloader: torch.utils.data.DataLoader,
         model: ModelAdapter,
-        attack: EvasionAttack,
+        attack: EvasionAttack | dict,
         statistics: StatisticComposer,
         device: torch.device,
-        num_classes: int,
         verbose: bool = False,
-) -> AttackEvaluation:
+) -> dict:
     """
     Evaluate the model's vulnerability on the attack that is passed.
     Since this is for performance purpose, it is assumed that it is not targeted
@@ -31,14 +66,22 @@ def evaluate_attack(
             model: target model
             attack: Attack to do on the (model, dataset)
             statistics: The statistic composer that computes all the metrics that are required
-            num_classes
             verbose
             device: device where the computation will be done
     """
 
-    ### PREPARE EXECUTION
+    ### PREPARE EXECUTION ###
+    if isinstance(attack, dict):
+        attack = _create_atk(
+            attack=attack,
+            model=model,
+            device=device
+        )
+
     atk_id: str = attack.__class__.__name__.lower().removesuffix("attack")
 
+    batch, _ = next(iter(dataloader))
+    num_classes: int = model(batch.to(device)).shape[-1]
     if verbose:
         progress_bar = enumerate(tqdm(dataloader, desc=f"Attack {repr(attack)} for model {model.name}"))
     else:
@@ -94,10 +137,13 @@ def evaluate_attack(
 
         statistics.update(**input_stat)
 
-    return AttackEvaluation(
-        statistics=statistics.compute(),
-        statistics_states=statistics.get_raw_state()
-    )
+    out = statistics.compute()
+    metric_states = statistics.get_raw_state()
+    print(f"metric state = {metric_states}")
+    statistics.update_aggregate(metric_states)
+    statistics.reset()
+
+    return out
 
 
 def read_results_from_disk(results_dir: str | pathlib.Path):

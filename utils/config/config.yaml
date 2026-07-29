@@ -21,6 +21,8 @@ metrics:
   - id: 'f1score'
   - id: 'misclassification'
   - id: 'precision'
+  - id: 'robustness'
+  - id: 'class_robustness'
 
 
 

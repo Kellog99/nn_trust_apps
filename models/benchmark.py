@@ -133,12 +133,9 @@ class JobExecutionConfig(BaseModel):
     model: ModelInfo
     attack: dict = Field(
         default=...,
-        description="It is a dictionary with the ID of the attacks and its parameters."
+        description="It is a dictionary with the ID of the attack and its parameters."
     )
-    evaluation: list[dict] = Field(
-        default=...,
-        description="It is a dictionary with the ID of the metrics and their parameters."
-    )
+
     options: BenchmarkOptionConfig
 
 
@@ -152,5 +149,5 @@ class JobResult(BaseModel):
     """Uniform result shape yielded by both local and Ray execution paths."""
     model_config = ConfigDict(arbitrary_types_allowed=True)
     error: Optional[Exception] = None
-    job_config: JobExecutionConfig
-    result: Optional[AttackEvaluation]
+    job_config: dict
+    result: Optional[dict]

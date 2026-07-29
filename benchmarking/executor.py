@@ -1,15 +1,17 @@
 from logging import Logger
 from pathlib import Path
-from typing import Iterator, Optional
+from typing import Iterator, Optional, Any, Callable
 
 import ray
 import torch
+from torch.utils.data import DataLoader
 from tqdm import tqdm
 
+from benchmarking.utils import evaluate_attack
 from benchmarking.utils.evaluation import save_attack_result
-from benchmarking.utils.execution import execute_job
 from models import ModelReportProps, JobExecutionConfig
 from models.benchmark import AttackEvaluation, JobResult
+from nn_trust import StatisticComposer, ModelAdapter
 
 
 class BenchmarkExecutor:
@@ -19,6 +21,7 @@ class BenchmarkExecutor:
 
     def __init__(
             self,
+            benchmark_id: str,
             root_path: str | Path = None,
             verbose: bool = False,
             use_ray: bool = False,
@@ -52,6 +55,7 @@ class BenchmarkExecutor:
             self._remote_execute_job: The Ray remote-wrapped version of
                 `execute_job`, created only when `use_ray=True`; `None` otherwise.
         """
+        self.benchmark_id = benchmark_id
         self.root_path = Path(root_path).expanduser() if isinstance(root_path, str) else root_path
         self.verbose = verbose
         self.use_ray = use_ray
@@ -81,116 +85,101 @@ class BenchmarkExecutor:
 
     def _iter_local(
             self,
-            input_job_list: list[JobExecutionConfig],
+            model: ModelAdapter,
+            dataloader: DataLoader,
+            attacks: list[dict[str, Any]],
+            statistics: StatisticComposer,
+            device: torch.device = torch.device("cpu"),
             log: Optional[Logger] = None,
     ) -> Iterator[JobResult]:
         """
         Execute all the attacks locally in a serialized way.
         """
-        for job_config in tqdm(input_job_list, disable=not self.verbose, desc="Running jobs"):
-            try:
-                result: AttackEvaluation = execute_job(
-                    benchmark_id=job_config.benchmark_id,
-                    dataset_cnf=job_config.dataset,
-                    model_cnf=job_config.model,
-                    attack_cnf=job_config.attack,
-                    metrics=job_config.evaluation,
-                    options=job_config.options
-                )
-                yield JobResult(
-                    job_config=job_config,
-                    result=result,
-                    error=None
-                )
-            except Exception as exc:
-                if log:
-                    log.exception("Job failed [%s]", self._describe(job_config))
-                yield JobResult(
-                    job_config=job_config,
-                    result=None,
-                    error=exc
-                )
+        pbar = tqdm(attacks, disable=not self.verbose, desc="Running jobs")
+        for atk in pbar:
+            result = evaluate_attack(
+                dataloader=dataloader,
+                model=model,
+                attack=atk,
+                statistics=statistics,
+                device=device,
+            )
+            yield JobResult(job_config=atk, result=result, error=None)
 
     def _iter_ray(
             self,
-            input_job_list: list[JobExecutionConfig],
+            model: ModelAdapter,
+            dataloader: DataLoader,
+            attacks: list[dict[str, Any]],
+            statistics: StatisticComposer,
+            device: torch.device = torch.device("cpu"),
             log: Optional[Logger] = None,
     ) -> Iterator[JobResult]:
         pending = {
             self._remote_execute_job.remote(
-                benchmark_id=job_config.benchmark_id,
-                dataset_cnf=job_config.dataset,
-                model_cnf=job_config.model,
-                attack=job_config.attack,
-                metrics=job_config.evaluation,
-                options=job_config.options,
-            ): job_config
-            for job_config in input_job_list
+                dataloader=dataloader,
+                model=model,
+                attack=atk,
+                statistics=statistics,
+                device=device,
+            ): atk
+            for atk in attacks
         }
 
-        with tqdm(total=len(pending), disable=not self.verbose, desc="Running jobs") as pbar:
+        pbar = tqdm(total=len(pending), disable=not self.verbose, desc="Running jobs")
+        with pbar:
             while pending:
                 done, _ = ray.wait(list(pending.keys()), num_returns=1)
                 ref = done[0]
-                job_config = pending.pop(ref)
+                atk = pending.pop(ref)
                 pbar.update(1)
                 try:
-                    yield JobResult(
-                        job_config=job_config,
-                        result=ray.get(ref),
-                        error=None
-                    )
-                except Exception as exc:
-                    if log:
-                        log.exception("Job failed [%s]", self._describe(job_config))
-                    yield JobResult(
-                        job_config=job_config,
-                        result=None,
-                        error=exc
-                    )
+                    result = ray.get(ref)  # execute_job must return the evaluate_attack output
+                    yield JobResult(job_config=atk, result=result, error=None)
+                except Exception as e:
+                    yield JobResult(job_config=atk, result=None, error=e)
 
     def execute_jobs(
             self,
-            input_job_list: list[JobExecutionConfig],
+            model: ModelAdapter,
+            dataloader: DataLoader,
+            attacks: list[dict[str, Any]],
+            statistics: StatisticComposer,
+            device: torch.device = torch.device("cpu"),
             log: Optional[Logger] = None,
+            verbose: bool = True
     ) -> dict:
-        if not input_job_list:
-            raise ValueError("input_job_list must not be empty")
-        if self.use_ray:
-            results_iter: Iterator[JobResult] = self._iter_ray(input_job_list, log=log)
-        else:
-            results_iter: Iterator[JobResult] = self._iter_local(input_job_list, log=log)
+        func: Callable[..., Iterator[JobResult]] = self._iter_ray if self.use_ray else self._iter_local
+        results_iter: Iterator[JobResult] = func(
+            model=model,
+            dataloader=dataloader,
+            attacks=attacks,
+            statistics=statistics,
+            device=device,
+            log=log,
+            verbose=verbose
+        )
 
-        first_benchmark_id = None
-        succeeded, failed = 0, 0
-        failures: list[JobExecutionConfig] = []
+        results: dict[str, Any] = {}
+        succeeded: list[JobResult] = []
+        failed: list[JobResult] = []
 
-        for job_config, result, error in results_iter:
-            if error is not None:
-                failed += 1
-                failures.append(error)
-                continue
-
-            self.save_results(result)
-            succeeded += 1
-            if first_benchmark_id is None:
-                first_benchmark_id = result.id
-
-        if first_benchmark_id is None:
-            # Every single job failed — nothing was ever saved.
-            raise RuntimeError(
-                f"All {failed} job(s) failed; no results were produced. "
-                f"First error: {failures!r}" if failures else "No results produced."
-            )
-
-        if self.verbose and failed:
-            print(f"Completed with {succeeded} succeeded, {failed} failed.")
+        for job_result in results_iter:
+            atk_id = job_result.job_config.get("id") or job_result.job_config.get("name")
+            if job_result.error is None:
+                self.save_results(job_result.result)
+                results[atk_id] = job_result.result
+                succeeded.append(job_result)
+            else:
+                failed.append(job_result)
+                if log is not None:
+                    log.error(f"Job failed: {job_result.job_config}: {job_result.error}")
 
         return {
-            "output_path": Path(self.root_path) / first_benchmark_id,
+            "output_path": Path(self.root_path) / self.benchmark_id,
+            "results": results,
             "succeeded": succeeded,
             "failed": failed,
-            "failures": failures,
         }
 
     def __repr__(self):
