@@ -106,7 +106,7 @@ class MetricsSection(PDFSection):
         )
 
         # Confusion Matrix
-        if hasattr(data, "confusion_matrix"):
+        if hasattr(data, "confusion_matrix") and data.confusion_matrix is not None:
             # Create the figure and axis
             cm = getattr(data, "confusion_matrix")
 

@@ -4,6 +4,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from models.info import ModelInfo, DatasetInfo
 from models.model import RegisteredObject
+from models.reports import ParameterLog
 
 
 class BenchmarkOptionConfig(BaseModel):
@@ -13,7 +14,7 @@ class BenchmarkOptionConfig(BaseModel):
     verbose: bool = True
     subset: Optional[int] = None
     gpu: bool = True
-    output_path: str
+    output_path: str = "~/Desktop/StableAI/benchmark_repository"
     use_ray: bool = False
     num_workers: int = 1
     num_gpus_per_worker: float = 1.0
@@ -127,27 +128,12 @@ class BenchmarkExecutionConfig(BaseModel):
     )
 
 
-class JobExecutionConfig(BaseModel):
-    benchmark_id: str
-    dataset: DatasetInfo
-    model: ModelInfo
-    attack: dict = Field(
-        default=...,
-        description="It is a dictionary with the ID of the attack and its parameters."
-    )
-
-    options: BenchmarkOptionConfig
-
-
-class AttackEvaluation(BaseModel):
-    id: Optional[Any] = None
-    statistics: dict[str, float | int]
-    statistics_states: dict[str, Any]
-
-
 class JobResult(BaseModel):
-    """Uniform result shape yielded by both local and Ray execution paths."""
+    """
+    Since this has to handle the errors to, only the id is required.
+    """
     model_config = ConfigDict(arbitrary_types_allowed=True)
-    error: Optional[Exception] = None
-    job_config: dict
-    result: Optional[dict]
+    id: str
+    parameters: Optional[list[ParameterLog]] = None
+    result: Optional[dict] = None
+    error: Optional[BaseException] = None

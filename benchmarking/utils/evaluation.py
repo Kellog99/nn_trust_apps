@@ -3,13 +3,14 @@ import os
 import pathlib
 import pickle
 from pathlib import Path
+from typing import Any
 
 import torch
 from tqdm.auto import tqdm
 
-from models.benchmark import AttackEvaluation
-from nn_trust import ModelAdapter, StatisticComposer, LossComposer, \
-    AttackFactory as EAF, Task
+from models import JobResult, ParametersProps
+from models.reports import ParameterLog
+from nn_trust import ModelAdapter, StatisticComposer, LossComposer, AttackFactory as EAF, Task
 from nn_trust.attack import EvasionAttack
 from nn_trust.target import AvoidOnehotTarget
 
@@ -56,10 +57,11 @@ def evaluate_attack(
         statistics: StatisticComposer,
         device: torch.device,
         verbose: bool = False,
-) -> dict:
+) -> JobResult:
     """
     Evaluate the model's vulnerability on the attack that is passed.
-    Since this is for performance purpose, it is assumed that it is not targeted
+    Since this is for performance purpose, it is assumed that it is not targeted.
+    Moreover, it updates the global statistics.
 
         Args:
             dataloader: dataset to use
@@ -137,11 +139,26 @@ def evaluate_attack(
 
         statistics.update(**input_stat)
 
-    out = statistics.compute()
-    metric_states = statistics.get_raw_state()
-    print(f"metric state = {metric_states}")
+    result = statistics.compute()
+    metric_states: dict[str, dict[str, Any]] = statistics.get_raw_state()
+
     statistics.update_aggregate(metric_states)
     statistics.reset()
+    atk_parameters: dict = attack.config.model_dump()
+    out = JobResult(
+        id=atk_id,
+        result=result,
+        parameters=[
+            ParameterLog(
+                id=key,
+                name=value.title,
+                description=value.description,
+                value=atk_parameters[key]
+            )
+            for key, value in attack.config.model_fields.items()
+            if key != "model" and isinstance(atk_parameters.get(key, None), (int, float, bool))
+        ],
+    )
 
     return out
 

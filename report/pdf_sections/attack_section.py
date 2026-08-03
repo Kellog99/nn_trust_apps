@@ -6,7 +6,7 @@ from reportlab.lib.styles import ParagraphStyle
 from reportlab.platypus import Paragraph, Table, TableStyle, Spacer, Image
 
 from models.model import ParametersProps
-from models.reports import AttackMetricsProps, ReportAttackProps
+from models.reports import AttackMetricsProps, ReportAttackProps, ParameterLog
 from report.corporate_colors import CorporateColors
 from report.pdf_sections.pdf_section import PDFSection
 
@@ -98,7 +98,7 @@ class AttackSection(PDFSection):
             style=self.metric_table_style
         )
 
-    def build_table_parameters(self, parameters: dict) -> list:
+    def build_table_parameters(self, parameters: list[ParameterLog] | list[dict]) -> list:
         """
         This function has to construct the table for the attack's parameters
         """
@@ -108,41 +108,44 @@ class AttackSection(PDFSection):
                 style=self.subtitle_style
             )
         ]
-
-        # It can happen that no parameters have been saved
-        if parameters:
-            out.append(
-                Paragraph(
-                    text="This table shows all the parameters that have been used for executing this attack.",
-                    style=self.description_style
-                )
-            )
-            out.append(Spacer(1, 10))
-            # Parameters table
-            header = ["Parameter", "Value"]
-            table_data: list[list] = [header]
-
-            for param, param_value in parameters.items():
-                if param not in self.excluded_metrics:
-                    label = param.replace('_', ' ')
-                    value = self._format_value(param_value)
-                    table_data.append([label, value])
-
-            out.append(
-                Table(
-                    data=table_data,
-                    colWidths=[self.corpus_width / len(header) for _ in range(len(header))],
-                    rowHeights=15,
-                    style=self.parameters_table_style
-                )
-            )
-        else:
+        if parameters is None or len(parameters) == 0:
             out.append(
                 Paragraph(
                     text="No parameters were saved for this attack.",
                     style=self.description_style
                 )
             )
+            return out
+
+        # It can happen that no parameters have been saved
+        out.append(
+            Paragraph(
+                text="This table shows all the parameters that have been used for executing this attack.",
+                style=self.description_style
+            )
+        )
+        out.append(Spacer(1, 10))
+        # Parameters table
+        header = ["Parameter", "Value"]
+        table_data: list[list] = [header]
+
+        for param in parameters:
+            if isinstance(param, dict):
+                param = ParameterLog.model_validate(param)
+            if param.id not in self.excluded_metrics:
+                label = param.name or param.id
+                label = label.replace('_', ' ')
+                value = self._format_value(param.value)
+                table_data.append([label, value])
+
+        out.append(
+            Table(
+                data=table_data,
+                colWidths=[self.corpus_width / len(header) for _ in range(len(header))],
+                rowHeights=15,
+                style=self.parameters_table_style
+            )
+        )
         return out
 
     def build_example(
@@ -260,7 +263,7 @@ class AttackSection(PDFSection):
 
         name: str = data.name
         metrics: AttackMetricsProps = data.metrics
-        parameters: list[ParametersProps] = data.parameters
+        parameters: list[ParameterLog] = data.parameters
 
         elements.append(
             Paragraph(

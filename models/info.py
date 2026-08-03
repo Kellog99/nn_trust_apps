@@ -1,7 +1,9 @@
 from typing import Optional, List, Literal, Any, Annotated
 
 import timm
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, model_validator, field_validator
+
+from nn_trust import Task
 
 
 class Info(BaseModel):
@@ -28,7 +30,7 @@ class Info(BaseModel):
         title="Image",
         description="An image that represents the file"
     )
-    task: str = Field(
+    task: str | Task = Field(
         default=...,
         title="Task",
         description="Task associated with, i.e. classification, detection, etc."
@@ -62,7 +64,6 @@ class Info(BaseModel):
         default=None,
         description="Repository of the dataset/model. It is stored the location where the object is saved."
     )
-
 
 class DatasetInfo(Info):
     num_samples: Optional[int] = Field(

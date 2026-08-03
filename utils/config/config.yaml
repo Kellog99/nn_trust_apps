@@ -45,8 +45,7 @@ options:
   save_perturbation: false
   ray: false
   gpu: true
-  output_path: "./benchmark_out" # Path to the output folder
-  output_format: "report" # report or test
+  create_pdf: true
 
 
 

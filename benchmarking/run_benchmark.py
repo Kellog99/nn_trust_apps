@@ -1,3 +1,5 @@
+import json
+import os.path
 from datetime import datetime
 from logging import Logger
 from pathlib import Path
@@ -7,8 +9,8 @@ import torch
 from torch.utils.data import DataLoader
 
 from benchmarking.executor import BenchmarkExecutor
-from models import BenchmarkOptionConfig, ModelInfo, DatasetInfo
-from models.benchmark import JobExecutionConfig
+from models import BenchmarkOptionConfig, ModelInfo, DatasetInfo, ModelReportProps
+from models.reports import ReportMetricsProps, ReportAttackProps
 from nn_trust import AttackFactory as AF, StatisticComposer, StatisticsFactory as SF, ModelAdapter
 from report import AdversarialReportGenerator
 from utils import load_model, get_dataloader
@@ -40,7 +42,7 @@ def run_benchmark(
         metrics: List[dict],
         options: BenchmarkOptionConfig,
         log: Optional[Logger] = None,
-) -> dict:
+) -> list[ModelReportProps]:
     """
     This function take as input a full benchmark configuration and execute the benchmark.
     """
@@ -64,6 +66,8 @@ def run_benchmark(
         for attack in attacks
         if attack.get("id", None) in AF.get_list_classes()
     ]
+    if "identitybaseline" not in attacks:
+        attacks.append({"id": "identitybaseline"})
     if len(attacks) == 0:
         raise ValueError("No proper attacks have been found.")
     #######################################################
@@ -76,10 +80,12 @@ def run_benchmark(
     # Define an execution strategy for the benchmark at hand i.e. create an executor instance
     device: torch.device = torch.device("cuda" if torch.cuda.is_available() and options.gpu else "cpu")
     executor = BenchmarkExecutor(
+        verbose=options.verbose,
         benchmark_id=benchmark_id,
         root_path=options.output_path,
         use_ray=options.use_ray,
     )
+    list_reports: list[ModelReportProps] = []
     for model_cnf in models:
         model: ModelAdapter = load_model(
             model_id=model_cnf.id or model_cnf.name,
@@ -122,16 +128,41 @@ def run_benchmark(
             )
 
             # 3.1 Start execution
-            results = executor.execute_jobs(
+            results: dict[str, ReportAttackProps] = executor.execute_jobs(
                 model=model,
                 dataloader=dataloader,
                 attacks=attacks,
                 statistics=statistics_composer,
                 device=device
             )
-            print(results)
+
             global_metrics: dict = statistics_composer.compute_aggregator()
 
+            if "identitybaseline" in results.keys():
+                identity: ReportAttackProps = results.pop("identitybaseline")
+                # removing the metrics that I do not want because they refer to the attack's performance
+                metrics: dict = identity.metrics.model_dump(
+                    exclude={
+                        "misclassification",
+                        "num_queries",
+                        "robustness",
+                        "risk",
+                        "power"
+                    })
+                global_metrics.update(metrics)
+
+            # Here, for sure, the results dictionary does not have the "identity baseline" key
+            model_report = ModelReportProps(
+                info=model_cnf,
+                metrics=ReportMetricsProps.model_validate(global_metrics),
+                attacks=results,
+            )
+            list_reports.append(model_report)
+            output_path: Path = Path(
+                options.output_path).expanduser().resolve() / f"{benchmark_id}/{model_cnf.id}_{dataset_cnf.id}"
+            output_path.mkdir(parents=True, exist_ok=True)
+            with open(output_path / "report.json", "a") as f:
+                json.dump(model_report.model_dump(), f)
             ######### saving the results #########
             if log:
                 log.info(
@@ -139,21 +170,4 @@ def run_benchmark(
                     len(attacks), len(models), len(datasets), len(attacks),
                 )
 
-    #################################### 4. Aggregate Results ####################################
-    # Get output path from results and aggregate statistics for single attacks, for each dataset and model
-    # removing do to critical issues
-    # postprocess_results(results["output_path"])
-    ###############################################################################################
-
-    #################################### 5. PDF generation ####################################
-    # Optionally, after the benchmark, it could be created the PDF report of the vulnerabilities
-    if options.create_pdf:
-        report = AdversarialReportGenerator()
-        report.generate(
-            data=results,
-            output_path=options.output_path,
-            header_logo_path=None,
-        )
-    ###########################################################################################
-
-    return results
+    return list_reports

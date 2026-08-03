@@ -7,8 +7,9 @@ from typing import TypeVar, Type
 import yaml
 
 from benchmarking import run_benchmark
-from models import BenchmarkOptionConfig, ModelInfo, DatasetInfo
-from nn_trust import AttackFactory as AF, Task, LossFactory as LF, StatisticsFactory as SF
+from models import BenchmarkOptionConfig, ModelInfo, DatasetInfo, ModelReportProps
+from nn_trust import AttackFactory as AF, Task, StatisticsFactory as SF
+from report import AdversarialReportGenerator
 
 logger = logging.getLogger("benchmark")
 
@@ -102,12 +103,12 @@ if __name__ == "__main__":
     # sweep) -- collect the union of tasks rather than assuming a single model's task.
     tasks = {Task.from_str(model.task) for model in models}
 
-    available_attacks = AF.get_list_classes(task=tasks)
+    attacks: list[dict] = [{"id": atk} for atk in AF.get_list_classes(task=tasks)]
     requested_attacks = config.get("attacks", [])
-    attacks = (
-        [atk for atk in requested_attacks if atk.get("id", None) in available_attacks]
-        if requested_attacks else available_attacks
-    )
+    if requested_attacks:
+        ids = AF.get_list_classes(task=tasks)
+        attacks = [atk for atk in requested_attacks if atk.get("id", None) in ids]
+
     if not attacks:
         raise ValueError("No registered attacks matched the requested config/task(s).")
     ######################################################################
@@ -136,7 +137,7 @@ if __name__ == "__main__":
         options.output_path, options.use_ray, options.create_pdf,
     )
 
-    results = run_benchmark(
+    results: list[ModelReportProps] = run_benchmark(
         models=models,
         datasets=datasets,
         attacks=attacks,
@@ -144,7 +145,15 @@ if __name__ == "__main__":
         options=options,
     )
 
-    logger.info(
-        "Done. %d succeeded, %d failed. Results: %s",
-        len(results["succeeded"]), len(results["failed"]), results["output_path"],
-    )
+    #################################### PDF generation ####################################
+    # Optionally, after the benchmark, it could be created the PDF report of the vulnerabilities
+
+    if options.create_pdf:
+        for result in results:
+            report = AdversarialReportGenerator()
+            report.generate(
+                data=result,
+                output_path=f"{options.output_path}/report.pdf",
+                header_logo_path=None,
+            )
+    ###########################################################################################

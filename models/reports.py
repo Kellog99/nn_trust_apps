@@ -1,4 +1,4 @@
-from typing import Optional, List
+from typing import Optional, List, Any
 
 from pydantic import BaseModel, ConfigDict
 
@@ -18,7 +18,7 @@ class ReportMetricsProps(BaseModel):
 
 # These are the metrics that compute the attack's performance
 class AttackMetricsProps(BaseModel):
-    risk: float
+    risk: Optional[float] = None
     accuracy: Optional[float] = None
     precision: Optional[float] = None
     f1score: Optional[float] = None
@@ -29,10 +29,20 @@ class AttackMetricsProps(BaseModel):
     confusion_matrix: Optional[List[List[int]]] = None
 
 
+class ParameterLog(BaseModel):
+    """
+    This base model represents the log of a parameter in a specific format.
+    """
+    id: str
+    name: Optional[str] = None
+    value: Any
+    description: Optional[str] = None
+
+
 class ReportAttackProps(BaseModel):
     name: str
     metrics: AttackMetricsProps
-    parameters: list[ParametersProps]
+    parameters: list[ParameterLog]
 
 
 class ReportProps(BaseModel):

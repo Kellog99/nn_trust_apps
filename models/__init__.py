@@ -3,8 +3,6 @@ from models.attack import SingleAttackOutput, SingleAttackProps, JailbreakAttack
 from models.benchmark import (
     BenchmarkExecutionConfig,
     BenchmarkOptionConfig,
-    JobExecutionConfig,
-    AttackEvaluation,
     JobResult
 )
 from models.info import ModelInfo, DatasetInfo

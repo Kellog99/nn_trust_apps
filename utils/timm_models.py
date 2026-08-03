@@ -91,7 +91,6 @@ if __name__=="__main__":
     ]
 
     repo = Path(config.path_model_repo).expanduser()
-    print(repo)
     for model in timmModels:
         model["id"] = model["name"]
         model_path = repo / model["name"]

@@ -184,11 +184,14 @@ class AdversarialReportGenerator:
 
         Args:
             data: data associated with a model's security assessment
-            output_path: Output PDF file path
+            output_path: Output PDF file path, ex. path/to/repository/filename.pdf
             header_logo_path: path to the logo
         """
 
         ############################# FILE PATH VALIDATION #############################
+        if isinstance(output_path, str):
+            output_path: Path = Path(output_path).expanduser().resolve()
+            
         if data is None:
             raise ValueError("It is necessary to pass the data for the report.")
 

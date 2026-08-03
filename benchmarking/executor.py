@@ -4,13 +4,13 @@ from typing import Iterator, Optional, Any, Callable
 
 import ray
 import torch
+from pydantic import BaseModel
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from benchmarking.utils import evaluate_attack
-from benchmarking.utils.evaluation import save_attack_result
-from models import ModelReportProps, JobExecutionConfig
-from models.benchmark import AttackEvaluation, JobResult
+from models import JobResult
+from models.reports import ReportAttackProps, AttackMetricsProps, ParameterLog
 from nn_trust import StatisticComposer, ModelAdapter
 
 
@@ -22,66 +22,20 @@ class BenchmarkExecutor:
     def __init__(
             self,
             benchmark_id: str,
-            root_path: str | Path = None,
+            root_path: Optional[str | Path] = None,
             verbose: bool = False,
             use_ray: bool = False,
             num_gpus_per_job: float = 0.4,
     ):
-        """
-        Args:
-            root_path: Base directory where benchmark results are saved. Accepts
-                either a `str` (which is expanded, e.g. resolving `~`) or an
-                already-constructed `Path`. Left as `None` by default, so callers
-                relying on the default must set it before results can be saved
-                (`save_attack_result` and the final `output_path` both depend on it).
-            verbose: When `True`, enables progress bars (`tqdm`), a start-of-run
-                print in `__call__`, an end-of-run success/failure summary, and
-                a default module logger inside `execute_jobs` if no `log` is
-                explicitly passed in.
-            use_ray: Selects the execution backend. `True` distributes jobs across
-                a Ray cluster (`_iter_ray`, with jobs submitted concurrently and
-                collected as they complete); `False` runs jobs one at a time on
-                the local process (`_iter_local`).
-            num_gpus_per_job: Fraction (or whole number) of a GPU to reserve per
-                job when `use_ray=True`. E.g. `0.4` lets ~2 jobs share one GPU.
-                Only used to configure the Ray remote wrapper; ignored when
-                `use_ray=False`.
-
-
-        Attributes set:
-            self.root_path: See `root_path` above (normalized to a `Path`).
-            self.verbose: See `verbose` above.
-            self.use_ray: See `use_ray` above.
-            self._remote_execute_job: The Ray remote-wrapped version of
-                `execute_job`, created only when `use_ray=True`; `None` otherwise.
-        """
         self.benchmark_id = benchmark_id
         self.root_path = Path(root_path).expanduser() if isinstance(root_path, str) else root_path
         self.verbose = verbose
         self.use_ray = use_ray
-        self._remote_execute_job = ray.remote(num_gpus=num_gpus_per_job)(execute_job) if use_ray else None
-
-    def save_results(self, job_output: ModelReportProps) -> None:
-        save_attack_result(
-            benchmark_id=job_output["benchmark_job_info"]["benchmark_id"],
-            atk_result=job_output["attack_results"],
-            atk_id=job_output["benchmark_job_info"]["atk_id"],
-            dataset_name=job_output["benchmark_job_info"]["dataset_id"],
-            model_name=job_output["benchmark_job_info"]["model_id"],
-            root_path=self.root_path,
-        )
+        self._remote_execute_job = ray.remote(num_gpus=num_gpus_per_job)(evaluate_attack) if use_ray else None
 
     @staticmethod
-    def _describe(job_config: JobExecutionConfig) -> str:
-        return (
-            f"model={getattr(job_config.model, 'model_id', job_config.model)} "
-            f"dataset={getattr(job_config.dataset, 'dataset_id', job_config.dataset)} "
-            f"attack={getattr(job_config.attack, 'atk_id', job_config.attack)}"
-        )
-
-    # ------------------------------------------------------------------ #
-    # Execution backends — both yield JobResult(job_config, result, error)
-    # ------------------------------------------------------------------ #
+    def _job_id(atk: dict[str, Any]) -> str:
+        return atk.get("id") or atk.get("Name") or "atk"
 
     def _iter_local(
             self,
@@ -97,14 +51,21 @@ class BenchmarkExecutor:
         """
         pbar = tqdm(attacks, disable=not self.verbose, desc="Running jobs")
         for atk in pbar:
-            result = evaluate_attack(
-                dataloader=dataloader,
-                model=model,
-                attack=atk,
-                statistics=statistics,
-                device=device,
-            )
-            yield JobResult(job_config=atk, result=result, error=None)
+            atk_id = self._job_id(atk)
+            try:
+                yield evaluate_attack(
+                    dataloader=dataloader,
+                    model=model,
+                    attack=atk,
+                    statistics=statistics,
+                    device=device,
+                )
+            except Exception as e:
+                print(f"error {e}")
+                yield JobResult(
+                    id=atk_id,
+                    error=e
+                )
 
     def _iter_ray(
             self,
@@ -115,7 +76,7 @@ class BenchmarkExecutor:
             device: torch.device = torch.device("cpu"),
             log: Optional[Logger] = None,
     ) -> Iterator[JobResult]:
-        pending = {
+        pending: dict[ray.ObjectRef, dict[str, Any]] = {
             self._remote_execute_job.remote(
                 dataloader=dataloader,
                 model=model,
@@ -132,12 +93,15 @@ class BenchmarkExecutor:
                 done, _ = ray.wait(list(pending.keys()), num_returns=1)
                 ref = done[0]
                 atk = pending.pop(ref)
+                atk_id = self._job_id(atk)
                 pbar.update(1)
                 try:
-                    result = ray.get(ref)  # execute_job must return the evaluate_attack output
-                    yield JobResult(job_config=atk, result=result, error=None)
+                    yield ray.get(ref)
                 except Exception as e:
-                    yield JobResult(job_config=atk, result=None, error=e)
+                    yield JobResult(
+                        id=atk_id,
+                        error=e
+                    )
 
     def execute_jobs(
             self,
@@ -147,8 +111,7 @@ class BenchmarkExecutor:
             statistics: StatisticComposer,
             device: torch.device = torch.device("cpu"),
             log: Optional[Logger] = None,
-            verbose: bool = True
-    ) -> dict:
+    ) -> dict[str, ReportAttackProps]:
         func: Callable[..., Iterator[JobResult]] = self._iter_ray if self.use_ray else self._iter_local
         results_iter: Iterator[JobResult] = func(
             model=model,
@@ -157,36 +120,31 @@ class BenchmarkExecutor:
             statistics=statistics,
             device=device,
             log=log,
-            verbose=verbose
         )
 
-        results: dict[str, Any] = {}
-        succeeded: list[JobResult] = []
+        results: dict[str, ReportAttackProps] = {}
         failed: list[JobResult] = []
 
-        for job_result in results_iter:
-            atk_id = job_result.job_config.get("id") or job_result.job_config.get("name")
-            if job_result.error is None:
-                self.save_results(job_result.result)
-                results[atk_id] = job_result.result
-                succeeded.append(job_result)
+        for jr in results_iter:
+            if jr.error is None and jr.result is not None:
+                params: list[ParameterLog] | None = jr.parameters
+                # removing all the unnecessary elements
+                if params is not None:
+                    params: list[ParameterLog] = [param for param in params if param.id != "model"]
+                    results[jr.id] = ReportAttackProps(
+                        name=jr.id,
+                        parameters=params,
+                        metrics=AttackMetricsProps.model_validate(jr.result)
+                    )
+                else:
+                    raise ValueError("The list of parameters is None.")
             else:
-                failed.append(job_result)
+                failed.append(jr)
                 if log is not None:
-                    log.error(f"Job failed: {job_result.job_config}: {job_result.error}")
+                    log.error(f"Job failed: {jr.id}: {jr.error}")
 
-        return {
-            "output_path": Path(self.root_path) / self.benchmark_id,
-            "results": results,
-            "succeeded": succeeded,
-            "failed": failed,
-        }
+        return results
 
     def __repr__(self):
         backend = "ray" if self.use_ray else "local"
         return f"{self.__class__.__name__}(root_path={self.root_path!r}, verbose={self.verbose!r}, backend={backend!r})"
-
-    def __call__(self, input_job_list: list[JobExecutionConfig]) -> dict:
-        if self.verbose:
-            print(f"Starting execution of {len(input_job_list)} jobs via {self!r}")
-        return self.execute_jobs(input_job_list)
