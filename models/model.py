@@ -1,10 +1,13 @@
-from typing import Any, Dict, Literal, Optional
+from typing import Dict, Literal, Optional
 
 from pydantic import BaseModel
 
 
 ########################### Register Object ###########################
 class ParametersProps(BaseModel):
+    """
+    This class represents the information for the parameters to pass to the frontend.
+    """
     id: str
     name: str
     min: Optional[float] = None

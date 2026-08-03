@@ -1,12 +1,9 @@
-from typing import Self, Literal, Optional
+from typing import Literal, Optional
 
-import torch
-from pydantic import BaseModel, model_validator, Field
-from torchvision.transforms import v2 as T
+from pydantic import BaseModel, Field, ConfigDict
 
-from models.model import RegisteredObject
 from models.info import ModelInfo
-from attack_server.utils.utils import pil_to_b64str
+from models.model import RegisteredObject
 
 
 class SingleAttackProps(BaseModel):
@@ -19,8 +16,8 @@ class SingleAttackOutput(BaseModel):
     """
     This model has the goal to send the information to the frontend regarding one image attack
     """
-    x_adv: torch.Tensor | str
-    adv_perturbation: torch.Tensor | str
+    x_adv: str
+    adv_perturbation: str
     original_prediction: str
     adversarial_prediction: str
     advance_metrics: dict[str, float]
@@ -32,20 +29,9 @@ class SingleAttackOutput(BaseModel):
         description="This contain original and adversarial predictions' confidence."
     )
 
-    class Config:
-        arbitrary_types_allowed = True  # Required for torch.Tensor
-
-    @model_validator(mode="after")
-    def image_to_base64(self) -> Self:
-        """
-        Since the elements have to go to the frontend, then the image must be base64 encoded.
-        """
-        for atr in ["x_adv", "adv_perturbation"]:
-            img = getattr(self, atr, None)
-            if isinstance(img, torch.Tensor):
-                pil_img = T.ToPILImage()(img.squeeze())
-                setattr(self, atr, pil_to_b64str(pil_img))
-        return self
+    model_config = ConfigDict(
+        arbitrary_types_allowed=True,
+    )
 
 
 class Bubble(BaseModel):
@@ -55,6 +41,7 @@ class Bubble(BaseModel):
 
 
 class JailbreakAttackOutput(BaseModel):
+    model_config = ConfigDict(protected_namespaces=())
     adversarial_prompt: str
     conversations: Optional[list[list[Bubble]]] = None
     model_response: str

@@ -1,15 +1,20 @@
-from pydantic import BaseModel, ConfigDict
+from typing import Any, Optional
+
+from pydantic import BaseModel, ConfigDict, Field
 
 from models.info import ModelInfo, DatasetInfo
 from models.model import RegisteredObject
+from models.reports import ParameterLog
 
 
 class BenchmarkOptionConfig(BaseModel):
     overwrite: bool = True
     num_images_to_save: int = 10
     save_perturbation: bool = True
+    verbose: bool = True
+    subset: Optional[int] = None
     gpu: bool = True
-    output_path: str
+    output_path: str = "~/Desktop/StableAI/benchmark_repository"
     use_ray: bool = False
     num_workers: int = 1
     num_gpus_per_worker: float = 1.0
@@ -39,8 +44,8 @@ class BenchmarkExecutionConfig(BaseModel):
                     "model_type": "plain",
                     "repository": "benchmark_assets/models/cifar10_resnet20",
                     "transformation": {
-                    "mean": [0.4914, 0.4822, 0.4465],
-                    "std": [0.247, 0.2435, 0.2616]
+                        "mean": [0.4914, 0.4822, 0.4465],
+                        "std": [0.247, 0.2435, 0.2616]
                     }
                 },
                 "dataset": {
@@ -57,53 +62,53 @@ class BenchmarkExecutionConfig(BaseModel):
                 },
                 "attacks": [
                     {
-                    "id": "deepfool",
-                    "name": "deepfool",
-                    "parameters": [
-                        {
-                        "id": "max_iters",
-                        "name": "max_iters",
-                        "default": 3
-                        },
-                                                {
-                        "id": "max_iters",
-                        "name": "max_iters",
-                        "default": 3
-                        }
-                    ],
-                    "task": "classification"
+                        "id": "deepfool",
+                        "name": "deepfool",
+                        "parameters": [
+                            {
+                                "id": "max_iters",
+                                "name": "max_iters",
+                                "default": 3
+                            },
+                            {
+                                "id": "max_iters",
+                                "name": "max_iters",
+                                "default": 3
+                            }
+                        ],
+                        "task": "classification"
                     },
                     {
-                    "id": "fuap",
-                    "name": "fuap",
-                    "parameters": [
-                        {
-                        "id": "max_iters",
-                        "name": "max_iters",
-                        "default": 3
-                        }
-                    ],
-                    "task": "classification"
+                        "id": "fuap",
+                        "name": "fuap",
+                        "parameters": [
+                            {
+                                "id": "max_iters",
+                                "name": "max_iters",
+                                "default": 3
+                            }
+                        ],
+                        "task": "classification"
                     }
                 ],
                 "metrics": [
                     {
-                    "id": "accuracy",
-                    "name": "accuracy",
-                    "parameters": [],
-                    "task": "classification"
+                        "id": "accuracy",
+                        "name": "accuracy",
+                        "parameters": [],
+                        "task": "classification"
                     },
                     {
-                    "id": "misclassification",
-                    "name": "misclassification",
-                    "parameters": [],
-                    "task": "classification"
+                        "id": "misclassification",
+                        "name": "misclassification",
+                        "parameters": [],
+                        "task": "classification"
                     },
                     {
-                    "id": "robustness",
-                    "name": "robustness",
-                    "parameters": [],
-                    "task": "classification"
+                        "id": "robustness",
+                        "name": "robustness",
+                        "parameters": [],
+                        "task": "classification"
                     }
                 ],
                 "options": {
@@ -119,5 +124,16 @@ class BenchmarkExecutionConfig(BaseModel):
                     "targeted": False
                 }
             }
-        }    
+        }
     )
+
+
+class JobResult(BaseModel):
+    """
+    Since this has to handle the errors to, only the id is required.
+    """
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+    id: str
+    parameters: Optional[list[ParameterLog]] = None
+    result: Optional[dict] = None
+    error: Optional[BaseException] = None

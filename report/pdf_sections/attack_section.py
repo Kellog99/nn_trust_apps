@@ -5,8 +5,10 @@ from typing import Optional
 from reportlab.lib.styles import ParagraphStyle
 from reportlab.platypus import Paragraph, Table, TableStyle, Spacer, Image
 
+from models.model import ParametersProps
+from models.reports import AttackMetricsProps, ReportAttackProps, ParameterLog
+from report.corporate_colors import CorporateColors
 from report.pdf_sections.pdf_section import PDFSection
-from report.pdf_sections.utils import CorporateColors, ReportAttacksProps
 
 
 class AttackSection(PDFSection):
@@ -77,7 +79,7 @@ class AttackSection(PDFSection):
             ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
         ])
 
-    def build_table_metrics(self, data: ReportAttacksProps) -> Table:
+    def build_table_metrics(self, data: AttackMetricsProps) -> Table:
         """
         This function has to construct the table that collects all the metrics of the attacks
         """
@@ -96,7 +98,7 @@ class AttackSection(PDFSection):
             style=self.metric_table_style
         )
 
-    def build_table_parameters(self, parameters: dict) -> list:
+    def build_table_parameters(self, parameters: list[ParameterLog] | list[dict]) -> list:
         """
         This function has to construct the table for the attack's parameters
         """
@@ -106,44 +108,50 @@ class AttackSection(PDFSection):
                 style=self.subtitle_style
             )
         ]
-
-        # It can happen that no parameters have been saved
-        if parameters:
-            out.append(
-                Paragraph(
-                    text="This table shows all the parameters that have been used for executing this attack.",
-                    style=self.description_style
-                )
-            )
-            out.append(Spacer(1, 10))
-            # Parameters table
-            header = ["Parameter", "Value"]
-            table_data: list[list] = [header]
-
-            for param, param_value in parameters.items():
-                if param not in self.excluded_metrics:
-                    label = param.replace('_', ' ')
-                    value = self._format_value(param_value)
-                    table_data.append([label, value])
-
-            out.append(
-                Table(
-                    data=table_data,
-                    colWidths=[self.corpus_width / len(header) for _ in range(len(header))],
-                    rowHeights=15,
-                    style=self.parameters_table_style
-                )
-            )
-        else:
+        if parameters is None or len(parameters) == 0:
             out.append(
                 Paragraph(
                     text="No parameters were saved for this attack.",
                     style=self.description_style
                 )
             )
+            return out
+
+        # It can happen that no parameters have been saved
+        out.append(
+            Paragraph(
+                text="This table shows all the parameters that have been used for executing this attack.",
+                style=self.description_style
+            )
+        )
+        out.append(Spacer(1, 10))
+        # Parameters table
+        header = ["Parameter", "Value"]
+        table_data: list[list] = [header]
+
+        for param in parameters:
+            if isinstance(param, dict):
+                param = ParameterLog.model_validate(param)
+            if param.id not in self.excluded_metrics:
+                label = param.name or param.id
+                label = label.replace('_', ' ')
+                value = self._format_value(param.value)
+                table_data.append([label, value])
+
+        out.append(
+            Table(
+                data=table_data,
+                colWidths=[self.corpus_width / len(header) for _ in range(len(header))],
+                rowHeights=15,
+                style=self.parameters_table_style
+            )
+        )
         return out
 
-    def build_example(self, path_root: Optional[str | Path] = None) -> list:
+    def build_example(
+            self,
+            path_root: Optional[str | Path] = None
+    ) -> list:
         """
         This function has to construct the table for the attack's parameters
         """
@@ -237,56 +245,41 @@ class AttackSection(PDFSection):
 
     def build(
             self,
-            data: dict[str, ReportAttacksProps | dict],
+            data: ReportAttackProps | dict,
             description: Optional[str] = None,
             path_root: Optional[str | Path] = None,
     ) -> list:
         """
-        Build the attack detail section.
+        It builds the section with all the attack's detail.
+
         Args:
             data: (dict) it contains the information about each attack.
             description (str): description to add after the title section.
             path_root (str | Path): it represents the path where the examples are stored.
         """
-        if path_root and isinstance(path_root, str):
-            path_root: Path = Path(path_root) / "examples"
-
         elements = []
+        if isinstance(data, dict):
+            data: ReportAttackProps = ReportAttackProps.model_validate(data)
+
+        name: str = data.name
+        metrics: AttackMetricsProps = data.metrics
+        parameters: list[ParameterLog] = data.parameters
 
         elements.append(
             Paragraph(
-                text="Adversarial Attacks Analysis",
-                style=self.title_style
+                text=f"<b>{name.upper()}</b> Attack Details",
+                style=self.subtitle_style
             )
         )
-        if description:
-            elements.append(
-                Paragraph(
-                    text=description,
-                    style=self.description_style
-                )
-            )
-            elements.append(Spacer(1, 10))
+        elements.append(Spacer(1, 20))
 
-        for atk_name, atk_info in data.items():
-            if isinstance(atk_info, dict):
-                atk_info: ReportAttacksProps = ReportAttacksProps.model_validate(atk_info)
+        elements.append(self.build_table_metrics(data=metrics))
+        elements.append(Spacer(1, 20))
 
-            elements.append(
-                Paragraph(
-                    text=f"<b>{atk_info.name.upper()}</b> Attack Details",
-                    style=self.subtitle_style
-                )
-            )
-            elements.append(Spacer(1, 20))
+        elements.extend(self.build_table_parameters(parameters=parameters))
+        elements.append(Spacer(1, 20))
 
-            elements.append(self.build_table_metrics(data=atk_info))
-            elements.append(Spacer(1, 20))
-
-            elements.extend(self.build_table_parameters(parameters=atk_info.parameters))
-            elements.append(Spacer(1, 20))
-
-            elements.extend(self.build_example(path_root=path_root / atk_name))
-            elements.append(Spacer(1, 20))
+        elements.extend(self.build_example(path_root=path_root / name if path_root else None))
+        elements.append(Spacer(1, 20))
 
         return elements

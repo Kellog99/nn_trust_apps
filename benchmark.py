@@ -1,103 +1,159 @@
 import argparse
 import json
+import logging
 from pathlib import Path
-from pprint import pprint
+from typing import TypeVar, Type
+
+import yaml
 
 from benchmarking import run_benchmark
-from models import BenchmarkOptionConfig, ModelInfo, DatasetInfo
-from nn_trust import AttackFactory as AF, Task
-from nn_trust.loss.loss_factory import LossFactory as LF
+from models import BenchmarkOptionConfig, ModelInfo, DatasetInfo, ModelReportProps
+from nn_trust import AttackFactory as AF, Task, StatisticsFactory as SF
+from report import AdversarialReportGenerator
+
+logger = logging.getLogger("benchmark")
+
+T = TypeVar("T", ModelInfo, DatasetInfo)
+
+
+def load_info(entry: dict, info_cls: Type[T]) -> T:
+    """
+    Build a ModelInfo/DatasetInfo from one entry of the config's "models"/"datasets"
+    list. Two shapes are supported:
+
+      - {"source_path": "..."}                -> info is read from <source_path>/info.json,
+                                                   repository defaults to source_path.
+      - {<info fields directly inline>, ...}   -> validated as-is; "repository" must be set.
+    """
+    source_path = entry.get("source_path")
+    if source_path:
+        source_path = Path(source_path).expanduser()
+        info_json = source_path / "info.json"
+
+        if not info_json.parent.exists():
+            raise FileNotFoundError(f"The model's folder, {info_json.parent}, does not exist.")
+        if not info_json.exists():
+            raise FileNotFoundError(f"Expected an info.json under {source_path}, found none.")
+
+        with open(info_json, "rb") as f:
+            data = json.load(f)
+        info = info_cls.model_validate(data)
+
+        if getattr(info, "repository", None) is None:
+            info.repository = str(source_path)
+        return info
+
+    info = info_cls.model_validate(entry)
+    if getattr(info, "repository", None) is None:
+        raise ValueError(
+            f"Entry {entry.get('id', entry.get('name', '<unknown>'))} needs either a "
+            f"'source_path' or an explicit 'repository'."
+        )
+    return info
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        prog="Attack benchmark",
+        description="Run adversarial-attack benchmarks defined in a YAML config file."
+    )
+    parser.add_argument(
+        "--config_path",
+        "-cnf",
+        required=True,
+        type=Path,
+        help="Path to the Benchmark configuration file.",
+    )
+    return parser.parse_args()
+
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(prog='Attack benchmark.')
-
-    parser.add_argument(
-        '--model_path',
-        '-mp',
-        required=True,
-        help="Path to the model's information."
+    args = parse_args()
+    logging.basicConfig(
+        level="INFO",
+        format="%(asctime)s [%(levelname)s] %(message)s"
     )
 
-    parser.add_argument(
-        '--dataset_path',
-        '-dp',
-        required=True,
-        help="Path to the dataset's information."
-    )
-    parser.add_argument(
-        '--attacks',
-        '-atk',
-        default=[],
-        help="List of attacks to run. By default all attacks are run."
-    )
-    parser.add_argument(
-        '--metrics',
-        '-m',
-        default=[],
-        help="List of metric to use. By default all metrics are used."
-    )
-    parser.add_argument(
-        '--output_path',
-        '-op',
-        default="./tmp",
-        help="Path where to store all the information from the benchmark."
-    )
-    parser.add_argument(
-        '--use_ray',
-        '-ray',
-        action="store_true",
-        default=False,
-        help="Whether to use ray or not. Hence, whether to parallelize the attacks or not."
-    )
-    args = parser.parse_args()
+    config_path = args.config_path.expanduser()
+
+    ########### Checking ig the configuration file exists ###########
+    if not config_path.exists():
+        raise FileNotFoundError(f"The path to the Benchmark configuration file does not exist: {config_path}")
+
+    with open(config_path) as f:
+        config = yaml.safe_load(f)
+
+    if not config:
+        raise ValueError(f"Configuration file {config_path} is empty or could not be parsed.")
 
     ####################### 1) Getting the models #######################
-    model_path: Path = Path(args.model_path).expanduser()
-    if not model_path.exists():
-        raise FileNotFoundError("The path to the model's location does not exist.")
-    with open(model_path, 'rb') as f:
-        data = json.load(f)
-    model_info: ModelInfo = ModelInfo.model_validate(data)
-    if getattr(model_info, 'repository', None) is None:
-        model_info.repository = str(model_path.parent)
+    models = [load_info(entry, ModelInfo) for entry in config.get("models", [])]
+    if not models:
+        raise ValueError("The configuration must define at least one entry under 'models'.")
     #####################################################################
 
-    ####################### 2) Getting the dataset #######################
-    dataset_path: Path = Path(args.dataset_path).expanduser()
-    if not dataset_path.exists():
-        raise FileNotFoundError("The path to the dataset's location does not exist.")
-    with open(dataset_path, 'rb') as f:
-        data = json.load(f)
-    dataset: DatasetInfo = DatasetInfo.model_validate(data)
-    if getattr(dataset, 'repository', None) is None:
-        dataset.repository = str(dataset_path.parent)
+    ####################### 2) Getting the datasets #######################
+    datasets = [load_info(entry, DatasetInfo) for entry in config.get("datasets", [])]
+    if not datasets:
+        raise ValueError("The configuration must define at least one entry under 'datasets'.")
     ######################################################################
 
     ####################### 3) Getting the attacks #######################
-    list_atk = AF.get_list_classes(task={Task.from_str(model_info.task)})
-    if len(args.attacks) > 0:
-        list_atk = [atk for atk in list_atk if atk in args.attacks]
+    # Models may have different tasks (e.g. classification + detection in the same
+    # sweep) -- collect the union of tasks rather than assuming a single model's task.
+    tasks = {Task.from_str(model.task) for model in models}
+
+    attacks: list[dict] = [{"id": atk} for atk in AF.get_list_classes(task=tasks)]
+    requested_attacks = config.get("attacks", [])
+    if requested_attacks:
+        ids = AF.get_list_classes(task=tasks)
+        attacks = [atk for atk in requested_attacks if atk.get("id", None) in ids]
+
+    if not attacks:
+        raise ValueError("No registered attacks matched the requested config/task(s).")
     ######################################################################
 
     ####################### 4) Getting the metrics #######################
-    list_metrics = LF.get_list_classes(task={Task.from_str(model_info.task)})
-    if len(args.metrics) > 0:
-        list_metrics = [mtr for mtr in list_metrics if mtr in args.metrics]
+    available_metrics = SF.get_list_classes(task=tasks)
+    requested_metrics = config.get("metrics", [])
+    metrics: list[dict] = [mtr for mtr in requested_metrics if mtr.get("id", None) in available_metrics]
+
+    if not metrics:
+        raise ValueError("No registered metrics matched the requested config/task(s).")
     ######################################################################
 
     ####################### Setting the Benchmarking options #######################
-    options: BenchmarkOptionConfig = BenchmarkOptionConfig(
-        num_images_to_save=10,
-        save_perturbation=True,
-        output_path=args.output_path,
-        use_ray=args.use_ray,
+    options = BenchmarkOptionConfig.model_validate(config.get("options", {}))
+
+    logger.info(
+        "Running benchmark: %d model(s), %d dataset(s), %d attack(s), %d metric(s)",
+        len(models),
+        len(datasets),
+        len(attacks),
+        len(metrics),
     )
-    print("Executing benchmark with following configuration:\n")
-    run_benchmark(
-        models=[model_info],
-        datasets=[dataset],
-        attacks=args.attacks,
-        metrics=list_metrics,
+    logger.info(
+        "Output path: %s | Ray: %s | PDF report: %s",
+        options.output_path, options.use_ray, options.create_pdf,
+    )
+
+    results: list[ModelReportProps] = run_benchmark(
+        models=models,
+        datasets=datasets,
+        attacks=attacks,
+        metrics=metrics,
         options=options,
     )
-    print("\nDone")
+
+    #################################### PDF generation ####################################
+    # Optionally, after the benchmark, it could be created the PDF report of the vulnerabilities
+
+    if options.create_pdf:
+        for result in results:
+            report = AdversarialReportGenerator()
+            report.generate(
+                data=result,
+                output_path=f"{options.output_path}/report.pdf",
+                header_logo_path=None,
+            )
+    ###########################################################################################

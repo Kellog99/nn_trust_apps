@@ -1,11 +1,11 @@
 from typing import Any, Literal, Self
 
 import torch
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, model_validator, ConfigDict
 from torchvision.transforms import v2 as T
 
 from models.model import RegisteredObject
-from attack_server.utils.utils import pil_to_b64str
+from services.utils.utils import tensor_image_to_b64str
 
 
 class PrivacyDatasetRef(BaseModel):
@@ -50,8 +50,9 @@ class PrivacyAttackOutput(BaseModel):
     target_metadata: dict[str, Any] = Field(default_factory=dict)
     dataset_metadata: dict[str, Any] = Field(default_factory=dict)
 
-    class Config:
-        arbitrary_types_allowed = True
+    model_config = ConfigDict(
+        arbitrary_types_allowed=True,
+    )
 
     @model_validator(mode="after")
     def image_to_base64(self) -> Self:
@@ -60,7 +61,7 @@ class PrivacyAttackOutput(BaseModel):
         out: list[str] = []
         for image in self.reconstructions:
             if isinstance(image, torch.Tensor):
-                out.append(pil_to_b64str(T.ToPILImage()(image.squeeze())))
+                out.append(tensor_image_to_b64str(T.ToPILImage()(image.squeeze())))
             else:
                 out.append(image)
         self.reconstructions = out

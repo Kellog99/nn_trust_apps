@@ -1,172 +1,166 @@
 import json
-import logging
 import os
 import pathlib
 import pickle
-import traceback
 from pathlib import Path
+from typing import Any
 
 import torch
 from tqdm.auto import tqdm
 
-from nn_trust.attack import AttackFactory as EAF
-from nn_trust.core import Task, ModelAdapter
-from nn_trust.evaluation.composer import ConfigStatisticComposer, StatisticComposer
-from nn_trust.loss.loss_composer import LossComposer
+from models import JobResult, ParametersProps
+from models.reports import ParameterLog
+from nn_trust import ModelAdapter, StatisticComposer, LossComposer, AttackFactory as EAF, Task
+from nn_trust.attack import EvasionAttack
 from nn_trust.target import AvoidOnehotTarget
+
+
+def _create_atk(
+        attack: dict,
+        model: ModelAdapter,
+        device: torch.device,
+) -> EvasionAttack:
+    atk_id: str = attack.get("id", None) or attack.get("name", None)
+    if atk_id is None:
+        raise ValueError("No id for instantiate the attack")
+
+    atk_config = {
+        "name": attack.get("id", None),
+        "id": attack.get("id", None),
+        **{
+            key: value
+            for key, value in attack.items()  # This is for extracting all the eventual parameters that are passed
+            if key != "id"
+        },
+    }
+    # Checking whether some losses have to be set
+    if atk_config.get("losses", None) is not None:
+        # If losses are specified, convert them to Loss objects
+        atk_config['loss'] = LossComposer(
+            losses=atk_config['losses'],
+            weights=atk_config.get('loss_weights', [1.0] * len(atk_config['losses'])),
+        )
+
+    return EAF.create(
+        class_id=atk_id,
+        model=model,
+        device=device,
+        task=Task.Classification,
+        **atk_config
+    )
+
 
 def evaluate_attack(
         dataloader: torch.utils.data.DataLoader,
         model: ModelAdapter,
-        attack_config: dict,
-        statistics: list[dict],
+        attack: EvasionAttack | dict,
+        statistics: StatisticComposer,
         device: torch.device,
-        num_classes: int,
         verbose: bool = False,
-        tracker=None,
-        benchmark_id: str = None,
-) -> dict:
+) -> JobResult:
     """
-    Evaluate the model on the attack that is passed.
+    Evaluate the model's vulnerability on the attack that is passed.
+    Since this is for performance purpose, it is assumed that it is not targeted.
+    Moreover, it updates the global statistics.
 
         Args:
-            atk: the attack that has to be performed.
+            dataloader: dataset to use
+            model: target model
+            attack: Attack to do on the (model, dataset)
+            statistics: The statistic composer that computes all the metrics that are required
+            verbose
+            device: device where the computation will be done
     """
-    try:
-        # INIT MODEL , DATA, STATISTIC_COMPOSER, ATTACK
-        ## 1. STATISTIC_COMPOSER
-        statistics_composer = StatisticComposer(config=ConfigStatisticComposer(
-            statistics=statistics,
-            num_classes=num_classes
-        ))
-        ## 2. ATTACK
-        atk_name = attack_config.pop("name")
-        atk_id = attack_config.pop("id", atk_name)
-        if attack_config.get("losses"):
-            # If losses are specified, convert them to Loss objects
-            attack_config['loss'] = LossComposer(
-                loss=attack_config['losses'],
-                loss_weights=attack_config.get('loss_weights', [1.0] * len(attack_config['losses'])),
-            )
 
-        targeted = attack_config.pop("targeted", False)
-
-        atk = EAF.create(
-            atk_name,
+    ### PREPARE EXECUTION ###
+    if isinstance(attack, dict):
+        attack = _create_atk(
+            attack=attack,
             model=model,
-            device=device,
-            task=Task.Classification,
-            targeted=targeted,
-            **attack_config
+            device=device
         )
-        atk.name = atk_id
-        if model.task not in atk.task:
-            raise ValueError(
-                f"\U0001F928 Attack {atk_name} does not support Model {model.name} task {model.task}.")
 
-        ### PREPARE EXECUTION
-        if verbose:
-            progress_bar = enumerate(tqdm(dataloader, desc=f"Attack {atk.name} for model {model.name}"))
+    atk_id: str = attack.__class__.__name__.lower().removesuffix("attack")
+
+    batch, _ = next(iter(dataloader))
+    num_classes: int = model(batch.to(device)).shape[-1]
+    if verbose:
+        progress_bar = enumerate(tqdm(dataloader, desc=f"Attack {repr(attack)} for model {model.name}"))
+    else:
+        progress_bar = enumerate(dataloader)
+
+    for idx, (batch, label) in progress_bar:
+
+        batch = batch.to(device)
+        label = label.to(device)
+
+        target = AvoidOnehotTarget(num_classes=num_classes)(label.tolist()).to(batch.device)
+
+        ############## Generating the adversarial image ##############
+        x_adv = attack.generate(
+            x=batch,
+            y=target
+        ).detach()
+        ##############################################################
+
+        with torch.no_grad():
+            out = model(batch)
+            out_adv = model(x_adv)
+
+        y_pred_adv = out_adv.argmax(dim=-1)
+        y_pred = out.argmax(dim=-1)
+
+        # adapt metrics counting for reference or standard attack
+        correct_mask = torch.eq(label, y_pred)
+        if atk_id == "reference":
+            y_pred = label
+
+        elif torch.any(correct_mask):
+            if not torch.all(correct_mask):
+                label = label[correct_mask]
+                x_adv = x_adv[correct_mask]
+                batch = batch[correct_mask]
+                out = out[correct_mask]
+                out_adv = out_adv[correct_mask]
+                y_pred = y_pred[correct_mask]
+                y_pred_adv = y_pred_adv[correct_mask]
+
         else:
-            progress_bar = enumerate(dataloader)
+            continue  # skip iteration, no statistic update for this batch
 
-        # tracker.create_task.remote(f"{atk_id}_{benchmark_id}","attack", benchmark_id = benchmark_id, num_tasks=num_tasks)
-        for idx, (batch, label, element_info) in progress_bar:
-            if tracker:
-                tracker.update_progress.remote(f"{atk_id}_{benchmark_id}",
-                                               status="in_progress",
-                                               progress=int((idx / len(dataloader)) * 100),
-                                               message=f"Processing batch {idx + 1}/{len(dataloader)}")
-            batch = batch.to(device)
-            label = label.to(device)
-            if targeted:
-               target_classes = (label + 1) % num_classes
-               target = torch.nn.functional.one_hot(target_classes,num_classes=num_classes).float().to(batch.device)
-            else:
-               target = AvoidOnehotTarget(num_classes=num_classes)(label.tolist()).to(batch.device)
-
-            x_adv = atk.generate(
-                x=batch,
-                y=target
-            ).detach()
-
-            with torch.no_grad():
-                out = model(batch)
-                out_adv = model(x_adv)
-            y_pred_adv = out_adv.argmax(dim=-1)
-            y_pred = out.argmax(dim=-1)
-            # adapt metrics counting for reference or standard attack
-            is_reference = atk_id == "reference"
-            correct_mask = torch.eq(label, y_pred)
-            if is_reference:
-                y_pred = label
-            elif torch.any(correct_mask):
-                if not torch.all(correct_mask):
-                    label = label[correct_mask]
-                    x_adv = x_adv[correct_mask]
-                    batch = batch[correct_mask]
-                    out = out[correct_mask]
-                    out_adv = out_adv[correct_mask]
-                    y_pred = y_pred[correct_mask]
-                    y_pred_adv = y_pred_adv[correct_mask]
-
-                    if targeted:
-                      target_classes = target_classes[correct_mask]
-            else:
-                continue  # skip iteration, no statistic update for this batch
-
-            input_stat = {
-                'x_adv': x_adv.detach(),
-                'x': batch.detach(),
-                'y': label,
-                "y_target": target_classes if targeted else label,
-                'out': out,
-                'out_adv': out_adv,
-                'y_pred': y_pred,
-                'y_pred_adv': y_pred_adv
-            }
-
-            if targeted:
-              input_stat["y_target"] = target_classes
-
-            statistics_composer.update(**input_stat)
-
-        if tracker:
-            tracker.update_progress.remote(f"{atk_id}_{benchmark_id}", status="completed", progress=100,
-                                           message=f"Completed attack {atk_id}")
-            
-        saved_statistics = []
-        for metric in statistics:
-            metric = dict(metric)
-            metric.pop("model", None)
-            saved_statistics.append(metric)
-
-        return {
-            "statistics": statistics_composer.compute(),
-            "statistics_states": statistics_composer.get_raw_state(),
-            "info": {
-                'name': model.name,
-                'parameters': sum([param.numel() for param in model.parameters()]),
-                'classes': num_classes,
-                'dimensionality': batch.shape,
-                'statistics': saved_statistics,
-                # if model metadata do not exist, save an empty dictionary
-                "model_info": {**getattr(model, "metadata", {}), "num_classes": num_classes,"parameters": sum(param.numel() for param in model.parameters())},
-                # if dataloader metadata do not exist, save an empty dictionary
-                "dataset_info": getattr(dataloader, "metadata", {})
-            }
+        input_stat = {
+            'x_adv': x_adv.detach(),
+            'x': batch.detach(),
+            'y': label,
+            'y_target': label,
+            'y_pred': y_pred,
+            'y_pred_adv': y_pred_adv
         }
-    except Exception as e:
-        logging.error(f"Error during evaluation of attack {attack_config.get('name', 'unknown')} : {e}")
-        traceback.print_exc()
-        if tracker:
-            tracker.update_progress.remote(
-                f"{atk_id}_{benchmark_id}",
-                status="completed",
-                progress=50,
-                message=f"Failed attack {atk_id} with error {e}"
+
+        statistics.update(**input_stat)
+
+    result = statistics.compute()
+    metric_states: dict[str, dict[str, Any]] = statistics.get_raw_state()
+
+    statistics.update_aggregate(metric_states)
+    statistics.reset()
+    atk_parameters: dict = attack.config.model_dump()
+    out = JobResult(
+        id=atk_id,
+        result=result,
+        parameters=[
+            ParameterLog(
+                id=key,
+                name=value.title,
+                description=value.description,
+                value=atk_parameters[key]
             )
-        raise e
+            for key, value in attack.config.model_fields.items()
+            if key != "model" and isinstance(atk_parameters.get(key, None), (int, float, bool))
+        ],
+    )
+
+    return out
 
 
 def read_results_from_disk(results_dir: str | pathlib.Path):
@@ -215,8 +209,8 @@ def aggregate_attacks_statistics(
     statistics_composer.reset()
     return aggregate_metrics
 
+
 def make_json_serializable(value):
-    
     if isinstance(value, torch.Tensor):
         value = value.detach().cpu()
         if value.numel() == 1:
@@ -225,10 +219,10 @@ def make_json_serializable(value):
 
     if isinstance(value, torch.Size):
         return list(value)
-    
+
     if isinstance(value, torch.device):
         return str(value)
-    
+
     if isinstance(value, Path):
         return str(value)
 
@@ -243,13 +237,14 @@ def make_json_serializable(value):
 
     if isinstance(value, tuple):
         return [make_json_serializable(item) for item in value]
-    
+
     # if json can already save it, keep it. If not, convert it to a string
     try:
         json.dumps(value)
         return value
     except TypeError:
         return str(value)
+
 
 def save_attack_result(
         benchmark_id: str,

@@ -1,7 +1,9 @@
-from typing import Optional, List, Literal, Any
+from typing import Optional, List, Literal, Any, Annotated
 
 import timm
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, model_validator, field_validator
+
+from nn_trust import Task
 
 
 class Info(BaseModel):
@@ -28,13 +30,13 @@ class Info(BaseModel):
         title="Image",
         description="An image that represents the file"
     )
-    task: str = Field(
+    task: str | Task = Field(
         default=...,
         title="Task",
         description="Task associated with, i.e. classification, detection, etc."
     )
-    domain: str = Field(
-        default=...,
+    domain: Optional[str] = Field(
+        default=None,
         title="Domain",
         description="Domain where the input belongs"
     )
@@ -63,7 +65,6 @@ class Info(BaseModel):
         description="Repository of the dataset/model. It is stored the location where the object is saved."
     )
 
-
 class DatasetInfo(Info):
     num_samples: Optional[int] = Field(
         default=None,
@@ -76,7 +77,7 @@ class DatasetInfo(Info):
         description="Batch size to use during the Benchmark."
     )
     num_workers: int = Field(
-        default=-1,
+        default=1,
         title="Number of Workers",
         description="Number of workers for handling the dataset's loading."
     )
@@ -94,6 +95,17 @@ class Transformation(BaseModel):
     size: Optional[int] = None
 
 
+MODEL_TYPES = Literal[
+    "plain",
+    "timm",
+    "HuggingFace",
+    "torch_script",
+    "torch_dynamo",
+    "onnx",
+    "api"
+]
+
+
 class ModelInfo(Info):
     dataset: Optional[str] = Field(
         default=None,
@@ -106,7 +118,13 @@ class ModelInfo(Info):
         description="Number of the model's parameters"
     )
     transformation: Transformation = Field(
-        default={},
+        default=Transformation(
+            mean=[0.485, 0.456, 0.406],
+            std=[0.229, 0.224, 0.225],
+            crop=None,
+            size=254,
+        ),
+        description="It represent the transformation to apply to the input.",
         title="Transformation",
     )
     ################################# Where the model is #################################
@@ -115,17 +133,10 @@ class ModelInfo(Info):
         title="API",
         description="If the model type is an API then this provide the information to use it."
     )
-    model_type: Literal[
-        "plain",
-        "timm",
-        "HuggingFace",
-        "torch_script",
-        "torch_dynamo",
-        "onnx",
-        "api"
-    ] = Field(
-        default="timm",
-        title="Library where the model has been taken from.",
+    type: MODEL_TYPES = Field(
+        default="plain",
+        title="Source Library",
+        description="Library where the model has been taken from.",
     )
 
     ######################################################################################
@@ -135,10 +146,9 @@ class ModelInfo(Info):
         """
         Validates the existence of timm model.
         """
-        if self.model_type in ["timm", "HuggingFace"]:
-            lib = timm if self.model_type == "timm" else timm
-            if self.id not in lib.list_models():
+        if self.type == "timm":
+            if self.name not in timm.list_models() and self.id not in timm.list_models():
                 raise ValueError(
-                    f"You are trying to use a model, {self.id}, from the library {self.model_type} but it doesn't exists."
+                    f"You are trying to use a model, {self.name}, from the library {self.type} but it doesn't exists."
                 )
         return self

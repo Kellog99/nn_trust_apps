@@ -22,6 +22,8 @@ test_*.yaml
 test_*.py
 
 # Submodules / build artifacts
+.idea
+
 */submodules/
 */benchmark_out/
 */assets/

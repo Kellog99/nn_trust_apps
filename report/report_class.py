@@ -1,91 +1,19 @@
+from io import BytesIO
 from pathlib import Path
 from typing import Optional
 
-from pydantic import BaseModel, Field, ConfigDict
-from reportlab.lib import colors
-from reportlab.lib.enums import TA_LEFT
-from reportlab.lib.pagesizes import A4
-from reportlab.lib.styles import ParagraphStyle
-from reportlab.platypus import SimpleDocTemplate
+from reportlab.platypus import SimpleDocTemplate, PageBreak, Paragraph, Spacer
 
+from models import ModelReportProps
 from report.pdf_sections import (
     AttackSection,
     AttackRisk,
     HeaderFooter,
     ModelInfoSection,
     MetricsSection,
-    Title,
-    ModelReportProps
+    Title
 )
-
-
-class AdversarialReportStyle(BaseModel):
-    model_config = ConfigDict(arbitrary_types_allowed=True)
-
-    pagesize: tuple[float, float] = A4
-    rightMargin: float = 40
-    leftMargin: float = 40
-    topMargin: float = 80
-    bottomMargin: float = 60
-
-    pdf_title_style: ParagraphStyle = Field(
-        default_factory=lambda: ParagraphStyle(
-            name='CustomTitle',
-            fontSize=28,
-            textColor=colors.HexColor('#000000'),
-            spaceAfter=30,
-            alignment=TA_LEFT,
-            fontName='Helvetica-Bold'
-        ),
-        description="This represent the title's style of the whole PDF, i.e. `Model Trustworthy`."
-    )
-
-    section_title_style: ParagraphStyle = Field(
-        default_factory=lambda: ParagraphStyle(
-            name='CustomHeading1',
-            fontSize=18,
-            textColor=colors.HexColor('#CC0000'),
-            fontName='Helvetica-Bold',
-            borderWidth=2,
-            borderRadius=5,
-            borderColor=colors.HexColor('#CC0000'),
-            borderPadding=5,
-            spaceAfter=20,
-            leftIndent=0,
-            leading=22,
-        ),
-        description="This represent the style of the section's title."
-    )
-
-    section_subtitle_style: ParagraphStyle = Field(
-        default_factory=lambda: ParagraphStyle(
-            name='MetricLabel',
-            fontSize=12,
-            leading=18,
-            textColor=colors.HexColor('#000000'),
-            fontName='Helvetica-Bold'
-        ),
-        description="This represents the style associated with sub title"
-    )
-
-    section_description_style: ParagraphStyle = Field(
-        default_factory=lambda: ParagraphStyle(
-            name='CustomHeading2',
-            fontSize=10,
-            textColor=colors.HexColor('#333333'),
-            fontName='Helvetica'
-        ),
-        description="This represents the style of the description of each section."
-    )
-
-    metric_value: ParagraphStyle = Field(
-        default_factory=lambda: ParagraphStyle(
-            name='MetricValue',
-            fontSize=11,
-            textColor=colors.HexColor('#000000'),
-            fontName='Helvetica'
-        )
-    )
+from report.report_style import AdversarialReportStyle
 
 
 class AdversarialReportGenerator:
@@ -127,7 +55,6 @@ class AdversarialReportGenerator:
         self.global_metrics_section = MetricsSection(
             corpus_width=corpus_width,
             benchmark=benchmark,
-            excluded_metrics=excluded_metrics,
             title_style=style.section_title_style,
             subtitle_style=style.section_subtitle_style,
             description_style=style.section_description_style
@@ -138,8 +65,7 @@ class AdversarialReportGenerator:
             corpus_width=corpus_width,
             title_style=style.section_title_style,
             subtitle_style=style.section_subtitle_style,
-            description_style=style.section_description_style,
-            metrics_to_show=["robustness", "accuracy", "f1score", "precision"]
+            description_style=style.section_description_style
         )
         # single attack section
         self.atk_section = AttackSection(
@@ -150,67 +76,52 @@ class AdversarialReportGenerator:
             description_style=style.section_description_style
         )
 
-    def generate(
-            self,
-            data: ModelReportProps | dict,
-            output_path: Optional[str | Path] = None,
-            output_file_name: Optional[str] = None,
-            header_logo_path: Optional[str | Path] = None
-    ):
+    def pdf_to_bytesio(self, pdf_path: str | Path) -> BytesIO:
         """
-        Generate PDF report from data that could be in a proper format or in a dict format
+        Load a PDF from disk into a BytesIO object.
 
         Args:
-            data: data associated with a model's security assessment
-            file_path: path to the data file
-            output_path: Output PDF file path
-            output_file_name: name of the PDF file
-            header_logo_path: path to the logo
+            pdf_path: Path to the PDF file.
+
+        Returns:
+            BytesIO containing the PDF data.
+
+        Raises:
+            FileNotFoundError: If the PDF does not exist.
+            ValueError: If the path is not a PDF file.
         """
+        if isinstance(pdf_path, str):
+            pdf_path: Path = Path(pdf_path).expanduser().resolve()
 
-        ############################# FILE PATH VALIDATION #############################
-        if data is None:
-            raise ValueError("Either file_path or data must be provided.")
+        if not pdf_path.exists():
+            raise FileNotFoundError(f"PDF not found: {pdf_path}")
 
-        if isinstance(data, dict):
-            try:
-                data: ModelReportProps = ModelReportProps.model_validate(data)
-            except:
-                raise ValueError("The data file provided is not in the format of ModelReportProps.")
-        ################################################################################
+        if not pdf_path.is_file():
+            raise ValueError(f"{pdf_path} is not a file.")
 
-        ############## Handling the saving path ##############
-        if not output_path:
-            output_path = Path("report/")
-        if isinstance(output_path, str):
-            output_path = Path(output_path).expanduser()
-            output_path.parent.mkdir(parents=True, exist_ok=True)
-        if not output_file_name:
-            output_file_name: str | None = data.info.name
-            if not output_file_name:
-                output_file_name = "model_adversarial_report.pdf"
-            else:
-                output_file_name = output_file_name.replace(" ", "_").lower()
-                if not output_file_name.endswith(".pdf"):
-                    output_file_name += ".pdf"
+        if pdf_path.suffix.lower() != ".pdf":
+            raise ValueError(f"{pdf_path} is not a PDF file.")
 
-        ################# Document Creation #################
-        doc = SimpleDocTemplate(
-            str(output_path / output_file_name),
-            pagesize=self.style.pagesize,
-            rightMargin=self.style.rightMargin,
-            leftMargin=self.style.leftMargin,
-            topMargin=self.style.topMargin,
-            bottomMargin=self.style.bottomMargin,
-        )
+        with pdf_path.open("rb") as f:
+            return BytesIO(f.read())
 
-        #############################################
-
+    def build_story(
+            self,
+            data: ModelReportProps,
+            output_folder: str | Path = "./"
+    ) -> list:
+        """
+        It builds the story of the PDF: the pages, the content and the plot
+        """
         # Build content
         story = []
         ##################### Sections #####################
         # 1) Title page
-        story.extend(self.title.build(data=data.info))
+        story.extend(
+            self.title.build(
+                data=data.info,
+            )
+        )
 
         # 2) Model information
         story.extend(
@@ -223,7 +134,8 @@ class AdversarialReportGenerator:
         story.extend(
             self.global_metrics_section.build(
                 data=data.metrics,
-                description="Here below, it is shown a table containing all the metrics that have been computed during the benchmark and their placement among a benchmark if it exists."
+                description="Here below, it is shown a table containing all the metrics that have been computed during the benchmark and their placement among a benchmark if it exists.",
+                output_folder=output_folder
             )
         )
 
@@ -231,20 +143,79 @@ class AdversarialReportGenerator:
         story.extend(
             self.atk_table.build(
                 data=data.attacks,
-                descriptions="This table represents the list of all the attacks that have been performed and the main metrics that have been computed."
+                descriptions="""
+                        This table contains all the attacks that have been tested and a subset of all the metrics that have been computed for a global comparison.
+                        """
             )
         )
+        story.append(PageBreak())
 
         # 5) Attacks analysis
-        story.extend(
-            self.atk_section.build(
-                data=data.attacks,
-                description="Here below are shown all the specifics about all the attacks that have been performed and their parameters.",
-                path_root=data.info.repository
+        story.append(
+            Paragraph(
+                text="Adversarial Attacks Analysis",
+                style=self.style.section_title_style
             )
         )
+        story.append(
+            Paragraph(
+                text="Here below are shown all the specifics about all the attacks that have been performed and their parameters.",
+                style=self.style.section_description_style
+            )
+        )
+        story.append(Spacer(1, 10))
+
+        for atk_name, atk_info in data.attacks.items():
+            story.extend(self.atk_section.build(
+                data=atk_info
+            ))
 
         ####################################################
+        return story
+
+    def generate(
+            self,
+            data: ModelReportProps | dict,
+            output_path: Optional[str | Path] = None,
+            header_logo_path: Optional[str | Path] = None
+    ):
+        """
+        Generate PDF report from data that could be in a proper format or in a dict format
+
+        Args:
+            data: data associated with a model's security assessment
+            output_path: Output PDF file path, ex. path/to/repository/filename.pdf
+            header_logo_path: path to the logo
+        """
+
+        ############################# FILE PATH VALIDATION #############################
+        if isinstance(output_path, str):
+            output_path: Path = Path(output_path).expanduser().resolve()
+            
+        if data is None:
+            raise ValueError("It is necessary to pass the data for the report.")
+
+        if isinstance(data, dict):
+            try:
+                data: ModelReportProps = ModelReportProps.model_validate(data)
+            except:
+                raise ValueError("The data file provided is not in the format of ModelReportProps.")
+        ################################################################################
+
+        ################# Document Creation #################
+        doc = SimpleDocTemplate(
+            str(output_path),
+            pagesize=self.style.pagesize,
+            rightMargin=self.style.rightMargin,
+            leftMargin=self.style.leftMargin,
+            topMargin=self.style.topMargin,
+            bottomMargin=self.style.bottomMargin,
+        )
+
+        story = self.build_story(
+            data=data,
+            output_folder=output_path.parent
+        )
 
         # Build PDF
         if header_logo_path:
@@ -256,13 +227,13 @@ class AdversarialReportGenerator:
             if not header_logo_path.is_file():
                 raise ValueError("The logo is not a file.")
             ###################################################################
-
-            doc.build(
-                story,
-                onFirstPage=HeaderFooter(logo_path=header_logo_path),
-                onLaterPages=HeaderFooter(logo_path=header_logo_path)
-            )
+            header_footer = HeaderFooter(logo_path=header_logo_path)
         else:
-            doc.build(story)
+            header_footer = HeaderFooter()
+        doc.build(
+            story,
+            onFirstPage=header_footer,
+            onLaterPages=header_footer,
+        )
 
-        print(f"Report generated: {output_path}")
+        #############################################
