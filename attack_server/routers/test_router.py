@@ -195,47 +195,117 @@ async def jailbreaking(
     model_info = body.get("model")
     attack_info = body.get("attack")
     goal = body.get("input")
+    attacker_info = body.get("attacker")
+    judge_info = body.get("judge")
 
-    # 1. Load the model (target)
-    model = load_model(
-        model_type=model_info.get("model_type"),
-        model_path=model_info.get("repository"),
-        task=Task.from_str(model_info.get("task")),
-        model_api=model_info.get("api"),
-        model_id=model_info.get("id"),
-    )
-    model = model.to(device)
-    model.eval()
+    # ── 1. Load models ──────────────────────────────────────────────────────
+    # Detect model type by ID convention:
+    #   - Ollama IDs never contain "/" (e.g. "llama3:8b-instruct")
+    #   - HuggingFace IDs always contain "/" (e.g. "meta-llama/Llama-2-7b")
+    def _is_ollama_id(model_id: str) -> bool:
+        return "/" not in model_id
 
-    # 2. Instantiate the attack
-    # We need to extract the attacker and judge models if the attack is multi-model.
-    # Currently assuming they might be derived or passed in parameters.
-    # Adjust as needed based on the attack type.
+    def _load_nlp_model(info: dict):
+        """Load an NLP model adapter (HF or Ollama) from its info dict."""
+        model_id = info.get("id", "")
+        model_type = info.get("model_type", "")
+        if model_type == "Ollama" or (not model_type and _is_ollama_id(model_id)):
+            from nn_trust.attack.nlp.adapters import OllamaNLPAdapter
+            base_url = info.get("api", "http://localhost:11434")
+            return OllamaNLPAdapter(
+                model_id=model_id,
+                base_url=base_url,
+                name=model_id,
+                temperature=0.7,
+                max_new_tokens=256,
+            )
+        # HuggingFace — use the existing load_model machinery
+        m = load_model(
+            model_type=info.get("model_type", "HuggingFace"),
+            model_path=info.get("repository"),
+            task=Task.from_str(info.get("task", "language")),
+            model_api=info.get("api"),
+            model_id=model_id,
+        )
+        if hasattr(m, "model") and hasattr(m.model, "parameters"):
+            m = m.to(device)
+            m.eval()
+        return m
 
-    # FIXME: For now we pass the model as both target and optionally attacker/judge 
-    # if the specific attack requires it, but usually you want separate instances.
-    
+    def _load_if_provided(info: dict | None, fallback_model, fallback_info: dict):
+        if info is None or info.get("id") == fallback_info.get("id"):
+            return fallback_model
+        return _load_nlp_model(info)
+
+    # Target model (always uses the route model from the store)
+    target_model = _load_nlp_model(model_info)
+
+    # Attacker and judge — fall back to target when not provided or same ID
+    attacker_model = _load_if_provided(attacker_info, target_model, model_info)
+    judge_model    = _load_if_provided(judge_info, target_model, model_info)
+
+    # ── 2. Instantiate the attack ───────────────────────────────────────────
     kwargs = {param.get("id"): param.get("default") for param in attack_info.get("parameters", [])}
     attack = AttackFactory.create(
         class_id=attack_info.get("id"),
-        model=model.to(device),
-        attacker=model.to(device), # Example: if using same model for attack
-        judge=model.to(device),    # Example: if using same model for judge
+        model=target_model,
+        attacker=attacker_model,
+        judge=judge_model,
         verbose=True, 
         device=device,
         **kwargs
     )
 
     # 3. Execution
-    # logger = ConsoleLogger(states=["generate"])
     state = attack.generate(goal=goal)
 
-    # 4. Extract results using the unified interface
-    # This matches the frontend expectation by returning the structure 
-    # it is already using, while utilizing get_result internally.
-    result = attack.get_result(state)
+    # 4. Build response from ConversationState (now a dataclass, not Pydantic)
+    # The ConversationState has: goal, success, best_response, best_score,
+    # attempts (list[AttackAttempt]), metadata, stateful flag, etc.
 
-    ret = result.model_dump()
-    
+    # Derive best_prompt from the highest-scored attempt
+    best_prompt = ""
+    scored_attempts = [a for a in state.attempts if a.score is not None]
+    if scored_attempts:
+        best_attempt = max(scored_attempts, key=lambda a: a.score)
+        best_prompt = best_attempt.prompt
+
+    if state.stateful:
+        # Stateful attack (e.g. Red Queen): one continuous conversation.
+        # The target_context holds the full dialogue (system, user, assistant).
+        conversations = [[
+            {
+                "role": "attacker" if m.role == "user" else "target",
+                "content": m.content,
+                "score": None,
+            }
+            for m in state.target_context
+            if m.role != "system"  # exclude internal system prompt from display
+        ]]
+        # Flat history == same as the single conversation (no separate attempts to show)
+        history = conversations[0]
+    else:
+        # Stateless attack (PAIR, GCG, Prefill, …): each attempt is an
+        # independent target query that starts a fresh conversation.
+        conversations = []
+        for attempt in state.attempts:
+            conversations.append([
+                {"role": "attacker", "content": attempt.prompt, "score": attempt.score},
+                {"role": "target",   "content": attempt.response, "score": attempt.score},
+            ])
+        # Flat history: all turns concatenated (for the "full history" view)
+        history = [turn for chat in conversations for turn in chat]
+
+    ret: dict = {
+        "goal": state.goal,
+        "success": state.success,
+        "best_prompt": best_prompt,
+        "best_response": state.best_response or "",
+        "best_score": state.best_score if state.best_score != float("-inf") else 0.0,
+        "history": history,
+        "conversations": conversations,
+        "metadata": state.metadata,
+    }
+
     return ret
 

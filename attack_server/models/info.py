@@ -103,6 +103,7 @@ class ModelInfo(Info):
         "plain",
         "timm",
         "HuggingFace",
+        "Ollama",
         "torch_script",
         "torch_dynamo",
         "onnx",
@@ -125,6 +126,10 @@ class ModelInfo(Info):
         elif self.model_type == "HuggingFace" and "/" not in self.id:
             raise ValueError(
                 "HuggingFace models should have an id like 'owner/model'"
+            )
+        elif self.model_type == "Ollama" and "/" in self.id:
+            raise ValueError(
+                "Ollama models should have an id without '/', e.g. 'llama3:8b-instruct'"
             )
 
         return self

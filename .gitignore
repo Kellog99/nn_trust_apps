@@ -36,3 +36,7 @@ data/
 .claude/
 CLAUDE.md
 MEMORY.md
+
+# Pi agent (track config, ignore auto-generated session data)
+.pi/sessions/
+!.pi/settings.json
