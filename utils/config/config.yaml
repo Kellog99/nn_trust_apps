@@ -4,7 +4,7 @@ models:
 datasets:
   - name: "imagenet"
     num_classes: 1000
-    batch: 20
+    batch_size: 30
     type_dataset: 1
     num_workers: 2
     source_path: "~/Desktop/StableAI/dataset_repository/imagenette2/"
@@ -15,25 +15,16 @@ datasets:
       mean: [ 0.5074, 0.5308, 0.5306 ]
       std: [ 0.2639, 0.2518, 0.2521 ]
 
-metrics:
-  - id: 'countsamples'
-  - id: 'accuracy'
-  - id: 'f1score'
-  - id: 'misclassification'
-  - id: 'precision'
-  - id: 'robustness'
-  - id: 'class_robustness'
-
-
-
 attacks:
-  - id: "contrastbaselineevasion"
-  - id: "gaussianbaselineevasion"
-  - id: "identitybaselineevasion"
+  - id: "contrastbaseline"
+  - id: "gaussianbaseline"
+  - id: "identitybaseline"
   - id: "saltnpeppernoisebaseline"
-  - id: "uniformbaselineevasion"
-  - id: "duevasion"
-  - id: "fom"
+  - id: "uniformbaseline"
+
+metrics:
+  - id: "robustness"
+  - id: "lipschitzbound"
 
 options:
   load_results: false                 # loading any existing results.
@@ -41,7 +32,7 @@ options:
   num_images_to_save: 10
   num_workers: 1
   verbose: true
-  subset: 50
+  subset: 100
   save_perturbation: false
   ray: false
   gpu: true

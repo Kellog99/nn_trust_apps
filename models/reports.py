@@ -8,6 +8,7 @@ from models.model import ParametersProps
 
 # These are the metrics associated to the model's performance
 class ReportMetricsProps(BaseModel):
+    num_samples: Optional[int] = None
     accuracy: Optional[float] = None
     precision: Optional[float] = None
     f1score: Optional[float] = None

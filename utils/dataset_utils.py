@@ -105,11 +105,10 @@ def get_dataloader(
     dataloader = DataLoader(
         subdataset,
         batch_size=batch,
-        shuffle=False,
+        shuffle=True,
         num_workers=num_workers,
         worker_init_fn=seed_worker,
         generator=g,
         pin_memory=True,
     )
-
     return dataloader

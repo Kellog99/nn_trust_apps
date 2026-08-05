@@ -1,55 +1,16 @@
 import argparse
-import json
 import logging
+from pprint import pprint
 from pathlib import Path
-from typing import TypeVar, Type
 
 import yaml
 
-from benchmarking import run_benchmark
+from benchmarking import run_benchmark, load_info
 from models import BenchmarkOptionConfig, ModelInfo, DatasetInfo, ModelReportProps
-from nn_trust import AttackFactory as AF, Task, StatisticsFactory as SF
+from nn_trust import AttackFactory as AF, Task
 from report import AdversarialReportGenerator
 
 logger = logging.getLogger("benchmark")
-
-T = TypeVar("T", ModelInfo, DatasetInfo)
-
-
-def load_info(entry: dict, info_cls: Type[T]) -> T:
-    """
-    Build a ModelInfo/DatasetInfo from one entry of the config's "models"/"datasets"
-    list. Two shapes are supported:
-
-      - {"source_path": "..."}                -> info is read from <source_path>/info.json,
-                                                   repository defaults to source_path.
-      - {<info fields directly inline>, ...}   -> validated as-is; "repository" must be set.
-    """
-    source_path = entry.get("source_path")
-    if source_path:
-        source_path = Path(source_path).expanduser()
-        info_json = source_path / "info.json"
-
-        if not info_json.parent.exists():
-            raise FileNotFoundError(f"The model's folder, {info_json.parent}, does not exist.")
-        if not info_json.exists():
-            raise FileNotFoundError(f"Expected an info.json under {source_path}, found none.")
-
-        with open(info_json, "rb") as f:
-            data = json.load(f)
-        info = info_cls.model_validate(data)
-
-        if getattr(info, "repository", None) is None:
-            info.repository = str(source_path)
-        return info
-
-    info = info_cls.model_validate(entry)
-    if getattr(info, "repository", None) is None:
-        raise ValueError(
-            f"Entry {entry.get('id', entry.get('name', '<unknown>'))} needs either a "
-            f"'source_path' or an explicit 'repository'."
-        )
-    return info
 
 
 def parse_args() -> argparse.Namespace:
@@ -113,15 +74,6 @@ if __name__ == "__main__":
         raise ValueError("No registered attacks matched the requested config/task(s).")
     ######################################################################
 
-    ####################### 4) Getting the metrics #######################
-    available_metrics = SF.get_list_classes(task=tasks)
-    requested_metrics = config.get("metrics", [])
-    metrics: list[dict] = [mtr for mtr in requested_metrics if mtr.get("id", None) in available_metrics]
-
-    if not metrics:
-        raise ValueError("No registered metrics matched the requested config/task(s).")
-    ######################################################################
-
     ####################### Setting the Benchmarking options #######################
     options = BenchmarkOptionConfig.model_validate(config.get("options", {}))
 
@@ -130,7 +82,7 @@ if __name__ == "__main__":
         len(models),
         len(datasets),
         len(attacks),
-        len(metrics),
+        len(config.get("metrics", [])),
     )
     logger.info(
         "Output path: %s | Ray: %s | PDF report: %s",
@@ -141,7 +93,7 @@ if __name__ == "__main__":
         models=models,
         datasets=datasets,
         attacks=attacks,
-        metrics=metrics,
+        metrics=config.get("metrics", []),
         options=options,
     )
 

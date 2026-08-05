@@ -1,185 +1,254 @@
 # NN Trust Applications
 
-## Table of contents:
+A collection of applications built on top of **`nn_trust`** for adversarial machine learning, robustness evaluation, benchmarking, and report generation.
 
-1. **Intro**
-2. **Prerequisites**
-3. **Execution**
-5. **Development notes and layout**
+The repository provides both command-line utilities and backend services for evaluating machine learning models against adversarial attacks and producing reproducible benchmark reports.
 
-### 1. Intro
+---
 
-This repository represents a collection of applications and tooling that build on top of the `nn_trust` library for
-adversarial machine learning (attacks, benchmarks, and demos). The most important are:
+# Features
 
-- `attack_server/` — TITANN backend and job manager (FastAPI + Ray + Celery integration)
-- `benchmarking/` — benchmark runner and utilities that orchestrate model evaluations and aggregate results
-- `report/` — Creates a PDF report from a json file associate with a benchmark
+- FastAPI backend for attack execution
+- Benchmark orchestration
+- Adversarial attack evaluation
+- PDF report generation
+- Repository management for models, datasets, and reports
+- Integration with Ray for distributed execution
 
-### 2. Prerequisites
+---
 
-Here are all the step for using this repository:
+# Repository Layout
 
-1. **Pakages**: since all the packages are handled by `uv` (https://docs.astral.sh/uv/); hence to create a fully working
-   environment do:
-    ```bash
-      uv sync --python 3.11
-    ```
-2. **Submodules**: if they are *not present* then this is the command for using the `submodules`:
-    * **Downloading**: download the submodules in the corresponding folder `./submodules/name` from `git`:
-
-        ```bash
-        git submodule add https://github.com/Kellog99/nn_trust.git submodules/nn_trust
-        git submodule add https://github.com/Kellog99/data_quality.git submodules/data_quality
-        ```
-      Due to internal policy all the settings of git are handled through `https` requests. Moreover, the `nn_trust`
-      repository is set on the branch `develop`.
-    *
-    * **Initialization**: to initialize the submodules execute
-      ```bash
-      git submodule init
-      git submodule update --recursive
-      ```
-3. **Installation**: install locally `nn_trust` dependency (from submodule)
-
-    ```bash
-    # create & activate a venv, then
-    uv pip install -e submodules/nn_trust/
-    ```
-
-#### 2.1 Safe removal of submodules
-
-To remove a submodule from the Git index (and the repository), these are the steps:
-
-```bash
-# 1. Deinitialize the submodule (clears working tree)
-git submodule deinit -f path/to/submodule
-
-# 2. Remove from the index and working tree
-
-git rm -f path/to/submodule
-
-# 3. Remove submodule metadata from .git/modules
-
-rm -rf .git/modules/path/to/submodule
-
+```text
+.
+├── attack_server/      # FastAPI backend and job manager
+├── benchmarking/       # Benchmark runner and utilities
+├── report/             # PDF report generation
+├── submodules/
+│   ├── nn_trust/
+│   └── data_quality/
+└── ...
 ```
 
-Step-by-step explanation:
+Main components:
 
-* `git submodule deinit` - Unregisters the submodule and clears its working directory
-* `git rm` - Removes the submodule from the index and working tree
-* `rm -rf .git/modules/...` - Cleans up Git's internal submodule cache
+| Directory | Description |
+|-----------|-------------|
+| `attack_server/` | FastAPI backend, Ray integration and job management |
+| `benchmarking/` | Benchmark execution and evaluation utilities |
+| `report/` | Generates PDF reports from benchmark outputs |
+| `submodules/nn_trust` | Core adversarial attack library |
 
-### 3. Execution
+---
 
-Now it is possible to execute all the functionalities of the STABLE-AI framework. Here there are all the commands:
+# Requirements
 
-1. **Application**: this part is for using the `GUI`. To do so it is necessary to start the FastAPI server inside:
+- Python **3.11**
+- [`uv`](https://docs.astral.sh/uv/)
+- Git with submodule support
 
-    ```bash
-    python app.py --reload --host 0.0.0.0 --port 8000
-    ```
-2. **Benchmarking**: this command is for executing just the benchmarking on a specific `dataset-model`:
-    ```bash
-   python benchmark.py --model_path path/to/model/info.json --dataset_path path/to/dataset/info.json
-    ```
-   The *configuration path* handles all the attacks' configuration. This avoid to pass all the arguments that could be a
-   lot through terminal.
+---
 
-3. **Report**: to produce a report regarding the benchmark of a specific model:
-    ```bash
-   python report_class.py --OUTPUTDIR path/to/output_folder
-    ```
-   The **OUTPUTDIR** represents the path to the benchmark's output folder. In this folder there are all the information
-   for generating the pdf report.
+# Installation
 
-#### 3.1 Benchmark
+## 1. Create the environment
 
-The benchmark file accepts multiple input from command line:
+```bash
+uv sync --python 3.11
+```
 
-```commandline
+## 2. Clone the submodules
+
+If the submodules are not already available:
+
+```bash
+git submodule add https://github.com/Kellog99/nn_trust.git submodules/nn_trust
+git submodule add https://github.com/Kellog99/data_quality.git submodules/data_quality
+```
+
+Initialize them:
+
+```bash
+git submodule init
+git submodule update --recursive
+```
+
+## 3. Install `nn_trust`
+
+```bash
+uv pip install -e submodules/nn_trust/
+```
+
+---
+
+# Quick Start
+
+## Launch the backend
+
+```bash
+python app.py --reload --host 0.0.0.0 --port 8000
+```
+
+---
+
+## Run a benchmark
+
+```bash
+python benchmark.py \
+    --model_path path/to/model/info.json \
+    --dataset_path path/to/dataset/info.json
+```
+
+---
+
+## Generate a report
+
+```bash
+python report_class.py \
+    --OUTPUTDIR path/to/output_folder
+```
+
+The output directory must contain the benchmark results produced by the benchmark runner.
+
+---
+
+# Benchmark CLI
+
+Display the complete list of available options:
+
+```bash
 python benchmark.py --help
 ```
 
-These are the actual parameters that accepts
+### Main arguments
 
-```terminaloutput
-usage: Attack benchmark. [-h] --model_path MODEL_PATH --dataset_path DATASET_PATH [--attacks ATTACKS] [--metrics METRICS]
-                         [--output_path OUTPUT_PATH] [--use_ray]
+| Argument | Description |
+|----------|-------------|
+| `--model_path` | Path to the model `info.json` |
+| `--dataset_path` | Path to the dataset `info.json` |
+| `--attacks` | List of attacks to execute |
+| `--metrics` | Metrics to compute |
+| `--output_path` | Directory where benchmark results are stored |
+| `--use_ray` | Enable distributed execution with Ray |
 
-options:
-  -h, --help            show this help message and exit
-  --model_path MODEL_PATH, -mp MODEL_PATH
-                        Path to the model's information.
-  --dataset_path DATASET_PATH, -dp DATASET_PATH
-                        Path to the dataset's information.
-  --attacks ATTACKS, -atk ATTACKS
-                        List of attacks to run. By default all attacks are run.
-  --metrics METRICS, -m METRICS
-                        List of metric to use. By default all metrics are used.
-  --output_path OUTPUT_PATH, -op OUTPUT_PATH
-                        Path where to store all the information from the benchmark.
-  --use_ray, -ray       Whether to use ray or not. Hence, whether to parallelize the attacks or not.
+---
 
+# Repository Organization
+
+The framework relies on three repositories.
+
+## Model Repository
+
+```text
+model_repository/
+├── model_1/
+│   ├── model.pth
+│   └── info.json
+└── model_2/
 ```
 
-The keys to the model and dataset path refer to the `info.json` file that is mandatory in each folder.
+---
 
-#### 3.2 Report
+## Dataset Repository
 
-The output of the benchmark is a JSON structured in the following way:
+The dataset repository follows the same organization.
 
-```python
-from typing import Optional, List
-
-from pydantic import BaseModel
-
-from models.info import ModelInfo
-
-
-class ReportMetricsProps(BaseModel):
-    accuracy: Optional[float] = None
-    precision: Optional[float] = None
-    f1score: Optional[float] = None
-    confusion_matrix: Optional[List[List[int | float]]] = None
-    robustness: Optional[float] = None
-    wobbliness: Optional[float] = None
-
-
-class ReportAttacksProps(BaseModel):
-    name: str
-    risk: float
-    accuracy: Optional[float] = None
-    precision: Optional[float] = None
-    f1score: Optional[float] = None
-    misclassification: Optional[float] = None
-    power: Optional[float] = None
-    num_queries: Optional[int] = None
-    robustness: Optional[float] = None
-    confusion_matrix: Optional[List[List[int]]] = None
-
-
-############## Model ##############
-class ModelReportProps(BaseModel):
-    info: ModelInfo
-    metrics: ReportMetricsProps
-    attacks: dict[str, ReportAttacksProps]
+```text
+dataset_repository/
+├── dataset_1/
+│   ├── data/
+│   └── info.json
+└── dataset_2/
 ```
 
-### 4. Development notes & repository layout
+---
 
-- `attack_server/` — FastAPI app and routers. Key files:
-    - `attack_server/app.py` — FastAPI application entry
-    - `attack_server/routers/job_router.py` — job endpoints, Ray executor integration
-    - `attack_server/lib/disk_reader.py` — helpers for locating benchmark outputs
+## Report Repository
 
-- `benchmarking/` — benchmark runner and utilities. Key files:
-    - `benchmarking/main.py` — postprocessing and runner entry points
-    - `benchmarking/benchmark_utils/` — executor, evaluator, and helpers
+```text
+report_repository/
+└── run_id/
+    ├── dataset_1/
+    │   ├── model_1/
+    │   │   ├── report.json
+    │   │   └── examples/
+    │   └── model_2/
+    └── dataset_2/
+```
 
-- `image-attack/` — demo UI and static assets.
+---
 
-If you edit Python code, prefer editing the module inside the corresponding subfolder and run the local unit tests when
-available. The `nn_trust` submodule contains the core attack implementations.
+# Metadata (`info.json`)
 
+Every model and dataset is described by an `info.json` metadata file.
+
+Typical information includes:
+
+- Identifier
+- Name
+- Task
+- Domain
+- Input dimensionality
+- Description
+- Repository information
+- Number of classes
+- Dataset- or model-specific fields
+
+These metadata files are mandatory and are used by the framework to correctly load resources.
+
+---
+
+# Benchmark Output
+
+Each benchmark execution produces a JSON report containing:
+
+- Model information
+- Performance metrics
+- Robustness metrics
+- Attack statistics
+- Confusion matrices
+- Attack-specific measurements
+
+The generated JSON file is used as input for the report generator.
+
+---
+
+# Development
+
+Relevant modules:
+
+```text
+attack_server/
+    app.py
+    routers/
+    lib/
+
+benchmarking/
+    main.py
+    benchmark_utils/
+
+report/
+```
+
+The actual adversarial attack implementations are located inside the `submodules/nn_trust` repository.
+
+---
+
+# Working with Git Submodules
+
+To safely remove a submodule:
+
+```bash
+git submodule deinit -f path/to/submodule
+git rm -f path/to/submodule
+rm -rf .git/modules/path/to/submodule
+```
+
+---
+
+# Notes
+
+- Dependencies are managed with **uv**.
+- Every model and dataset must provide an `info.json` file.
+- Ray is optional and can be enabled with the `--use_ray` flag.
+- The report generator expects the output of a completed benchmark execution.

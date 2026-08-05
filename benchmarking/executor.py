@@ -4,7 +4,6 @@ from typing import Iterator, Optional, Any, Callable
 
 import ray
 import torch
-from pydantic import BaseModel
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
@@ -52,6 +51,8 @@ class BenchmarkExecutor:
         pbar = tqdm(attacks, disable=not self.verbose, desc="Running jobs")
         for atk in pbar:
             atk_id = self._job_id(atk)
+
+            pbar.desc = f"Running {atk_id}"
             try:
                 yield evaluate_attack(
                     dataloader=dataloader,

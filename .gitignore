@@ -17,10 +17,6 @@ data/
 output/
 tmp/
 
-# Test configs / scratch
-test_*.yaml
-test_*.py
-
 # Submodules / build artifacts
 .idea
 
