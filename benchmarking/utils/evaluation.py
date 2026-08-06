@@ -136,13 +136,13 @@ def evaluate_attack(
             'y_pred': y_pred,
             'y_pred_adv': y_pred_adv
         }
-
         statistics.update(**input_stat)
 
     result = statistics.compute()
-    metric_states: dict[str, dict[str, Any]] = statistics.get_raw_state()
-
-    statistics.update_aggregate(metric_states)
+    # In case the identity attack is performed, then no global statistics is used
+    if atk_id != 'identitybaseline':
+        metric_states: dict[str, dict[str, Any]] = statistics.get_raw_state()
+        statistics.update_aggregate(metric_states)
     statistics.reset()
     atk_parameters: dict = attack.config.model_dump()
     out = JobResult(
@@ -159,55 +159,7 @@ def evaluate_attack(
             if key != "model" and isinstance(atk_parameters.get(key, None), (int, float, bool))
         ],
     )
-
     return out
-
-
-def read_results_from_disk(results_dir: str | pathlib.Path):
-    r"""
-    Read from disk back to Evaluator results object structure
-    The directory from which results are read are the same kind of the target of `save_`
-
-    >>>results = dict(
-    ...     info,
-    ...     results=dict(attacks=dict(statistics, statistics_states)),
-    ...     aggregate_statistics=optional
-    ...)
-    """
-    results_dir = Path(results_dir)
-    results = {"attacks": {}}
-    attacks_dir = [attack_dir for attack_dir in results_dir.iterdir() if attack_dir.is_dir()]
-    for attack_dir in attacks_dir:
-        with open(attack_dir / "statistics.json", "r") as fmetric:
-            statistics = json.load(fmetric)
-        with open(attack_dir / "statistics_states.pkl", "rb") as fdata:
-            statistics_states = pickle.load(fdata)
-        results["attacks"][attack_dir.name] = {
-            "statistics": statistics,
-            "statistics_states": statistics_states
-        }
-        with open(attack_dir / "info.json", "r") as f:
-            results["info"] = json.load(f)
-    if "aggregate_statistics.json" in results_dir.iterdir():
-        with open(results_dir / "aggregate_statistics.json", "r") as f:
-            results["aggregate_statistics"] = json.load(f)
-    return results
-
-
-def aggregate_attacks_statistics(
-        statistics_composer: StatisticComposer,
-        results: dict
-) -> dict:
-    """
-    Use statistic composer in aggregation mode to aggregate statistics states and
-    compute aggregated results
-    """
-    for attack, attack_results in results['attacks'].items():
-        if not attack == "reference":
-            statistics_composer.update_aggregate(attack_results["statistics_states"])
-    aggregate_metrics = statistics_composer.compute()
-    statistics_composer.reset()
-    return aggregate_metrics
 
 
 def make_json_serializable(value):
@@ -244,25 +196,3 @@ def make_json_serializable(value):
         return value
     except TypeError:
         return str(value)
-
-
-def save_attack_result(
-        benchmark_id: str,
-        atk_result: dict,
-        atk_id: str,
-        dataset_name: str,
-        model_name: str,
-        root_path: str | pathlib.Path) -> None:
-    """
-    Save single attack results from static method -evaluate_attack- to a JSON file
-    """
-    output_path = Path(benchmark_id) / f"{model_name}_{dataset_name}" / atk_id
-    if root_path:
-        output_path = Path(root_path) / output_path
-    os.makedirs(output_path, exist_ok=True)
-    with open(output_path / "statistics.json", 'w') as f:
-        json.dump(make_json_serializable(atk_result["statistics"]), f)
-    with open(output_path / "statistics_states.pkl", 'wb') as f:
-        pickle.dump(atk_result["statistics_states"], f)
-    with open(output_path / "info.json", 'w') as f:
-        json.dump(make_json_serializable(atk_result["info"]), f)
