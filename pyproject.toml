@@ -32,3 +32,7 @@ dependencies = [
 
 [tool.uv.sources]
 nn-trust = { path = "submodules/nn_trust", editable = true }
+
+
+[tool.pytest.ini_options]
+pythonpath = ["."]

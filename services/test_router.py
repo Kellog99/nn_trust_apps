@@ -1,21 +1,14 @@
-import datetime
 import time
-from pathlib import Path
-
 import torch
 from fastapi import APIRouter, Body, Query, HTTPException
 from pydantic import ValidationError
-from torchmetrics.image import StructuralSimilarityIndexMeasure
-from torchvision.transforms import v2 as T, InterpolationMode
 
-from models import RegisteredObject, SingleAttackOutput, SingleAttackProps, JailbreakAttackOutput, Bubble, ModelInfo
+from models import SingleAttackOutput, SingleAttackProps, JailbreakAttackOutput, Bubble, ModelInfo, RegisteredObject
 from nn_trust import Task
-from nn_trust.attack import EvasionAttack
-from nn_trust.attack.attack_factory import AttackFactory as EAF
-from nn_trust.target import AvoidOnehotTarget
-from nn_trust.utils.logger import PyTorchCheckpointLogger
-from services.utils.model import load_model
-from services.utils.utils import b64str_to_pil, tensor_image_to_b64str
+from nn_trust.attack import EvasionAttack, AttackFactory as AF
+from services.utils.attack import single_attack_performance
+from services.utils.utils import b64str_to_pil
+from utils import load_model
 
 router = APIRouter(prefix="/test", tags=["jobs management", "jobs utils"])
 
@@ -61,10 +54,12 @@ async def single_attack(
         print(f"Error message: {str(e)}")
         raise
 
+    task = Task.from_str(model_info.task),
+
     model = load_model(
         model_type=model_info.type,
         model_path=model_info.repository,
-        task=Task.from_str(model_info.task),
+        task=task,
         model_api=model_info.api,
         model_id=model_info.id,
     )
@@ -72,108 +67,23 @@ async def single_attack(
     model.eval()
     print(" Model loaded ".center(40, "#"))
 
-    ###########################################
-
-    ################## IMAGE ##################
-    pil_image = b64str_to_pil(body.input)
-    input_dimensionality = model_info.input_dimensionality
-
-    if isinstance(input_dimensionality, list):
-        if len(input_dimensionality) == 3:
-            input_dimensionality = input_dimensionality[1:]
-        elif len(input_dimensionality) == 1:
-            input_dimensionality = [input_dimensionality[0], input_dimensionality[0]]
-        input_dimensionality = tuple(input_dimensionality)
-    elif isinstance(input_dimensionality, int):
-        input_dimensionality = (input_dimensionality, input_dimensionality)
-
-    ############ image transformation ############
-    original_input: torch.Tensor = T.ToTensor()(pil_image)
-    C, H, W = original_input.shape
-
-    transformations = T.Compose([
-        T.Resize(size=input_dimensionality, interpolation=InterpolationMode.NEAREST),
-        T.ToImage(),
-        T.ToDtype(torch.float32, scale=True),
-        T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
-    ])
-    x: torch.Tensor = transformations(pil_image)
-    if x.dim() == 3:
-        x = x.unsqueeze(0)
-    x = x.to(device)
-    print(" Image loaded ".center(40, "#"))
-
-    ###############################################
-
     ################## ATTACK ##################
-    attack: RegisteredObject = body.attack
-    attack: EvasionAttack = EAF.create(
+    atk: RegisteredObject = body.attack
+    attack: EvasionAttack = AF.create(
         model=model.to(device),
-        class_id=attack.id,
-        task=Task.from_str(model_info.task),
+        class_id=atk.id,
+        task=task,
         **{param.id: param.default for param in attack.parameters}
     )
     print(" Attack Created ".center(40, "#"))
     ############################################
 
-    ################## Results ##################
-    y = model(x)
-    labels = y.argmax(-1).tolist()
-    target = AvoidOnehotTarget(num_classes=y.shape[-1])(labels).to(device)
-    ssim_metric = StructuralSimilarityIndexMeasure()
-    # Logger for getting additional material
-    out_path = Path(f"./tmp/{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}")
-    logger = PyTorchCheckpointLogger(
-        states=["conf_adversarial", "conf_original"],
-        path=out_path
-    )
-    print(" Executing the Attack ".center(40, "#"))
-
-    start = time.time()
-    x_adv = attack.generate(
-        x=x,
-        y=target,
-        logger=logger
-    )
-    end = time.time()
-    print(" Attack Completed ".center(40, "#"))
-
-    y_adv = model(x_adv).argmax(-1)
-    ssim_measure = ssim_metric(x, x_adv.cpu()).item()
-    conf_original, conf_adversarial = {}, {}
-    if logger:
-        conf_original: dict = logger.get_log(tag="conf_original", state="generate")
-        conf_adversarial: dict = logger.get_log(tag="conf_adversarial", state="generate")
-
-        print(conf_original)
-        print(conf_adversarial)
-    ############################################
-
-    ################## Invert transform ################
-    inv_transform = T.Compose([
-        T.Normalize(
-            mean=[-0.485 / 0.229, -0.456 / 0.224, -0.406 / 0.225],
-            std=[1 / 0.229, 1 / 0.224, 1 / 0.225]
-        ),
-        T.Resize(size=(H, W), interpolation=InterpolationMode.BICUBIC),
-    ])
-    pert: torch.Tensor = inv_transform(x_adv.cpu() - x)
-    x_adv: torch.Tensor = inv_transform(x_adv.cpu())
-
-    return SingleAttackOutput(
-        x_adv=tensor_image_to_b64str(x_adv.cpu()),
-        adv_perturbation=tensor_image_to_b64str(pert.cpu()),
-        original_prediction=str(labels[0]),
-        adversarial_prediction=str(y_adv.item()),
-        advance_metrics={
-            "ssim": ssim_measure,
-            "distance": torch.norm(pert, p=getattr(attack.config, "p", 2)).item(),
-            "execution_time": end - start,
-        },
-        confidence={
-            "adversarial": conf_original,
-            "original": conf_adversarial,
-        }
+    return single_attack_performance(
+        model=model,
+        attack=attack,
+        pil_image=b64str_to_pil(body.input),
+        input_dimensionality=model_info.input_dimensionality,
+        device=device
     )
 
 
