@@ -199,33 +199,14 @@ async def jailbreaking(
     judge_info = body.get("judge")
 
     # ── 1. Load models ──────────────────────────────────────────────────────
-    # Detect model type by ID convention:
-    #   - Ollama IDs never contain "/" (e.g. "llama3:8b-instruct")
-    #   - HuggingFace IDs always contain "/" (e.g. "meta-llama/Llama-2-7b")
-    def _is_ollama_id(model_id: str) -> bool:
-        return "/" not in model_id
-
     def _load_nlp_model(info: dict):
-        """Load an NLP model adapter (HF or Ollama) from its info dict."""
-        model_id = info.get("id", "")
-        model_type = info.get("model_type", "")
-        if model_type == "Ollama" or (not model_type and _is_ollama_id(model_id)):
-            from nn_trust.attack.nlp.adapters import OllamaNLPAdapter
-            base_url = info.get("api", "http://localhost:11434")
-            return OllamaNLPAdapter(
-                model_id=model_id,
-                base_url=base_url,
-                name=model_id,
-                temperature=0.7,
-                max_new_tokens=256,
-            )
-        # HuggingFace — use the existing load_model machinery
+        """Load an NLP model adapter from its info dict."""
         m = load_model(
             model_type=info.get("model_type", "HuggingFace"),
             model_path=info.get("repository"),
             task=Task.from_str(info.get("task", "language")),
             model_api=info.get("api"),
-            model_id=model_id,
+            model_id=info.get("id"),
         )
         if hasattr(m, "model") and hasattr(m.model, "parameters"):
             m = m.to(device)

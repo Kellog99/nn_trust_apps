@@ -8,7 +8,7 @@ import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 from nn_trust import ModelAdapter, Task
-from nn_trust.attack.nlp.adapters import HuggingFaceNLPAdapter
+from nn_trust.attack.nlp.adapters import HuggingFaceNLPAdapter, OllamaNLPAdapter
 from nn_trust.models.api_model import APICVModel
 
 
@@ -26,7 +26,7 @@ def load_model(
 
     Parameters
     ----------
-    model_type : {"plain", "model_weights", "torch_script", "torch_dynamo", "onnx", "api"}
+    model_type : {"plain", "model_weights", "torch_script", "torch_dynamo", "onnx", "api", "HuggingFace", "Ollama", "timm"}
         Selects the loading method:
         - **"plain"**: Load a raw Python model object saved with `torch.save(...)`.
           `file_path` must point to a `.pth` or similar file containing a pickled model.
@@ -87,6 +87,15 @@ def load_model(
                 **kwargs,
                 )
             
+            return model
+        
+        case "Ollama":
+            model = OllamaNLPAdapter(
+                model_id=model_id,
+                base_url=model_api or "http://localhost:11434",
+                name=model_id,
+                **kwargs,
+            )
             return model
         
         case "plain":
