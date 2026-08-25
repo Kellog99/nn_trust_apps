@@ -6,8 +6,8 @@ import torch
 from tqdm.auto import tqdm
 
 from nn_trust.models.model_utils import load_model
-from .dataset_utils import get_data_transformation_config, get_dataloader, get_dataloader_nlp
-from .evaluation_utils import evaluate_attack, evaluate_attack_nlp, save_attack_result_to_disk_v2
+from .dataset_utils import get_data_transformation_config, get_dataloader
+from .evaluation_utils import evaluate_attack, save_attack_result_to_disk_v2
 
 
 def override_keys_if_not_none(base_dict: dict, overriding_dict: dict) -> dict:
@@ -25,62 +25,42 @@ def execute_job(config: dict):
     """
     dataset = config["dataset"]
     model_config = config["model"]
-
-    # Handle branching for NLP vs Image tasks
-    if config.get("task_type") == "nlp":
-        # NLP path: use NLPGoalDataset and skip image transforms
-        dataloader = get_dataloader_nlp(
-            dataset=dataset["source_path"],
-            batch=dataset["batch"],
-            name=dataset["name"]
-        )
-        dataset_default_config = {} # NLP datasets might not have this in the same way
-    else:
-        # Original Image-based path
-        transform, inverse_transform = get_data_transformation_config(
-            transform_id=dataset["transform_config"]["transform_id"],
-            size=dataset["transform_config"].get("size"),
-            crop=dataset["transform_config"].get("crop"),
-            mean=dataset["transform_config"].get("mean"),
-            std=dataset["transform_config"].get("std"),
-        )
-        dataloader = get_dataloader(
-            dataset=dataset["source_path"],
-            batch=dataset["batch"],
-            subset=dataset["subset"],
-            type_dataset=dataset["type_dataset"],
-            transform=transform,
-            num_workers=dataset["num_workers"],
-            name=dataset["name"]
-        )
-        with open(Path(dataset["source_path"]) / (Path(dataset["source_path"]).name + ".json")) as f:
-            # TODO: uniform this path to dataset_dir/info.json like for models instead of <dataset_dir>/<dataset_name>.json
-            dataset_default_config = json.load(f)
-    with open(Path(model_config["model_path"]) / "info.json") as f:
-        model_default_config = json.load(f)
+    transform, inverse_transform = get_data_transformation_config(
+        transform_id=dataset["transform_config"]["transform_id"],
+        size=dataset["transform_config"].get("size"),
+        crop=dataset["transform_config"].get("crop"),
+        mean=dataset["transform_config"].get("mean"),
+        std=dataset["transform_config"].get("std"),
+    )
+    dataloader = get_dataloader(
+        dataset=dataset["source_path"],
+        batch=dataset["batch"],
+        subset=dataset["subset"],
+        type_dataset=dataset["type_dataset"],
+        transform=transform,
+        num_workers=dataset["num_workers"],
+        name=dataset["name"]
+    )
     model = load_model(**model_config)
 
-    model.metadata = override_keys_if_not_none(model_default_config, model_config)
+    with open(Path(dataset["source_path"]) / (Path(dataset["source_path"]).name + ".json")) as f:
+        # TODO: uniform this path to dataset_dir/info.json like for models instead of <dataset_dir>/<dataset_name>.json
+        dataset_default_config = json.load(f)
+    with open(Path(model_config["model_path"]) / "info.json") as f:
+        model_default_config = json.load(f)
 
-    if config.get("task_type") == "nlp":
-        dataloader.metadata = {} # Placeholder for now
-        res = evaluate_attack_nlp(
-            model=model,
-            dataloader=dataloader,
-            attack_config=config["attack"],
-            statistics=config["evaluation"]["statistics"],
-            device=torch.device("cuda") if (config["options"]["gpu"] and torch.cuda.is_available()) else torch.device("cpu")
-        )
-    else:
-        dataloader.metadata = override_keys_if_not_none(dataset_default_config, dataset)
-        res = evaluate_attack(
-            model=model,
-            dataloader=dataloader,
-            attack_config=config["attack"],
-            statistics=config["evaluation"]["statistics"],
-            device=torch.device("cuda") if (config["options"]["gpu"] and torch.cuda.is_available()) else torch.device("cpu"),
-            num_classes=dataset["num_classes"],
-        )
+    model.metadata = override_keys_if_not_none(model_default_config, model_config)
+    dataloader.metadata = override_keys_if_not_none(dataset_default_config, dataset)
+
+    res = evaluate_attack(
+        model=model,
+        dataloader=dataloader,
+        attack_config=config["attack"],
+        statistics=config["evaluation"]["statistics"],
+        device=torch.device("cuda") if (config["options"]["gpu"] and torch.cuda.is_available()) else torch.device(
+            "cpu"),
+        num_classes=dataset["num_classes"],
+    )
     return {"attack_results": res, "benchmark_job_info": config["benchmark_info"]}
 
 

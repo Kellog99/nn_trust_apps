@@ -186,17 +186,7 @@ async def start_benchmark_job(body: ExecutionConfig = Body(...)) -> str | Respon
     try:
         dataset_name = body.dataset
         model_name = body.model
-
-        # Branching logic for NLP tasks
-        if body.task_type == "nlp":
-            # NLP-specific path
-            file_path = os.path.join(os.environ.get('DATASETS_REPO'), dataset_name, f"{dataset_name}.json")
-            # For NLP, source_path is the directory of the JSON dataset
-            source_path = os.path.join(os.environ.get('DATASETS_REPO'), dataset_name)
-        else:
-            # Original Image-based path
-            file_path = os.path.join(os.environ.get('DATASETS_REPO'), dataset_name, f"{dataset_name}.json")
-            source_path = os.path.join(dataset_name, "data")
+        file_path = os.path.join(os.environ.get('DATASETS_REPO'), dataset_name, f"{dataset_name}.json")
 
         if os.path.exists(file_path) and os.path.isfile(file_path):
             with open(file_path, "r", encoding="utf-8") as f:
@@ -226,7 +216,7 @@ async def start_benchmark_job(body: ExecutionConfig = Body(...)) -> str | Respon
             "model_path": model_file_path
         }
 
-        config_dataset["source_path"] = source_path
+        config_dataset["source_path"] = os.path.join(dataset_name, "data")
 
         benchmark_config['datasets'] = [config_dataset]
         benchmark_config['models'] = [config_models]
@@ -245,7 +235,6 @@ async def start_benchmark_job(body: ExecutionConfig = Body(...)) -> str | Respon
             }
             for metric in body.metrics
         ]
-        benchmark_config["task_type"] = body.task_type
         task_id = benchmarking.benchmark(benchmark_config, executor)
         return JSONResponse(status_code=200, content=task_id)
 
