@@ -90,10 +90,12 @@ def test_evaluate_attack(
         model: ModelAdapter,
         dataloader: DataLoader,
         device: torch.device,
-        tmp_path: Path = Path("./test_tmp"),
+        tmp_path: Path = Path("./test_tmp/identitybaseline"),
 ):
-    model.to(device)
+    if not tmp_path.exists():
+        tmp_path.mkdir(exist_ok=True, parents=True)
 
+    model.to(device)
     result = evaluate_attack(
         dataloader=dataloader,
         model=model,
@@ -108,9 +110,11 @@ def test_evaluate_attack(
     assert checkpoint_path.exists()
 
     data = torch.load(str(checkpoint_path), weights_only=False)
+    print(data.keys())
     assert "generate/original_input" in data
     assert len(data["generate/original_input"]) == len(dataloader)
     assert data["generate/original_input"][0].shape == (1, 3, 224, 224)
+
 
 
 @pytest.mark.parametrize("device", available_devices())

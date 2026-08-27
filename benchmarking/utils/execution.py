@@ -18,6 +18,8 @@ def _iter_local(
         statistics: StatisticComposer,
         device: torch.device = torch.device("cpu"),
         output_path: Optional[str | Path] = None,
+        save_variables: Optional[list[str]] = None,
+        max_saved_elements: Optional[int | dict[str, int]] = None,
         verbose: bool = True,
         **kwargs
 ) -> Iterator[JobResult]:
@@ -36,6 +38,8 @@ def _iter_local(
                 statistics=statistics,
                 device=device,
                 output_path=output_path,
+                save_variables=save_variables,
+                max_saved_elements=max_saved_elements,
             )
         except Exception as e:
             yield JobResult(
@@ -51,6 +55,8 @@ def _iter_ray(
         statistics: StatisticComposer,
         device: torch.device = torch.device("cpu"),
         output_path: Optional[str | Path] = None,
+        save_variables: Optional[list[str]] = None,
+        max_saved_elements: Optional[int | dict[str, int]] = None,
         verbose: bool = True,
         num_gpus_per_job: float = 0.6,
         **kwargs
@@ -64,6 +70,8 @@ def _iter_ray(
             statistics=statistics,
             output_path=output_path,
             device=device,
+            save_variables=save_variables,
+            max_saved_elements=max_saved_elements,
         ): atk
         for atk in attacks
     }

@@ -49,6 +49,10 @@ class BenchmarkExecutor:
             attacks: list[dict[str, Any]],
             statistics: StatisticComposer,
             log: Optional[Logger] = None,
+            device: Optional[torch.device] = None,
+            output_path: Optional[str | Path] = None,
+            save_variables: Optional[list[str]] = None,
+            max_saved_elements: Optional[int | dict[str, int]] = None,
     ) -> dict[str, ReportAttackProps]:
         func: Callable[..., Iterator[JobResult]] = _iter_ray if self.use_ray else _iter_local
         results_iter: Iterator[JobResult] = func(
@@ -56,8 +60,10 @@ class BenchmarkExecutor:
             dataloader=dataloader,
             attacks=attacks,
             statistics=statistics,
-            device=self.device,
-            output_path=self.output_path,
+            device=device if device is not None else self.device,
+            output_path=output_path if output_path is not None else self.output_path,
+            save_variables=save_variables,
+            max_saved_elements=max_saved_elements,
             log=log,
         )
 

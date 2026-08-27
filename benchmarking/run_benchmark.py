@@ -138,7 +138,9 @@ def run_benchmark(
                 attacks=attacks,
                 statistics=statistics_composer,
                 device=device,
-                output_path=output_path
+                output_path=output_path,
+                save_variables=options.variables_to_save,
+                max_saved_elements=options.max_saved_elements,
             )
             global_metrics: dict = statistics_composer.compute_aggregator()
 

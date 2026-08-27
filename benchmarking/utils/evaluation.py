@@ -1,8 +1,10 @@
 from datetime import datetime
 from pathlib import Path
+from collections.abc import Sequence
 from typing import Any, Optional
 
 import torch
+from torch.utils.data import DataLoader
 from tqdm.auto import tqdm
 
 from models import JobResult
@@ -39,33 +41,26 @@ def _create_atk(
             losses=atk_config['losses'],
             weights=atk_config.get('loss_weights', [1.0] * len(atk_config['losses'])),
         )
-    if out_path is None:
-        out_path = Path("./tmp") / datetime.now().strftime("%Y%m%d_%H%M%S_%f")
-    if isinstance(out_path, str):
-        out_path = Path(out_path)
-    out_path = out_path.expanduser().resolve() / atk_id
 
-    config = EAF.get_config(
+    return EAF.create(
         class_id=atk_id,
         model=model,
         device=device,
         task=Task.Classification,
         **atk_config
     )
-    return EAF.get_info(atk_id).class_type(
-        config=config,
-        logger=PyTorchCheckpointLogger(path=out_path, states=["generate"]),
-    )
 
 
 def evaluate_attack(
-        dataloader: torch.utils.data.DataLoader,
+        dataloader: DataLoader,
         model: ModelAdapter,
         attack: EvasionAttack | dict,
         statistics: StatisticComposer,
         device: torch.device,
         verbose: bool = False,
-        output_path: Optional[str | Path] = None
+        output_path: Optional[str | Path] = None,
+        save_variables: Optional[list[str]] = None,
+        max_saved_elements: Optional[int | dict[str, int]] = 1,
 ) -> JobResult:
     """
     Evaluate the model's vulnerability on the attack that is passed.
@@ -79,6 +74,12 @@ def evaluate_attack(
             statistics: The statistic composer that computes all the metrics that are required
             verbose
             device: device where the computation will be done
+            save_variables: Variables to save in the PyTorch checkpoint. Supported aliases include
+                ``x``/``original_input`` and ``res``/``x_adv``.
+            max_saved_elements: Optional maximum number of elements to save for each variable.
+                Pass an integer for the same limit on every variable, or a dict keyed by variable name.
+                The default preserves the current behavior of saving one element. Pass ``None`` to save all.
+            output_path:
     """
 
     ### PREPARE EXECUTION ###
@@ -92,6 +93,23 @@ def evaluate_attack(
         )
         close_logger = isinstance(getattr(attack, "logger", None), PyTorchCheckpointLogger)
 
+    if output_path is None:
+        output_path = Path("./tmp") / datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+    if isinstance(output_path, str):
+        output_path = Path(output_path)
+
+    output_path = output_path.expanduser().resolve() / attack.__class__.__name__.lower().removesuffix("attack")
+
+    logger: PyTorchCheckpointLogger = PyTorchCheckpointLogger(
+        path=output_path,
+        max_artifact={
+            "original_input": 5,
+            "adversarial_input": 5
+        }
+    )
+
+    save_variables = save_variables if save_variables is not None else ["original_input", "res"]
+    saved_counts: dict[str, int] = {name: 0 for name in save_variables}
     try:
         atk_id: str = attack.__class__.__name__.lower().removesuffix("attack")
 
@@ -114,6 +132,17 @@ def evaluate_attack(
                 x=batch,
                 y=target
             ).detach()
+
+            if isinstance(getattr(attack, "logger", None), PyTorchCheckpointLogger):
+                for b in range(batch.shape[0]):
+                    logger.log(
+                        tag="original_input",
+                        data=batch[b],
+                    )
+                    logger.log(
+                        tag="adversarial_input",
+                        data=batch[b],
+                    )
             ##############################################################
 
             with torch.no_grad():
