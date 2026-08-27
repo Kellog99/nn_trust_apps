@@ -58,7 +58,6 @@ def get_info(
         ),
 ) -> list[ModelInfo] | list[DatasetInfo] | list[ModelReportProps] | list[DatasetReportProps]:
     """Get all models/datasets/reports under `repo_path` matching `tasks`."""
-    print("entered")
     if isinstance(repo_path, str):
         repo_path: Path = Path(repo_path).expanduser()
     if not repo_path.exists():
@@ -93,7 +92,6 @@ def get_info(
             task = _extract_task(model_type, item)
             if task_filter is None or task in task_filter:
                 out.append(item)
-
     return out
 
 
