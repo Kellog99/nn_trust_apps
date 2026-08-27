@@ -5,6 +5,7 @@ from pydantic import BaseModel, Field, model_validator, field_validator
 
 from nn_trust import Task
 
+TIMM_MODELS = frozenset(timm.list_models())
 
 class Info(BaseModel):
     """
@@ -66,6 +67,8 @@ class Info(BaseModel):
     )
 
 class DatasetInfo(Info):
+    type: Literal["dataset"] = "dataset"
+
     num_samples: Optional[int] = Field(
         default=None,
         title="Number of Samples",
@@ -96,6 +99,7 @@ class Transformation(BaseModel):
 
 
 MODEL_TYPES = Literal[
+    "Ollama",
     "plain",
     "timm",
     "HuggingFace",
@@ -107,6 +111,8 @@ MODEL_TYPES = Literal[
 
 
 class ModelInfo(Info):
+    type: Literal["model"] = "model"
+    
     dataset: Optional[str] = Field(
         default=None,
         title="Dataset",
@@ -133,7 +139,7 @@ class ModelInfo(Info):
         title="API",
         description="If the model type is an API then this provide the information to use it."
     )
-    type: MODEL_TYPES = Field(
+    model_type: MODEL_TYPES = Field(
         default="plain",
         title="Source Library",
         description="Library where the model has been taken from.",
@@ -146,9 +152,18 @@ class ModelInfo(Info):
         """
         Validates the existence of timm model.
         """
-        if self.type == "timm":
-            if self.name not in timm.list_models() and self.id not in timm.list_models():
+        if self.model_type == "timm":
+            if self.id not in TIMM_MODELS:
                 raise ValueError(
-                    f"You are trying to use a model, {self.name}, from the library {self.type} but it doesn't exists."
+                    f"You are trying to use a model, {self.id}, from the library {self.model_type} but it doesn't exists."
                 )
+        elif self.model_type == "HuggingFace" and "/" not in self.id:
+            raise ValueError(
+                "HuggingFace models should have an id like 'owner/model'"
+            )
+        elif self.model_type == "Ollama" and "/" in self.id:
+            raise ValueError(
+                "Ollama models should have an id without '/', e.g. 'llama3:8b-instruct'"
+            )
+
         return self

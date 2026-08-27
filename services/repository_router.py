@@ -2,10 +2,10 @@ import json
 import os
 from pathlib import Path
 from pprint import pprint
-from typing import Literal
+from typing import Literal, Union, Annotated
 
 from fastapi import APIRouter, Query, Depends, Request, Body, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, TypeAdapter
 
 from models import config_field, ModelReportProps, DatasetReportProps, ModelInfo, DatasetInfo
 
@@ -15,6 +15,12 @@ router = APIRouter(prefix="/repository")
 def get_path(request: Request, repo_path: str = Query(...)):
     config_func = config_field(attr_name=repo_path)
     return config_func(request)
+
+# Define the discriminated union
+InfoUnion = Annotated[
+    Union[DatasetInfo, ModelInfo, ModelReportProps, DatasetReportProps],
+    Field(discriminator='type')
+]
 
 
 _MODEL_MAP = {
@@ -31,7 +37,15 @@ def _extract_task(model_type: str, info) -> str:
     return info.task
 
 
-@router.get("/getList")
+@router.get(
+    "/getList",
+    response_model=Union[
+        list[ModelInfo],
+        list[DatasetInfo],
+        list[ModelReportProps],
+        list[DatasetReportProps]
+    ]
+)
 def get_info(
         tasks: list[str] | None = Query(
             default=None,
@@ -44,6 +58,7 @@ def get_info(
         ),
 ) -> list[ModelInfo] | list[DatasetInfo] | list[ModelReportProps] | list[DatasetReportProps]:
     """Get all models/datasets/reports under `repo_path` matching `tasks`."""
+    print("entered")
     if isinstance(repo_path, str):
         repo_path: Path = Path(repo_path).expanduser()
     if not repo_path.exists():
@@ -58,7 +73,6 @@ def get_info(
     out = []
     for root, _, files in os.walk(repo_path):
         for file in files:
-            print(file)
             # The goal is to extract only those files that are a json file
             if not file.endswith("json"):
                 continue
@@ -70,15 +84,14 @@ def get_info(
             if model_type in ("model", "dataset") and not raw.get("id"):
                 raw["id"] = Path(root).name
 
-            pprint(raw)
             try:
-                item = model_cls.model_validate(raw)
+                # item = model_cls.model_validate(raw)
+                item = TypeAdapter(InfoUnion).validate_python(raw)
             except:
                 continue
 
             task = _extract_task(model_type, item)
             if task_filter is None or task in task_filter:
-                print("append")
                 out.append(item)
 
     return out
