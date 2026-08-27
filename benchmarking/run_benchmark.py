@@ -2,7 +2,6 @@ import json
 from datetime import datetime
 from logging import Logger
 from pathlib import Path
-from pprint import pprint
 from typing import List, Optional
 
 import torch
@@ -77,10 +76,12 @@ def run_benchmark(
 
     # Define an execution strategy for the benchmark at hand i.e. create an executor instance
     device: torch.device = torch.device("cuda" if torch.cuda.is_available() and options.gpu else "cpu")
+    output_path: str = options.output_path + f"/{datetime.now().strftime('%Y%m%dT%H%M%S')}"
+
     executor = BenchmarkExecutor(
         verbose=options.verbose,
         benchmark_id=benchmark_id,
-        root_path=options.output_path,
+        root_path=output_path,
         use_ray=options.use_ray,
     )
     list_reports: list[ModelReportProps] = []
@@ -125,7 +126,6 @@ def run_benchmark(
                 }
                 for metric in metrics if metric.get("id") in SF.get_list_classes(task={task})
             ]
-            print([metric["id"] for metric in metrics])
             statistics_composer = StatisticComposer(
                 statistics=metrics,
                 device=device
@@ -137,7 +137,8 @@ def run_benchmark(
                 dataloader=dataloader,
                 attacks=attacks,
                 statistics=statistics_composer,
-                device=device
+                device=device,
+                output_path=output_path
             )
             global_metrics: dict = statistics_composer.compute_aggregator()
 
@@ -154,7 +155,6 @@ def run_benchmark(
                 })
             metrics["num_samples"]: int = len(dataloader.dataset)
             global_metrics.update(metrics)
-            pprint(global_metrics)
             # Here, for sure, the results dictionary does not have the "identity baseline" key
             model_report = ModelReportProps(
                 info=model_cnf,
@@ -163,7 +163,7 @@ def run_benchmark(
             )
             list_reports.append(model_report)
             output_path: Path = Path(
-                options.output_path).expanduser().resolve() / f"{model_cnf.id}/{dataset_cnf.id}"
+                output_path).expanduser().resolve() / f"{model_cnf.id}/{dataset_cnf.id}"
             output_path.mkdir(parents=True, exist_ok=True)
             with open(output_path / "report.json", "a") as f:
                 json.dump(model_report.model_dump(), f)

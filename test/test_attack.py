@@ -6,14 +6,7 @@ from PIL.Image import Image
 from nn_trust import CVModelAdapter, Task, AttackObjective
 from nn_trust.attack import AttackFactory as AF, EvasionAttack
 from services.utils.attack import single_attack_performance
-from test.utils.utils import get_dog_image, get_dummy_cv_model
-
-
-def available_devices():
-    devices = [torch.device("cpu")]
-    if torch.cuda.is_available():
-        devices.append(torch.device("cuda"))
-    return devices
+from test.utils import get_dummy_cv_model, available_devices, get_dog_image
 
 
 @pytest.mark.parametrize("model", [get_dummy_cv_model()])

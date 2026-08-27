@@ -4,7 +4,7 @@ models:
 datasets:
   - name: "imagenet"
     num_classes: 1000
-    batch_size: 40
+    batch_size: 20
     type_dataset: 1
     num_workers: 2
     source_path: "~/Desktop/StableAI/dataset_repository/imagenette2/"
