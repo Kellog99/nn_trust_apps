@@ -10,7 +10,7 @@ from tqdm import tqdm
 from benchmarking.utils import evaluate_attack
 from models import JobResult
 from models.reports import ReportAttackProps, AttackMetricsProps, ParameterLog
-from nn_trust import StatisticComposer, ModelAdapter
+from nn_trust import StatisticComposer, ModelAdapter, Task
 
 
 class BenchmarkExecutor:

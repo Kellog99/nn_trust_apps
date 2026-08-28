@@ -13,7 +13,8 @@ from utils._loaders import (
     _load_huggingface,
     _load_model_weights,
     _load_torch_dynamo,
-    _load_torch_script
+    _load_torch_script,
+    _load_ultralytics
 )
 
 _LOADERS: dict[str, Callable[..., CVModelAdapter]] = {
@@ -25,6 +26,7 @@ _LOADERS: dict[str, Callable[..., CVModelAdapter]] = {
     "onnx": _load_onnx,
     "api": _load_api,
     "huggingface": _load_huggingface,
+    "ultralytics": _load_ultralytics,
 }
 
 

@@ -62,7 +62,10 @@ def run_benchmark(
     ##### 1.2 Models
     # Filtering the attacks
     attacks: list[dict] = [
-        attack
+        {
+            **attack,
+            "targeted": attack.get("targeted", options.targeted), # passing option targeted to attacks
+        }
         for attack in attacks
         if attack.get("id", None) in AF.get_list_classes()
     ]
@@ -105,7 +108,8 @@ def run_benchmark(
                 subset=options.subset,
                 transform=transform,
                 num_workers=dataset_cnf.num_workers,
-                name=dataset_cnf.name
+                name=dataset_cnf.name,
+                task=task
             )
             #################### Defining the Statistic Composer ####################
             num_classes = model_cnf.num_classes
@@ -119,6 +123,7 @@ def run_benchmark(
             metrics: list[dict] = [
                 {
                     **metric,
+                    "targeted": metric.get("targeted", options.targeted), # passing option targeted to metrics
                     "model": model,
                     "device": options.gpu,
                     "num_classes": num_classes,
@@ -165,7 +170,7 @@ def run_benchmark(
             output_path: Path = Path(
                 options.output_path).expanduser().resolve() / f"{model_cnf.id}/{dataset_cnf.id}"
             output_path.mkdir(parents=True, exist_ok=True)
-            with open(output_path / "report.json", "a") as f:
+            with open(output_path / "report.json", "w") as f:
                 json.dump(model_report.model_dump(), f)
             ######### saving the results #########
             if log:

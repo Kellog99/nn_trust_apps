@@ -12,13 +12,14 @@ from models import JobResult, ParametersProps
 from models.reports import ParameterLog
 from nn_trust import ModelAdapter, StatisticComposer, LossComposer, AttackFactory as EAF, Task
 from nn_trust.attack import EvasionAttack
-from nn_trust.target import AvoidOnehotTarget
+from nn_trust.attack.detection_utils import nms
 
 
 def _create_atk(
         attack: dict,
         model: ModelAdapter,
         device: torch.device,
+        task: Task
 ) -> EvasionAttack:
     atk_id: str = attack.get("id", None) or attack.get("name", None)
     if atk_id is None:
@@ -45,7 +46,7 @@ def _create_atk(
         class_id=atk_id,
         model=model,
         device=device,
-        task=Task.Classification,
+        task=model.task,
         **atk_config
     )
 
@@ -71,19 +72,21 @@ def evaluate_attack(
             verbose
             device: device where the computation will be done
     """
+    task = model.task
 
     ### PREPARE EXECUTION ###
     if isinstance(attack, dict):
         attack = _create_atk(
             attack=attack,
             model=model,
-            device=device
+            device=device,
+            task=task
         )
 
     atk_id: str = attack.__class__.__name__.lower().removesuffix("attack")
 
-    batch, _ = next(iter(dataloader))
-    num_classes: int = model(batch.to(device)).shape[-1]
+    #batch, _ = next(iter(dataloader))
+    #num_classes: int = model(batch.to(device)).shape[-1]
     if verbose:
         progress_bar = enumerate(tqdm(dataloader, desc=f"Attack {repr(attack)} for model {model.name}"))
     else:
@@ -91,50 +94,127 @@ def evaluate_attack(
 
     for idx, (batch, label) in progress_bar:
 
-        batch = batch.to(device)
-        label = label.to(device)
+        y_target = None
+        match task:
+            case Task.Detection:
+                batch = torch.stack(batch).to(device)
 
-        target = AvoidOnehotTarget(num_classes=num_classes)(label.tolist()).to(batch.device)
+                label = [
+                    {
+                        "boxes": label_["boxes"].to(device),
+                        "labels": label_["labels"].to(device),
+                    }
+                    for label_ in label
+                ]
 
-        ############## Generating the adversarial image ##############
-        x_adv = attack.generate(
-            x=batch,
-            y=target
-        ).detach()
-        ##############################################################
+                with torch.no_grad():
+                    out = model(batch)
 
-        with torch.no_grad():
-            out = model(batch)
-            out_adv = model(x_adv)
+                boxes, scores = out
+                num_classes = scores.shape[-1]
 
-        y_pred_adv = out_adv.argmax(dim=-1)
-        y_pred = out.argmax(dim=-1)
+                iou_threshold = attack.config.iou_threshold_targeted
+                score_threshold = attack.config.score_threshold_targeted
+                targeted = attack.config.targeted
+                label_target = attack.config.label_target
 
-        # adapt metrics counting for reference or standard attack
-        correct_mask = torch.eq(label, y_pred)
-        if atk_id == "reference":
-            y_pred = label
+                x_adv = attack.generate(x=batch, y=out)
 
-        elif torch.any(correct_mask):
-            if not torch.all(correct_mask):
-                label = label[correct_mask]
-                x_adv = x_adv[correct_mask]
-                batch = batch[correct_mask]
-                out = out[correct_mask]
-                out_adv = out_adv[correct_mask]
-                y_pred = y_pred[correct_mask]
-                y_pred_adv = y_pred_adv[correct_mask]
+                with torch.no_grad():
+                    out_adv = model(x_adv)
 
-        else:
-            continue  # skip iteration, no statistic update for this batch
+                # apply nms on predictions from original images
+                # We give a high iou_threshold and low score_threshold so that we give as many scores as possible to coreectly compute map
+                boxes, scores = out
+                post_nms_preds = nms(
+                    {
+                    "boxes": boxes,
+                    "scores": scores.max(dim=-1).values,
+                    "cls_scores": scores,
+                    },
+                iou_threshold=iou_threshold, # compare one reference predicted bounding box with the other predicted bounding boxes. If the IoU between the two boxes is over the threshold, discards the box with the lower score. Ones all the remaining boxes are compared, we select the next reference box. As such, increasing the threshold increases the nubmer of final predicted bounding boxes by the model, because less boxes are discarded
+                score_threshold=score_threshold, # filter out all the predicted bounding boxes whose score is below the threshold. As such, increaidng the threshold increases the number of final predicted bounding boxes, because less boxes are discarded
+                )
+
+                # convert post_nms_preds to targets for metrics
+                y_pred = [
+                {
+                    "boxes": pred["boxes"],
+                    "labels": pred["labels"],
+                }
+                for pred in post_nms_preds    
+                ]
+                
+                # convert post_nms_preds to the desired targets for metrics
+                if targeted == True:
+                    target_class = (label_target + 1) % num_classes
+
+                    y_target = [
+                    {
+                        "boxes": pred["boxes"],
+                        "labels": torch.where(
+                            pred["labels"] == label_target, # the condition to satisfy
+                            torch.full_like(pred["labels"], target_class), # insert the target_class where the condition is satisfied
+                            pred["labels"], # insert the original pred["labels"] values where the condition is not satisfied
+                        ),
+                    }
+                    for pred in post_nms_preds
+                    ]
+                else:
+                    y_target = y_pred
+
+                # apply nms on predictions from adversarial images
+                # We give a high iou_threshold and low score_threshold so that we give as many scores as possible to coreectly compute map
+                adv_boxes, adv_scores = out_adv
+                y_pred_adv = nms(
+                    {
+                        "boxes": adv_boxes,
+                        "scores": adv_scores.max(dim=-1).values,
+                        "cls_scores": adv_scores,
+                    },
+                    iou_threshold=iou_threshold,
+                    score_threshold=score_threshold,
+                )
+
+            case Task.Classification:
+                batch = batch.to(device)
+                label = label.to(device)
+
+                with torch.no_grad():
+                    out = model(batch)
+
+                y_pred = out.argmax(dim=-1)
+                correct_mask = torch.eq(label, y_pred)
+
+                if atk_id != "identitybaseline":
+                    if not torch.any(correct_mask):
+                        continue
+
+                    batch = batch[correct_mask]
+                    label = label[correct_mask]
+                    out = out[correct_mask]
+                    y_pred = y_pred[correct_mask]
+
+                x_adv = attack.generate(x=batch, y=out.detach()).detach()
+
+                with torch.no_grad():
+                    out_adv = model(x_adv)
+
+                y_pred_adv = out_adv.argmax(dim=-1)
+
+            case _:
+                raise NotImplementedError(f"{task} not supported yet.")
+
 
         input_stat = {
             'x_adv': x_adv.detach(),
             'x': batch.detach(),
             'y': label,
-            'y_target': label,
             'y_pred': y_pred,
-            'y_pred_adv': y_pred_adv
+            'y_pred_adv': y_pred_adv,
+            'y_target': y_target,
+            'out': out,
+            'out_adv': out_adv
         }
         statistics.update(**input_stat)
 
@@ -145,7 +225,7 @@ def evaluate_attack(
         statistics.update_aggregate(metric_states)
     statistics.reset()
     atk_parameters: dict = attack.config.model_dump()
-    out = JobResult(
+    job_result = JobResult(
         id=atk_id,
         result=result,
         parameters=[
@@ -159,7 +239,7 @@ def evaluate_attack(
             if key != "model" and isinstance(atk_parameters.get(key, None), (int, float, bool))
         ],
     )
-    return out
+    return job_result
 
 
 def make_json_serializable(value):

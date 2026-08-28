@@ -1,0 +1,70 @@
+models:
+  - source_path: "benchmark_assets/models/cifar10_resnet20"
+
+datasets:
+  - source_path: "benchmark_assets/datasets/cifar10_test"
+    batch_size: 8
+    num_workers: 1
+
+attacks:
+ - id: zoo
+ - id: autozoom
+ - id: _uap
+ - id: daguap
+ - id: fuap
+ - id: fgsmuap
+ - id: boundary
+ - id: sphereprojection
+ - id: banditpriorevasion
+ - id: contrastbaselineevasion
+ - id: gaussianbaselineevasion
+ - id: saltnpeppernoisebaseline
+ - id: uniformbaselineevasion
+ - id: binaryevasion
+ - id: blackboxtransfer
+ - id: dag
+ - id: deepfool
+ - id: duevasion
+ - id: fom
+ - id: ofuapevasion
+ - id: gduapevasion
+ - id: geodaevasion
+ - id: hopskipjump
+ - id: jsm
+ - id: localsearchevasion
+ - id: parsimonious
+ - id: pgdkde
+ - id: priorgd
+ - id: signoptevasion
+ - id: simbaevasion
+ - id: simpleblackboxevasion
+
+metrics:
+  - id: accuracy
+  - id: precision
+    average_method: macro
+  - id: f1score
+    average_method: macro
+  - id: confusion_matrix
+  - id: misclassification
+  - id: robustness
+  - id: wobbliness
+  - id: expectedcalibrationerror
+  - id: ssim
+  - id: meansquarecontingency
+
+options:
+  load_results: false                 # loading any existing results.
+  overwrite: true                     # overwriting the results if a benchmarking is performed
+  num_images_to_save: 10
+  num_workers: 1
+  verbose: true
+  save_perturbation: false
+  use_ray: false
+  gpu: true
+  create_pdf: true
+  output_path: "~/Documents/Projects/StableAI/nn_trust_apps/benchmark_output"
+  targeted: false
+  subset: 100
+
+
