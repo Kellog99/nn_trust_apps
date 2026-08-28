@@ -1,3 +1,4 @@
+import datetime
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock
@@ -86,14 +87,16 @@ ATTACKS = [
 
 
 @pytest.mark.parametrize("device", available_devices())
+@pytest.mark.parametrize("max_saved_elements", [2, 3])
 def test_evaluate_attack(
         model: ModelAdapter,
         dataloader: DataLoader,
         device: torch.device,
-        tmp_path: Path = Path("./test_tmp/identitybaseline"),
+        max_saved_elements: int
 ):
-    if not tmp_path.exists():
-        tmp_path.mkdir(exist_ok=True, parents=True)
+    tmp_path: Path = Path(f"./test_tmp/{datetime.datetime.now().strftime('%Y%m%d%H%M%S')}")
+
+    checkpoint_path = tmp_path / "identitybaseline/log.pth"
 
     model.to(device)
     result = evaluate_attack(
@@ -103,18 +106,18 @@ def test_evaluate_attack(
         statistics=StatisticComposer(),
         device=device,
         output_path=tmp_path,
+        max_saved_elements=max_saved_elements
     )
+    print(checkpoint_path)
 
-    checkpoint_path = tmp_path / "identitybaseline.pth"
     assert result.id == "identitybaseline"
     assert checkpoint_path.exists()
-
     data = torch.load(str(checkpoint_path), weights_only=False)
     print(data.keys())
-    assert "generate/original_input" in data
-    assert len(data["generate/original_input"]) == len(dataloader)
-    assert data["generate/original_input"][0].shape == (1, 3, 224, 224)
-
+    assert "original_input" in data
+    assert "adversarial_input" in data
+    assert len(data["original_input"]) == max_saved_elements
+    assert len(data["adversarial_input"]) == max_saved_elements
 
 
 @pytest.mark.parametrize("device", available_devices())
