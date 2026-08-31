@@ -28,7 +28,7 @@ metrics:
 options:
   load_results: false                 # loading any existing results.
   overwrite: true                     # overwriting the results if a benchmarking is performed
-  num_images_to_save: 10
+  max_saved_elements: 10
   num_workers: 1
   verbose: true
   subset: 100

@@ -15,24 +15,6 @@ from utils import load_model, get_dataloader
 from utils.dataset_utils import get_transformation
 
 
-def resolve_repository_path(
-        repository: str | None,
-        project_root: Path
-) -> str:
-    """
-    Resolve a model or dataset repository path to an absolute path (beginning at the home directory)
-    """
-    if repository is None:
-        raise ValueError("The repository path is required.")
-
-    path = Path(repository).expanduser()
-
-    if not path.is_absolute():
-        path = project_root / path
-
-    return str(path.resolve())
-
-
 def run_benchmark(
         options: BenchmarkOptionConfig,
         models: List[ModelInfo],
@@ -60,6 +42,7 @@ def run_benchmark(
 
     ##### 1.2 Models
     # Filtering the attacks
+    attacks: list[dict] = attacks or []
     attacks: list[dict] = [
         attack
         for attack in attacks
@@ -81,8 +64,8 @@ def run_benchmark(
     executor = BenchmarkExecutor(
         verbose=options.verbose,
         benchmark_id=benchmark_id,
-        root_path=output_path,
         use_ray=options.use_ray,
+        output_path=output_path,
     )
     list_reports: list[ModelReportProps] = []
     for model_cnf in models:
@@ -116,7 +99,10 @@ def run_benchmark(
                 num_classes = out.shape[-1]
 
             if metrics is None or len(metrics) == 0:
-                metrics = [{"id": metric} for metric in SF.get_list_classes(task={task})]
+                metrics = [
+                    {"id": metric}
+                    for metric in SF.get_list_classes(task={task})
+                ]
             metrics: list[dict] = [
                 {
                     **metric,
@@ -130,7 +116,6 @@ def run_benchmark(
                 statistics=metrics,
                 device=device
             )
-
             # 3.1 Start execution
             results: dict[str, ReportAttackProps] = executor.execute_jobs(
                 model=model,
@@ -138,12 +123,9 @@ def run_benchmark(
                 attacks=attacks,
                 statistics=statistics_composer,
                 device=device,
-                output_path=output_path,
-                save_variables=options.variables_to_save,
-                max_saved_elements=options.max_saved_elements,
+                max_saved_elements=options.max_saved_elements or 1,
             )
             global_metrics: dict = statistics_composer.compute_aggregator()
-
             # Global metrics
             identity: ReportAttackProps = results.pop("identitybaseline")
             # removing the metrics that I do not want because they refer to the attack's performance
@@ -164,9 +146,7 @@ def run_benchmark(
                 attacks=results,
             )
             list_reports.append(model_report)
-            output_path: Path = Path(
-                output_path).expanduser().resolve() / f"{model_cnf.id}/{dataset_cnf.id}"
-            output_path.mkdir(parents=True, exist_ok=True)
+            output_path: Path = Path(output_path).expanduser().resolve() / f"{model_cnf.id}/{dataset_cnf.id}"
             with open(output_path / "report.json", "a") as f:
                 json.dump(model_report.model_dump(), f)
             ######### saving the results #########

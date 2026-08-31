@@ -20,7 +20,6 @@ class BenchmarkExecutor:
     def __init__(
             self,
             benchmark_id: Optional[str] = None,
-            root_path: Optional[str | Path] = None,
             verbose: bool = False,
             use_ray: bool = False,
             num_gpus_per_job: float = 0.4,
@@ -30,14 +29,14 @@ class BenchmarkExecutor:
         if benchmark_id is None:
             benchmark_id: str = datetime.now().strftime("%Y%m%d-%H%M%S")
         self.benchmark_id = benchmark_id
-        self.root_path = Path(root_path).expanduser() if isinstance(root_path, str) else root_path
 
         self.verbose = verbose
         self.device = device
-        self.output_path = output_path if output_path is not None else f"./tmp/{self.benchmark_id}"
-        if isinstance(self.output_path, str):
-            self.output_path = Path(self.output_path).expanduser().resolve()
-            self.output_path.mkdir(parents=True, exist_ok=True)
+        output_path = output_path if output_path is not None else f"./tmp/{self.benchmark_id}"
+        if isinstance(output_path, str):
+            output_path = Path(output_path).expanduser().resolve()
+            output_path.mkdir(parents=True, exist_ok=True)
+        self.output_path: Path = output_path
 
         self.use_ray = use_ray
         self.num_gpus_per_job = num_gpus_per_job
@@ -50,10 +49,9 @@ class BenchmarkExecutor:
             statistics: StatisticComposer,
             log: Optional[Logger] = None,
             device: Optional[torch.device] = None,
-            output_path: Optional[str | Path] = None,
-            save_variables: Optional[list[str]] = None,
-            max_saved_elements: Optional[int | dict[str, int]] = None,
+            max_saved_elements: int = 10,
     ) -> dict[str, ReportAttackProps]:
+
         func: Callable[..., Iterator[JobResult]] = _iter_ray if self.use_ray else _iter_local
         results_iter: Iterator[JobResult] = func(
             model=model,
@@ -61,9 +59,8 @@ class BenchmarkExecutor:
             attacks=attacks,
             statistics=statistics,
             device=device if device is not None else self.device,
-            output_path=output_path if output_path is not None else self.output_path,
-            save_variables=save_variables,
             max_saved_elements=max_saved_elements,
+            output_path=self.output_path,
             log=log,
         )
 
@@ -92,4 +89,4 @@ class BenchmarkExecutor:
 
     def __repr__(self):
         backend = "ray" if self.use_ray else "local"
-        return f"{self.__class__.__name__}(root_path={self.root_path!r}, verbose={self.verbose!r}, backend={backend!r})"
+        return f"{self.__class__.__name__}(output_path={self.output_path!r}, verbose={self.verbose!r}, backend={backend!r})"

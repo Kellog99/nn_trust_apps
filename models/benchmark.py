@@ -9,10 +9,9 @@ from models.reports import ParameterLog
 
 class BenchmarkOptionConfig(BaseModel):
     overwrite: bool = True
-    num_images_to_save: int = 10
     save_perturbation: bool = True
     variables_to_save: list[str] = Field(default_factory=lambda: ["original_input", "res"])
-    max_saved_elements: Optional[int | dict[str, int]] = None
+    max_saved_elements: Optional[int] = None
     verbose: bool = True
     subset: Optional[int] = None
     gpu: bool = True
