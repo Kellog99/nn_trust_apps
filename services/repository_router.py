@@ -76,8 +76,11 @@ def get_info(
             if not file.endswith("json"):
                 continue
             full_path = Path(root) / file
-            with open(full_path) as f:
-                raw = json.load(f)
+            try:
+                with open(full_path, "r", encoding="utf-8") as f:
+                    raw = json.load(f)
+            except (json.JSONDecodeError, OSError):
+                continue
 
             raw["repository"] = root
             if model_type in ("model", "dataset") and not raw.get("id"):
