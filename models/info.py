@@ -99,6 +99,7 @@ MODEL_TYPES = Literal[
     "model_weights",
     "plain",
     "timm",
+    "model_weights",
     "HuggingFace",
     "torch_script",
     "torch_dynamo",

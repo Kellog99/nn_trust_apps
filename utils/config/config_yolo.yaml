@@ -3,42 +3,42 @@ models:
 
 datasets:
   - source_path: "benchmark_assets/datasets/coco_val2017"
-    batch_size: 1
+    batch_size: 8
     num_workers: 1
 
 attacks:
- - id: zoo
- - id: autozoom
- - id: _uap
- - id: daguap
- - id: fuap
- - id: fgsmuap
- - id: boundary
- - id: sphereprojection
- - id: advyoloevasion
- - id: banditpriorevasion
- - id: contrastbaselineevasion
- - id: gaussianbaselineevasion
- - id: saltnpeppernoisebaseline
- - id: uniformbaselineevasion
- - id: binaryevasion
- - id: blackboxtransfer
+# - id: zoo
+# - id: autozoom
+# - id: _uap
+# - id: daguap
+# - id: fuap
+# - id: fgsmuap
+# - id: boundary
+# - id: sphereprojection
+# - id: advyoloevasion
+# - id: banditpriorevasion
+# - id: contrastbaselineevasion
+# - id: gaussianbaselineevasion
+# - id: saltnpeppernoisebaseline
+# - id: uniformbaselineevasion
+# - id: binaryevasion
+# - id: blackboxtransfer
  - id: dag
- - id: deepfool
- - id: duevasion
- - id: fom
- - id: ofuapevasion
- - id: gduapevasion
- - id: geodaevasion
- - id: hopskipjump
- - id: jsm
- - id: localsearchevasion
- - id: parsimonious
- - id: pgdkde
- - id: priorgd
- - id: signoptevasion
- - id: simbaevasion
- - id: simpleblackboxevasion
+# - id: deepfool
+# - id: duevasion
+# - id: fom
+# - id: ofuapevasion
+# - id: gduapevasion
+# - id: geodaevasion
+# - id: hopskipjump
+# - id: jsm
+# - id: localsearchevasion
+# - id: parsimonious
+# - id: pgdkde
+# - id: priorgd
+# - id: signoptevasion
+# - id: simbaevasion
+# - id: simpleblackboxevasion
 
 
 metrics:
@@ -52,7 +52,7 @@ metrics:
 options:
   load_results: false                 # loading any existing results.
   overwrite: true                     # overwriting the results if a benchmarking is performed
-  num_images_to_save: 10
+  max_saved_elements: 10
   num_workers: 1
   verbose: true
   save_perturbation: false
@@ -60,5 +60,5 @@ options:
   gpu: true
   create_pdf: true
   output_path: "~/Documents/Projects/StableAI/nn_trust_apps/benchmark_output"
-  targeted: false
-  subset: 10
+  targeted: true
+  subset: 100
