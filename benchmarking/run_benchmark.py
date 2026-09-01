@@ -153,6 +153,7 @@ def run_benchmark(
             list_reports.append(model_report)
 
             output_path: Path = Path(output_path).expanduser().resolve() / f"{model_cnf.id}/{dataset_cnf.id}"
+            output_path.mkdir(parents=True, exist_ok=True)
             with open(output_path / "report.json", "w") as f:
                 json.dump(model_report.model_dump(), f)
             ######### saving the results #########

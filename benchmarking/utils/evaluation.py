@@ -10,7 +10,7 @@ from tqdm.auto import tqdm
 from benchmarking.utils.attack import _create_atk
 from models import JobResult
 from models.reports import ParameterLog
-from nn_trust import ModelAdapter, StatisticComposer
+from nn_trust import ModelAdapter, StatisticComposer, Task
 from nn_trust.attack import EvasionAttack
 from nn_trust.utils import PyTorchCheckpointLogger
 
@@ -108,11 +108,6 @@ def evaluate_attack(
 
                 x_adv = attack.generate(x=batch, y=out).detach()
 
-                for b in range(batch.shape[0]):
-                    logger.log(tag="original_input", data=batch[b])
-                    logger.log(tag="adversarial_input", data=x_adv[b])
-
-
                 boxes, scores = out
                 num_classes = scores.shape[-1]
 
@@ -143,6 +138,8 @@ def evaluate_attack(
                 {
                     "boxes": pred["boxes"],
                     "labels": pred["labels"],
+                    "scores": pred["scores"],
+                    "cls_scores": pred["cls_scores"],
                 }
                 for pred in post_nms_preds    
                 ]
@@ -206,6 +203,12 @@ def evaluate_attack(
 
             case _:
                 raise NotImplementedError(f"{task} not supported yet.")
+
+        for b in range(batch.shape[0]):
+                logger.log(tag="original_input", data=batch[b])
+                logger.log(tag="adversarial_input", data=x_adv[b])
+                logger.log(tag="original_prediction", data=y_pred[b])
+                logger.log(tag="adversarial_prediction", data=y_pred_adv[b])
 
 
         input_stat = {
