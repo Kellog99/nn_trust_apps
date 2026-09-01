@@ -2,7 +2,6 @@ import json
 from datetime import datetime
 from logging import Logger
 from pathlib import Path
-from pprint import pprint
 from typing import List, Optional
 
 import torch
@@ -14,24 +13,6 @@ from models.reports import ReportMetricsProps, ReportAttackProps
 from nn_trust import AttackFactory as AF, StatisticComposer, StatisticsFactory as SF, ModelAdapter, Task
 from utils import load_model, get_dataloader
 from utils.dataset_utils import get_transformation
-
-
-def resolve_repository_path(
-        repository: str | None,
-        project_root: Path
-) -> str:
-    """
-    Resolve a model or dataset repository path to an absolute path (beginning at the home directory)
-    """
-    if repository is None:
-        raise ValueError("The repository path is required.")
-
-    path = Path(repository).expanduser()
-
-    if not path.is_absolute():
-        path = project_root / path
-
-    return str(path.resolve())
 
 
 def run_benchmark(
@@ -61,6 +42,7 @@ def run_benchmark(
 
     ##### 1.2 Models
     # Filtering the attacks
+    attacks: list[dict] = attacks or []
     attacks: list[dict] = [
         {
             **attack,
@@ -80,11 +62,13 @@ def run_benchmark(
 
     # Define an execution strategy for the benchmark at hand i.e. create an executor instance
     device: torch.device = torch.device("cuda" if torch.cuda.is_available() and options.gpu else "cpu")
+    output_path: str = options.output_path + f"/{datetime.now().strftime('%Y%m%dT%H%M%S')}"
+
     executor = BenchmarkExecutor(
         verbose=options.verbose,
         benchmark_id=benchmark_id,
-        root_path=options.output_path,
         use_ray=options.use_ray,
+        output_path=output_path,
     )
     list_reports: list[ModelReportProps] = []
     for model_cnf in models:
@@ -119,7 +103,10 @@ def run_benchmark(
                 num_classes = out.shape[-1]
 
             if metrics is None or len(metrics) == 0:
-                metrics = [{"id": metric} for metric in SF.get_list_classes(task={task})]
+                metrics = [
+                    {"id": metric}
+                    for metric in SF.get_list_classes(task={task})
+                ]
             metrics: list[dict] = [
                 {
                     **metric,
@@ -130,22 +117,20 @@ def run_benchmark(
                 }
                 for metric in metrics if metric.get("id") in SF.get_list_classes(task={task})
             ]
-            print([metric["id"] for metric in metrics])
             statistics_composer = StatisticComposer(
                 statistics=metrics,
                 device=device
             )
-
             # 3.1 Start execution
             results: dict[str, ReportAttackProps] = executor.execute_jobs(
                 model=model,
                 dataloader=dataloader,
                 attacks=attacks,
                 statistics=statistics_composer,
-                device=device
+                device=device,
+                max_saved_elements=options.max_saved_elements or 1,
             )
             global_metrics: dict = statistics_composer.compute_aggregator()
-
             # Global metrics
             identity: ReportAttackProps = results.pop("identitybaseline")
             # removing the metrics that I do not want because they refer to the attack's performance
@@ -159,7 +144,6 @@ def run_benchmark(
                 })
             metrics["num_samples"]: int = len(dataloader.dataset)
             global_metrics.update(metrics)
-            pprint(global_metrics)
             # Here, for sure, the results dictionary does not have the "identity baseline" key
             model_report = ModelReportProps(
                 info=model_cnf,
@@ -167,9 +151,8 @@ def run_benchmark(
                 attacks=results,
             )
             list_reports.append(model_report)
-            output_path: Path = Path(
-                options.output_path).expanduser().resolve() / f"{model_cnf.id}/{dataset_cnf.id}"
-            output_path.mkdir(parents=True, exist_ok=True)
+
+            output_path: Path = Path(output_path).expanduser().resolve() / f"{model_cnf.id}/{dataset_cnf.id}"
             with open(output_path / "report.json", "w") as f:
                 json.dump(model_report.model_dump(), f)
             ######### saving the results #########
