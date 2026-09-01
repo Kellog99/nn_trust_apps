@@ -1,7 +1,6 @@
 import json
 import os
 from pathlib import Path
-from pprint import pprint
 from typing import Literal
 
 from fastapi import APIRouter, Query, Depends, Request, Body, HTTPException
@@ -58,7 +57,6 @@ def get_info(
     out = []
     for root, _, files in os.walk(repo_path):
         for file in files:
-            print(file)
             # The goal is to extract only those files that are a json file
             if not file.endswith("json"):
                 continue
@@ -69,8 +67,6 @@ def get_info(
             raw["repository"] = root
             if model_type in ("model", "dataset") and not raw.get("id"):
                 raw["id"] = Path(root).name
-
-            pprint(raw)
             try:
                 item = model_cls.model_validate(raw)
             except:
@@ -78,7 +74,6 @@ def get_info(
 
             task = _extract_task(model_type, item)
             if task_filter is None or task in task_filter:
-                print("append")
                 out.append(item)
 
     return out
