@@ -47,7 +47,7 @@ def get_attacks_info(
     List all available attacks for classification.
     """
     out: dict[str, RegisteredObject] = {}
-    for atk in AF.get_list_classes(task={Task.Classification}):
+    for atk in AF.get_list_classes(task={Task.Classification, Task.Language}):
         if atk in excluded_attacks:
             continue
         info = AttackInfo.model_validate(AF.get_information(id=atk, exclude=set()))

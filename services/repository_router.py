@@ -1,10 +1,11 @@
 import json
 import os
 from pathlib import Path
-from typing import Literal
+from pprint import pprint
+from typing import Literal, Union, Annotated
 
 from fastapi import APIRouter, Query, Depends, Request, Body, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, TypeAdapter
 
 from models import config_field, ModelReportProps, DatasetReportProps, ModelInfo, DatasetInfo
 
@@ -14,6 +15,12 @@ router = APIRouter(prefix="/repository")
 def get_path(request: Request, repo_path: str = Query(...)):
     config_func = config_field(attr_name=repo_path)
     return config_func(request)
+
+# Define the discriminated union
+InfoUnion = Annotated[
+    Union[DatasetInfo, ModelInfo, ModelReportProps, DatasetReportProps],
+    Field(discriminator='type')
+]
 
 
 _MODEL_MAP = {
@@ -30,7 +37,15 @@ def _extract_task(model_type: str, info) -> str:
     return info.task
 
 
-@router.get("/getList")
+@router.get(
+    "/getList",
+    response_model=Union[
+        list[ModelInfo],
+        list[DatasetInfo],
+        list[ModelReportProps],
+        list[DatasetReportProps]
+    ]
+)
 def get_info(
         tasks: list[str] | None = Query(
             default=None,
@@ -61,21 +76,24 @@ def get_info(
             if not file.endswith("json"):
                 continue
             full_path = Path(root) / file
-            with open(full_path) as f:
-                raw = json.load(f)
+            try:
+                with open(full_path, "r", encoding="utf-8") as f:
+                    raw = json.load(f)
+            except (json.JSONDecodeError, OSError):
+                continue
 
             raw["repository"] = root
             if model_type in ("model", "dataset") and not raw.get("id"):
                 raw["id"] = Path(root).name
             try:
-                item = model_cls.model_validate(raw)
+                # item = model_cls.model_validate(raw)
+                item = TypeAdapter(InfoUnion).validate_python(raw)
             except:
                 continue
 
             task = _extract_task(model_type, item)
             if task_filter is None or task in task_filter:
                 out.append(item)
-
     return out
 
 

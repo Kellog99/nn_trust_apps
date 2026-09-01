@@ -2,9 +2,11 @@ from pathlib import Path
 from typing import Callable, Optional
 
 import torch
+from transformers import AutoModelForCausalLM, AutoTokenizer
 
 from models.info import MODEL_TYPES
-from nn_trust import CVModelAdapter, Task
+from nn_trust import CVModelAdapter, Task, Knowledge
+from nn_trust.attack.nlp.adapters import HuggingFaceNLPAdapter, OllamaNLPAdapter
 from utils._loaders import (
     _load_plain,
     _load_api,
@@ -41,7 +43,9 @@ def load_model(
 ):
     r"""
     Load a model from disk and wrap it into the shared `CVModelAdapter`
-    interface, supporting multiple serialization formats.
+    interface, supporting multiple serialization formats. LLM models are
+    wrapped into the `NLPModelAdapter` subclasses `HuggingFaceNLPAdapter`
+    (HuggingFace causal LM) or `OllamaNLPAdapter` (remote Ollama API).
 
     Args:
         model_id
@@ -55,8 +59,40 @@ def load_model(
             `info.json` (e.g. `num_classes=`, `task=`).
 
     Returns:
-        CVModelAdapter: A unified adapter wrapping the loaded model.
+        CVModelAdapter | NLPModelAdapter: A unified adapter wrapping the
+        loaded model.
     """
+    # ── LLM loading (NLP adapters) ───────────────────────────────────────
+    # Ollama models are always remote LLMs and never go through the CV path.
+    if model_type == "Ollama":
+        if model_id is None:
+            raise ValueError("model_id is required for Ollama models.")
+        return OllamaNLPAdapter(
+            model_id=model_id,
+            base_url=api_url or "http://localhost:11434",
+            name=model_id,
+            **kwargs,
+        )
+
+    # HuggingFace can be a CV model (local checkpoint via the CV path below)
+    # or an LLM (hub causal LM). Ambiguity is resolved by task: a Language
+    # task selects the HuggingFaceNLPAdapter; anything else falls through to
+    # the unchanged CV `_load_huggingface` path.
+    _task = Task.from_str(task) if isinstance(task, str) else task
+    if model_type == "HuggingFace" and _task == Task.Language:
+        if model_id is None:
+            raise ValueError("model_id is required for HuggingFace LLMs.")
+        llm = AutoModelForCausalLM.from_pretrained(model_id)
+        tok = AutoTokenizer.from_pretrained(model_id)
+        return HuggingFaceNLPAdapter(
+            model=llm,
+            tokenizer=tok,
+            name=model_id,
+            threat_model=Knowledge.White,
+            task=Task.Language,
+            **kwargs,
+        )
+
     if model_path is None:
         raise ValueError("model_path is required if not using remote repos.")
 
