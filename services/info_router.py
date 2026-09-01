@@ -1,18 +1,19 @@
+import inspect
 import logging
-from typing import Literal, get_origin
 
 import torch
 from fastapi import APIRouter, HTTPException, Request, Depends, Body
 
-from models.model import RegisteredObject
-from models import ServerConfig, SharableVariables, config_field
-from services.utils.utils import get_parameter_prop
 from benchmarking.privacy.contracts import get_privacy_dataset_factory
 from benchmarking.privacy.model_registry import AppPrivacyModelFactory
-from nn_trust.attack.attack_factory import AttackFactory, AttackInfo
-from nn_trust.core import Task
-from nn_trust.evaluation.statistic_factory import StatisticsFactory as SF, InfoStatistic
+from models import ServerConfig, SharableVariables, config_field, ParametersProps
+from models.model import RegisteredObject
+from nn_trust import Task, AttackFactory as AF, StatisticsFactory as SF
+from nn_trust.attack.attack_factory import AttackInfo
+from nn_trust.evaluation.statistic_factory import InfoStatistic
 from nn_trust.utils import get_default_model_factory
+from services.utils.statistics import extract_numeric_param
+from services.utils.utils import get_parameter_prop
 
 router = APIRouter(prefix="/info")
 
@@ -24,17 +25,17 @@ def _str_enum(v) -> str | None:
     return str(v.value) if hasattr(v, "value") else str(v)
 
 
-def _collect_params(atk: str) -> list:
+def _collect_params(atk: str) -> list[ParametersProps]:
+    """
+    Collecting all the parameters that are (int, float, str) and returning a list of ParametersProp
+    """
     params = []
     seen: set[str] = set()
-    for type_filter in ((int, float, str), None):
-        for pid, pinfo in AttackFactory.get_config_param(atk, type_filter):
-            if pid in seen:
-                continue
-            seen.add(pid)
-            if type_filter is None and get_origin(pinfo.annotation) is not Literal:
-                continue
-            params.append(get_parameter_prop(id=pid, param_info=pinfo))
+    for pid, pinfo in AF.get_config_param(atk, attribute_type=(int, float, str)):
+        if pid in seen:
+            continue
+        seen.add(pid)
+        params.append(get_parameter_prop(id=pid, param_info=pinfo))
     return params
 
 
@@ -46,10 +47,10 @@ def get_attacks_info(
     List all available attacks for classification.
     """
     out: dict[str, RegisteredObject] = {}
-    for atk in AttackFactory.get_list_classes(task={Task.Classification, Task.Language}):
+    for atk in AF.get_list_classes(task={Task.Classification, Task.Language}):
         if atk in excluded_attacks:
             continue
-        info = AttackInfo.model_validate(AttackFactory.get_information(id=atk, exclude=set()))
+        info = AttackInfo.model_validate(AF.get_information(id=atk, exclude=set()))
         out[atk] = RegisteredObject(
             id=info.id,
             name=info.name,
@@ -81,14 +82,11 @@ def get_statistics_info(
 
             # collecting all the parameters for displaying the configuration
             parameters = []
-            for param_id, param_info in SF.get_config_param(stat, (int, float)):
-                try:
-                    parameters.append(get_parameter_prop(
-                        id=param_id,
-                        param_info=param_info
-                    ))
-                except:
-                    print(f"unable to save the {param_id} parameters.")
+            init_params = inspect.signature(metric_info.class_type).parameters
+            for name, p in init_params.items():
+                info = extract_numeric_param(name, p)
+                if info is not None:
+                    parameters.append(info)
 
             # Creating the list of all the attacks
             out[stat] = RegisteredObject(

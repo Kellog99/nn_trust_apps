@@ -85,7 +85,6 @@ def get_info(
             raw["repository"] = root
             if model_type in ("model", "dataset") and not raw.get("id"):
                 raw["id"] = Path(root).name
-
             try:
                 # item = model_cls.model_validate(raw)
                 item = TypeAdapter(InfoUnion).validate_python(raw)

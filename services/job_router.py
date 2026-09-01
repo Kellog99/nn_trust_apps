@@ -9,7 +9,6 @@ from fastapi import APIRouter, Response, Body, Query
 
 from benchmarking import run_benchmark, executor
 from models import BenchmarkExecutionConfig, DatasetInfo, ModelInfo, RegisteredObject
-from services.utils.utils import find_image
 
 router = APIRouter(prefix="/job", tags=["jobs management", "jobs utils"])
 
@@ -26,7 +25,6 @@ async def start_benchmark_job(body: BenchmarkExecutionConfig = Body(...)) -> dic
     metrics: list[RegisteredObject] = body.metrics
     options = body.options
 
-    print(attacks)
     result = run_benchmark(
         models=[model],
         datasets=[dataset],
@@ -117,12 +115,9 @@ def get_jobs_results(
         info["task"] = "Classification"
 
         # ----# thumbnail
-        try:
-            prototype = json.loads(requests.get(
-                f"http://{os.getenv('DQ_HOST')}:{os.getenv('DQ_PORT')}/getDataset?dataset=animals").text)[
-                "prototype"]["datas"][0]
-        except Exception as e:
-            prototype = find_image(os.path.join(os.environ.get("DATASETS_REPO"), str(model_dir).split(os.sep)[-2]))
+        prototype = json.loads(requests.get(
+            f"http://{os.getenv('DQ_HOST')}:{os.getenv('DQ_PORT')}/getDataset?dataset=animals").text)[
+            "prototype"]["datas"][0]
         # ----#
 
         with open(os.path.join(model_dir, 'aggregate_statistics.json'), "r", encoding="utf-8") as f:
