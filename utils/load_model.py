@@ -2,31 +2,69 @@ from pathlib import Path
 from typing import Callable, Optional
 
 import torch
-from transformers import AutoModelForCausalLM, AutoTokenizer
 
-from models.info import MODEL_TYPES
-from nn_trust import CVModelAdapter, Task, Knowledge
-from nn_trust.attack.nlp.adapters import HuggingFaceNLPAdapter, OllamaNLPAdapter
-from utils._loaders import (
+from models.info import MODEL_TYPES, ModelInfo
+from nn_trust import CVModelAdapter, Task, Knowledge, NLPModelAdapter
+from utils._loader_nlp_models import _load_ollama, _load_huggingface_nlp
+from utils._loaders_cvmodels import (
     _load_plain,
     _load_api,
     _load_onnx,
     _load_timm,
-    _load_huggingface,
-    _load_model_weights,
+    _load_huggingface_cv,
     _load_torch_dynamo,
     _load_torch_script
 )
 
-_LOADERS: dict[str, Callable[..., CVModelAdapter]] = {
+
+def load_huggingface_model(
+        task: Task,
+        model_path: Optional[Path] = None,
+        model_id: Optional[str] = None,
+        info: Optional[ModelInfo] = None,
+        knowledge: Optional[Knowledge] = None,
+        **kwars,
+) -> CVModelAdapter | NLPModelAdapter:
+    """
+    It has to switch the loading between the CV and the NLP model
+    """
+    match task:
+        case Task.Classification:
+            if model_path is None:
+                raise ValueError("model_path is required for Classification")
+            if info is None:
+                raise ValueError("info is required for Classification")
+
+            return _load_huggingface_cv(
+                model_path=model_path,
+                info=info,
+                task=task,
+                **kwars,
+            )
+        case Task.Classification:
+            if model_id is None:
+                raise ValueError("model_id is required for getting the Hugging face model.")
+            if knowledge is None:
+                raise ValueError("knowledge is required for getting the Hugging face model.")
+            return _load_huggingface_nlp(
+                model_id=model_id,
+                knowledge=knowledge,
+                task=task,
+                **kwars,
+            )
+        case _:
+            raise ValueError(f"Unsupported task: {task}")
+
+
+_LOADERS: dict[MODEL_TYPES, Callable[..., CVModelAdapter | NLPModelAdapter]] = {
+    "Ollama": _load_ollama,
+    "HuggingFace": load_huggingface_model,
     "plain": _load_plain,
     "timm": _load_timm,
-    "model_weights": _load_model_weights,
     "torch_script": _load_torch_script,
     "torch_dynamo": _load_torch_dynamo,
     "onnx": _load_onnx,
     "api": _load_api,
-    "huggingface": _load_huggingface,
 }
 
 
@@ -62,36 +100,12 @@ def load_model(
         CVModelAdapter | NLPModelAdapter: A unified adapter wrapping the
         loaded model.
     """
-    # ── LLM loading (NLP adapters) ───────────────────────────────────────
-    # Ollama models are always remote LLMs and never go through the CV path.
-    if model_type == "Ollama":
-        if model_id is None:
-            raise ValueError("model_id is required for Ollama models.")
-        return OllamaNLPAdapter(
-            model_id=model_id,
-            base_url=api_url or "http://localhost:11434",
-            name=model_id,
-            **kwargs,
-        )
 
     # HuggingFace can be a CV model (local checkpoint via the CV path below)
     # or an LLM (hub causal LM). Ambiguity is resolved by task: a Language
     # task selects the HuggingFaceNLPAdapter; anything else falls through to
     # the unchanged CV `_load_huggingface` path.
     _task = Task.from_str(task) if isinstance(task, str) else task
-    if model_type == "HuggingFace" and _task == Task.Language:
-        if model_id is None:
-            raise ValueError("model_id is required for HuggingFace LLMs.")
-        llm = AutoModelForCausalLM.from_pretrained(model_id)
-        tok = AutoTokenizer.from_pretrained(model_id)
-        return HuggingFaceNLPAdapter(
-            model=llm,
-            tokenizer=tok,
-            name=model_id,
-            threat_model=Knowledge.White,
-            task=Task.Language,
-            **kwargs,
-        )
 
     if model_path is None:
         raise ValueError("model_path is required if not using remote repos.")
@@ -106,14 +120,15 @@ def load_model(
     if isinstance(model_path, str):
         model_path: Path = Path(model_path).expanduser().resolve()
 
-    model: CVModelAdapter = loader(
+    model: CVModelAdapter | NLPModelAdapter = loader(
         model_id=model_id,
         model_path=model_path,
         task=task,
         api_url=api_url,
-        device=device
+        device=device,
+        knowledge=Knowledge.White if _task == Task.Classification else Knowledge.Black
     )
-    if num_classes is not None:
+    if num_classes is not None and hasattr(model, "num_classes"):
         model.num_classes = num_classes
     model = model.to(device)
     model.eval()

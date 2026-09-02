@@ -3,6 +3,7 @@ import torch
 import torchvision
 from PIL.Image import Image
 
+from models import SingleAttackOutput
 from nn_trust import CVModelAdapter, Task, AttackObjective
 from nn_trust.attack import AttackFactory as AF, EvasionAttack
 from services.utils.attack import single_attack_performance
@@ -18,7 +19,7 @@ from test.utils import get_dummy_cv_model, available_devices, get_dog_image
     )[:2],
 )
 @pytest.mark.parametrize("pil_image", [get_dog_image()])
-@pytest.mark.parametrize("device", available_devices()[1:3])
+@pytest.mark.parametrize("device", available_devices())
 def test_attack(
         model: CVModelAdapter,
         attack_id: str,
@@ -48,8 +49,8 @@ def test_attack(
         setattr(cnf, "surrogate_model", sm.to(device))
 
     atk: EvasionAttack = AF.create(config=cnf)
-    out = single_attack_performance(
-        model=model,
+    out: SingleAttackOutput = single_attack_performance(
+        model=model.to(device),
         attack=atk,
         pil_image=pil_image,
         device=device

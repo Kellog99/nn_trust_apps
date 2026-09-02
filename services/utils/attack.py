@@ -22,8 +22,10 @@ def single_attack_performance(
         input_dimensionality: list[int] | int = [224, 224],
         device: torch.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 ) -> SingleAttackOutput:
+    """
+    Perform a single attack with a
+    """
     ################## IMAGE ##################
-
     if isinstance(input_dimensionality, list):
         if len(input_dimensionality) == 3:
             input_dimensionality = input_dimensionality[1:]
