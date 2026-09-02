@@ -95,7 +95,6 @@ def get_parameter_prop(
 
     is_int = ann is int
     lo, hi = _parse_bounds(param_info.metadata)
-    print(f"lo = {lo}, hi = {hi}")
     lo = max(lo, 0.0)
     hi = min(hi, float(max_value))
 
