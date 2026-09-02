@@ -120,6 +120,7 @@ async def jailbreaking(
             task=Task.from_str(info.get("task", "language")),
             model_api=info.get("api"),
             model_id=info.get("id"),
+            api_key=info.get("api_key") or info.get("key"),
         )
         if hasattr(m, "model") and hasattr(m.model, "parameters"):
             m = m.to(device)

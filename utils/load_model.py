@@ -1,4 +1,5 @@
 from pathlib import Path
+import os
 from typing import Callable, Optional
 
 import torch
@@ -6,7 +7,12 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 
 from models.info import MODEL_TYPES
 from nn_trust import CVModelAdapter, Task, Knowledge
-from nn_trust.attack.nlp.adapters import HuggingFaceNLPAdapter, OllamaNLPAdapter
+from nn_trust.attack.nlp.adapters import (
+    HuggingFaceNLPAdapter,
+    OllamaNLPAdapter,
+    GeminiAIStudioAdapter,
+    OpenAINLPAdapter,
+)
 from utils._loaders import (
     _load_plain,
     _load_api,
@@ -70,6 +76,28 @@ def load_model(
         return OllamaNLPAdapter(
             model_id=model_id,
             base_url=api_url or "http://localhost:11434",
+            name=model_id,
+            **kwargs,
+        )
+
+    if model_type == "Gemini":
+        if model_id is None:
+            raise ValueError("model_id is required for Gemini models.")
+        return GeminiAIStudioAdapter(
+            model_id=model_id,
+            base_url=api_url or "https://generativelanguage.googleapis.com",
+            api_key=kwargs.pop("api_key", None),
+            name=model_id,
+            **kwargs,
+        )
+
+    if model_type == "OpenRouter":
+        if model_id is None:
+            raise ValueError("model_id is required for OpenRouter models.")
+        return OpenAINLPAdapter(
+            model_id=model_id,
+            base_url=api_url or "https://openrouter.ai/api",
+            api_key=kwargs.pop("api_key", None) or os.environ.get("OPENROUTER_API_KEY"),
             name=model_id,
             **kwargs,
         )
