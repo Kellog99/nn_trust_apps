@@ -1,8 +1,8 @@
 models:
-  - source_path: "benchmark_assets/models/cifar10_resnet20"
+  - source_path: "/home/antonio-liguori/Documents/Projects/StableAI/nn_trust_personal/benchmark_assets/models/cifar10_resnet20"
 
 datasets:
-  - source_path: "benchmark_assets/datasets/cifar10_test"
+  - source_path: "/home/antonio-liguori/Documents/Projects/StableAI/nn_trust_personal/benchmark_assets/datasets/cifar10_test"
     batch_size: 8
     num_workers: 1
 
@@ -63,7 +63,7 @@ options:
   use_ray: false
   gpu: true
   create_pdf: true
-  output_path: "~/Documents/Projects/StableAI/nn_trust_apps/benchmark_output"
+  output_path: "/home/antonio-liguori/Documents/Projects/StableAI/nn_trust_personal/benchmark_output"
   targeted: false
   subset: 100
 

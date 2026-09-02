@@ -97,15 +97,3 @@ if __name__ == "__main__":
         options=options,
     )
 
-    #################################### PDF generation ####################################
-    # Optionally, after the benchmark, it could be created the PDF report of the vulnerabilities
-
-    if options.create_pdf:
-        for result in results:
-            report = AdversarialReportGenerator()
-            report.generate(
-                data=result,
-                output_path=f"{options.output_path}/report.pdf",
-                header_logo_path=None,
-            )
-    ###########################################################################################

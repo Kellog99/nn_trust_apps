@@ -3,6 +3,7 @@ from datetime import datetime
 from logging import Logger
 from pathlib import Path
 from typing import List, Optional
+from report import AdversarialReportGenerator
 
 import torch
 from torch.utils.data import DataLoader
@@ -62,14 +63,8 @@ def run_benchmark(
 
     # Define an execution strategy for the benchmark at hand i.e. create an executor instance
     device: torch.device = torch.device("cuda" if torch.cuda.is_available() and options.gpu else "cpu")
-    output_path: str = options.output_path + f"/{datetime.now().strftime('%Y%m%dT%H%M%S')}"
+    benchmark_output_path: Path = Path(options.output_path).expanduser().resolve() / benchmark_id
 
-    executor = BenchmarkExecutor(
-        verbose=options.verbose,
-        benchmark_id=benchmark_id,
-        use_ray=options.use_ray,
-        output_path=output_path,
-    )
     list_reports: list[ModelReportProps] = []
     for model_cnf in models:
         task: Task = model_cnf.task if isinstance(model_cnf.task, Task) else Task.from_str(model_cnf.task)
@@ -122,6 +117,15 @@ def run_benchmark(
                 device=device
             )
             # 3.1 Start execution
+            output_path: Path = benchmark_output_path / f"{model_cnf.id}/{dataset_cnf.id}"
+            output_path.mkdir(parents=True, exist_ok=True)
+
+            executor = BenchmarkExecutor(
+                verbose=options.verbose,
+                benchmark_id=benchmark_id,
+                use_ray=options.use_ray,
+                output_path=output_path,
+            )
             results: dict[str, ReportAttackProps] = executor.execute_jobs(
                 model=model,
                 dataloader=dataloader,
@@ -152,10 +156,19 @@ def run_benchmark(
             )
             list_reports.append(model_report)
 
-            output_path: Path = Path(output_path).expanduser().resolve() / f"{model_cnf.id}/{dataset_cnf.id}"
-            output_path.mkdir(parents=True, exist_ok=True)
+            ############### Saving the report in JSON format ###############
             with open(output_path / "report.json", "w") as f:
                 json.dump(model_report.model_dump(), f)
+
+            #################################### PDF generation ####################################
+            # Optionally, after the benchmark, it could be created the PDF report of the vulnerabilities
+            if options.create_pdf:
+                report = AdversarialReportGenerator()
+                report.generate(
+                    data=model_report,
+                    output_path=output_path / "report.pdf",
+                    header_logo_path=None,
+                )
             ######### saving the results #########
             if log:
                 log.info(
