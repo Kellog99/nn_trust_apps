@@ -10,6 +10,8 @@ from services.utils.attack import single_attack_performance
 from services.utils.utils import b64str_to_pil
 from utils import load_model
 
+from pprint import pprint
+
 router = APIRouter(prefix="/test", tags=["jobs management", "jobs utils"])
 
 
@@ -110,9 +112,10 @@ async def jailbreaking(
     goal = body.get("input")
     attacker_info = body.get("attacker")
     judge_info = body.get("judge")
+    max_new_tokens = body.get("max_new_tokens", 2048)
 
     # ── 1. Load models ──────────────────────────────────────────────────────
-    def _load_nlp_model(info: dict):
+    def _load_nlp_model(info: dict, max_tokens: int = 256):
         """Load an NLP model adapter from its info dict."""
         m = load_model(
             model_type=info.get("model_type", "HuggingFace"),
@@ -121,23 +124,24 @@ async def jailbreaking(
             model_api=info.get("api"),
             model_id=info.get("id"),
             api_key=info.get("api_key") or info.get("key"),
+            max_new_tokens=max_tokens,
         )
         if hasattr(m, "model") and hasattr(m.model, "parameters"):
             m = m.to(device)
             m.eval()
         return m
 
-    def _load_if_provided(info: dict | None, fallback_model, fallback_info: dict):
+    def _load_if_provided(info: dict | None, fallback_model, fallback_info: dict, max_tokens: int = 256):
         if info is None or info.get("id") == fallback_info.get("id"):
             return fallback_model
-        return _load_nlp_model(info)
+        return _load_nlp_model(info, max_tokens=max_tokens)
 
     # Target model (always uses the route model from the store)
-    target_model = _load_nlp_model(model_info)
+    target_model = _load_nlp_model(model_info, max_tokens=max_new_tokens)
 
     # Attacker and judge — fall back to target when not provided or same ID
-    attacker_model = _load_if_provided(attacker_info, target_model, model_info)
-    judge_model    = _load_if_provided(judge_info, target_model, model_info)
+    attacker_model = _load_if_provided(attacker_info, target_model, model_info, max_tokens=max_new_tokens)
+    judge_model    = _load_if_provided(judge_info, target_model, model_info, max_tokens=16)
 
     # ── 2. Instantiate the attack ───────────────────────────────────────────
     kwargs = {param.get("id"): param.get("default") for param in attack_info.get("parameters", [])}
@@ -158,15 +162,31 @@ async def jailbreaking(
     # The ConversationState has: goal, success, best_response, best_score,
     # attempts (list[AttackAttempt]), metadata, stateful flag, etc.
 
-    # Derive best_prompt from the highest-scored attempt
-    best_prompt = ""
-    scored_attempts = [a for a in state.attempts if a.score is not None]
-    if scored_attempts:
-        best_attempt = max(scored_attempts, key=lambda a: a.score)
-        best_prompt = best_attempt.prompt
-
     # 4. Extract conversations polymorphically using the attack instance
     conversations = attack.extract_conversations(state)
+
+    # Derive best_prompt, best_response, and best_score from valid conversation paths
+    # (avoiding pruned/abandoned attempts in state.attempts)
+    best_prompt = ""
+    best_response = state.best_response or ""
+    best_score = state.best_score if state.best_score != float("-inf") else 0.0
+
+    max_score = float("-inf")
+    for chat in conversations:
+        for idx, turn in enumerate(chat):
+            score = turn.get("score")
+            if score is not None and score > max_score:
+                max_score = score
+                best_score = max_score
+                if turn["role"] == "target":
+                    best_response = turn["content"]
+                    if idx > 0 and chat[idx - 1]["role"] == "attacker":
+                        best_prompt = chat[idx - 1]["content"]
+                elif turn["role"] == "attacker":
+                    best_prompt = turn["content"]
+                    if idx + 1 < len(chat) and chat[idx + 1]["role"] == "target":
+                        best_response = chat[idx + 1]["content"]
+
     history = [turn for chat in conversations for turn in chat]
 
     ret: dict = {
