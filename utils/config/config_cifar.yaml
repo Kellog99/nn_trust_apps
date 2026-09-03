@@ -3,41 +3,49 @@ models:
 
 datasets:
   - source_path: "/home/antonio-liguori/Documents/Projects/StableAI/nn_trust_personal/benchmark_assets/datasets/cifar10_test"
-    batch_size: 8
+    batch_size: 1
     num_workers: 1
 
 attacks:
  - id: zoo
- - id: autozoom
- - id: _uap
- - id: daguap
- - id: fuap
- - id: fgsmuap
- - id: boundary
- - id: sphereprojection
- - id: banditpriorevasion
- - id: contrastbaselineevasion
- - id: gaussianbaselineevasion
- - id: saltnpeppernoisebaseline
- - id: uniformbaselineevasion
- - id: binaryevasion
- - id: blackboxtransfer
- - id: dag
- - id: deepfool
- - id: duevasion
- - id: fom
- - id: ofuapevasion
- - id: gduapevasion
- - id: geodaevasion
- - id: hopskipjump
- - id: jsm
- - id: localsearchevasion
- - id: parsimonious
- - id: pgdkde
- - id: priorgd
- - id: signoptevasion
- - id: simbaevasion
- - id: simpleblackboxevasion
+   max_iters: 5
+   c: 10000.0
+   gradient_estimator_args:
+     num_samples: 1000
+     epsilon: 0.01
+   optimizer_args:
+     lr: 0.1
+     momentum: 0.9
+# - id: autozoom
+# - id: _uap
+# - id: daguap
+# - id: fuap
+# - id: fgsmuap
+# - id: boundary
+# - id: sphereprojection
+# - id: banditpriorevasion
+# - id: contrastbaselineevasion
+# - id: gaussianbaselineevasion
+# - id: saltnpeppernoisebaseline
+# - id: uniformbaselineevasion
+# - id: binaryevasion
+# - id: blackboxtransfer
+# - id: dag
+# - id: deepfool
+# - id: duevasion
+# - id: fom
+# - id: ofuapevasion
+# - id: gduapevasion
+# - id: geodaevasion
+# - id: hopskipjump
+# - id: jsm
+# - id: localsearchevasion
+# - id: parsimonious
+# - id: pgdkde
+# - id: priorgd
+# - id: signoptevasion
+# - id: simbaevasion
+# - id: simpleblackboxevasion
 
 metrics:
   - id: accuracy

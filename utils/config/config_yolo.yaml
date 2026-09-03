@@ -3,46 +3,55 @@ models:
 
 datasets:
   - source_path: "/home/antonio-liguori/Documents/Projects/StableAI/nn_trust_personal/benchmark_assets/datasets/coco_val2017"
-    batch_size: 8
+    batch_size: 1
     num_workers: 1
 
 attacks:
  - id: zoo
- - id: autozoom
- - id: _uap
- - id: daguap
- - id: fuap
- - id: fgsmuap
- - id: boundary
- - id: sphereprojection
+   seed: 1
+   max_iters: 50
+   c: 10000.0
+   gradient_estimator_args:
+     num_samples: 200
+     epsilon: 0.01
+   optimizer_args:
+     lr: 0.1
+     momentum: 0.9
+# - id: autozoom
+# - id: _uap
+# - id: daguap
+# - id: fuap
+# - id: fgsmuap
+# - id: boundary
+# - id: sphereprojection
 # - id: advyoloevasion
- - id: banditpriorevasion
- - id: contrastbaselineevasion
- - id: gaussianbaselineevasion
- - id: saltnpeppernoisebaseline
- - id: uniformbaselineevasion
- - id: binaryevasion
- - id: blackboxtransfer
- - id: dag
-   max_iters: 10
-   epsilon: 150.0
-   top_k: 5
-   label_target: 0
- - id: deepfool
- - id: duevasion
- - id: fom
- - id: ofuapevasion
- - id: gduapevasion
- - id: geodaevasion
- - id: hopskipjump
- - id: jsm
- - id: localsearchevasion
- - id: parsimonious
- - id: pgdkde
- - id: priorgd
- - id: signoptevasion
- - id: simbaevasion
- - id: simpleblackboxevasion
+# - id: banditpriorevasion
+# - id: contrastbaselineevasion
+# - id: gaussianbaselineevasion
+# - id: saltnpeppernoisebaseline
+# - id: uniformbaselineevasion
+# - id: binaryevasion
+# - id: blackboxtransfer
+# - id: dag
+#   max_iters: 10
+#   epsilon: 150.0
+#   top_k: 5
+#   label_target: 0
+# - id: deepfool
+# - id: duevasion
+# - id: fom
+# - id: ofuapevasion
+# - id: gduapevasion
+# - id: geodaevasion
+# - id: hopskipjump
+# - id: jsm
+# - id: localsearchevasion
+# - id: parsimonious
+# - id: pgdkde
+# - id: priorgd
+# - id: signoptevasion
+# - id: simbaevasion
+# - id: simpleblackboxevasion
 
 
 metrics:
@@ -56,7 +65,7 @@ metrics:
 options:
   load_results: false                 # loading any existing results.
   overwrite: true                     # overwriting the results if a benchmarking is performed
-  max_saved_elements: 10
+  max_saved_elements: 1
   num_workers: 1
   verbose: true
   save_perturbation: false
@@ -65,4 +74,4 @@ options:
   create_pdf: true
   output_path: "/home/antonio-liguori/Documents/Projects/StableAI/nn_trust_personal/benchmark_output"
   targeted: false
-  subset: 5
+  subset: 1
