@@ -113,7 +113,6 @@ MODEL_TYPES = Literal[
 
 
 class ModelInfo(Info):
-    type: Literal["model"] = "model"
 
     dataset: Optional[str] = Field(
         default=None,

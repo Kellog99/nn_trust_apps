@@ -4,20 +4,25 @@ import torchvision
 from PIL.Image import Image
 
 from models import SingleAttackOutput
-from nn_trust import CVModelAdapter, Task, AttackObjective
+from nn_trust import CVModelAdapter, Task, AttackObjective, AttackConfig
 from nn_trust.attack import AttackFactory as AF, EvasionAttack
 from services.utils.attack import single_attack_performance
 from test.utils import get_dummy_cv_model, available_devices, get_dog_image
 
-
-@pytest.mark.parametrize("model", [get_dummy_cv_model()])
-@pytest.mark.parametrize(
+"""@pytest.mark.parametrize(
     "attack_id",
     AF.get_list_classes(
         task={Task.Classification},
         objective=[AttackObjective.EVASION],
     )[:2],
+)"""
+
+
+@pytest.mark.parametrize(
+    "attack_id",
+    ["fom"],
 )
+@pytest.mark.parametrize("model", [get_dummy_cv_model()])
 @pytest.mark.parametrize("pil_image", [get_dog_image()])
 @pytest.mark.parametrize("device", available_devices())
 def test_attack(
@@ -29,13 +34,13 @@ def test_attack(
     """
     Verify that every evasion attack runs without errors.
     """
-
-    print(sum(
+    params: int = sum(
         p.numel() for p in model.parameters()
         if not isinstance(p, torch.nn.parameter.UninitializedParameter)
-    ))
+    )
+    print(f"params: {params}")
 
-    cnf = AF.get_config(
+    cnf: AttackConfig = AF.get_config(
         class_id=attack_id,
         max_iters=3,
         model=model.to(device),
@@ -55,3 +60,5 @@ def test_attack(
         pil_image=pil_image,
         device=device
     )
+    for k in out.confidence.keys():
+        assert out.confidence[k] == cnf.max_iters

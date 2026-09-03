@@ -43,8 +43,6 @@ async def single_attack(
         # Extracting the values from the body
         model_info: ModelInfo = body.model
         attack: RegisteredObject = body.attack
-        x_image: str = body.input
-
     except ValidationError as e:
         print("=== VALIDATION ERROR ===")
         print(e.json())
