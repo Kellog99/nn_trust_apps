@@ -33,10 +33,7 @@ async def single_attack(
         SingleAttackOutput: a collection of all the results concerning a single attack.
     """
 
-    if device in ["cpu", "cuda"]:
-        device = torch.device(device)
-    else:
-        device = torch.device("cpu")
+    device: torch.device = torch.device(device if device in ["cpu", "cuda", "mps"] else "cpu")
 
     ################## MODEL ##################
     try:
@@ -86,13 +83,15 @@ async def single_attack(
     )
     print(" Attack Created ".center(40, "#"))
     ############################################
-    return single_attack_performance(
+    out: SingleAttackOutput = single_attack_performance(
         model=model,
         attack=attack,
         pil_image=b64str_to_pil(body.input),
         input_dimensionality=model_info.input_dimensionality,
         device=device
     )
+    print(out.confidence, out.advance_metrics)
+    return out
 
     # # --- Single attack --- #
 

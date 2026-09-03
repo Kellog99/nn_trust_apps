@@ -49,12 +49,19 @@ def single_attack_performance(
     if x.dim() == 3:
         x = x.unsqueeze(0)
     x = x.to(device)
+    if not torch.isfinite(x).all():
+        raise ValueError("Image preprocessing produced non-finite values.")
     print(" Image loaded ".center(40, "#"))
     ###############################################
 
     ################## Results ##################
     with torch.no_grad():
         y = model(x)
+    if not torch.isfinite(y).all():
+        raise RuntimeError(
+            "The model produced non-finite logits for the original image. "
+            "Check the model weights and preprocessing configuration."
+        )
     labels = y.argmax(-1).tolist()
     num_classes: int = y.shape[-1]
 
@@ -66,7 +73,6 @@ def single_attack_performance(
         path=out_path
     )
     print(" Executing the Attack ".center(40, "#"))
-
     start = time.time()
     x_adv = attack.generate(
         x=x,
@@ -74,21 +80,30 @@ def single_attack_performance(
         logger=logger
     ).detach()
     end = time.time()
+    if not torch.isfinite(x_adv).all():
+        raise RuntimeError(
+            "The attack produced non-finite values. Reduce the attack epsilon/learning rate "
+            "or enable epsilon-ball projection."
+        )
 
     with torch.no_grad():
         print(" Attack Completed ".center(40, "#"))
-        y_adv: torch.Tensor = model(x_adv).argmax(-1)
+        adv_logits = model(x_adv)
+        if not torch.isfinite(adv_logits).all():
+            raise RuntimeError(
+                "The model produced non-finite logits for the adversarial image. "
+                "Reduce the attack epsilon/learning rate or enable epsilon-ball projection."
+            )
+        y_adv: torch.Tensor = adv_logits.argmax(-1)
         ssim_metric = StructuralSimilarityIndexMeasure().to(device)
         ssim_measure: float = ssim_metric(x.to(device), x_adv.to(device)).item()
 
     conf_original: list[list[float]] = logger.get_log(tag="conf_original")
     conf_adversarial: list[list[float]] = logger.get_log(tag="conf_adversarial")
-    print(conf_original)
-    print(conf_adversarial)
+
     conf_original: list[float] = [conf[0] for conf in conf_original]
     conf_adversarial: list[float] = [conf[0] for conf in conf_adversarial]
 
-    print(conf_adversarial)
     ############################################
 
     ################## Invert transform ################
@@ -100,7 +115,11 @@ def single_attack_performance(
         T.Resize(size=(H, W), interpolation=InterpolationMode.BICUBIC),
     ])
     pert: torch.Tensor = x_adv.cpu() - x.cpu()
-    pert = inv_transform(pert)
+    # A perturbation has no mean component: inverse-normalize it by scaling
+    # with the channel standard deviation only. Applying Normalize here would
+    # add the ImageNet mean and inflate the reported distance.
+    std = torch.tensor([0.229, 0.224, 0.225], dtype=pert.dtype).view(1, 3, 1, 1)
+    pert = T.Resize(size=(H, W), interpolation=InterpolationMode.BICUBIC)(pert * std)
     x_adv = inv_transform(x_adv.cpu())
 
     return SingleAttackOutput(

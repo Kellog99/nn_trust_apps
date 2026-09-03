@@ -1,12 +1,15 @@
+import warnings
+
 import pytest
 import torch
 import torchvision
 from PIL.Image import Image
 
 from models import SingleAttackOutput
-from nn_trust import CVModelAdapter, Task, AttackObjective, AttackConfig
+from nn_trust import CVModelAdapter, AttackConfig
 from nn_trust.attack import AttackFactory as AF, EvasionAttack
 from services.utils.attack import single_attack_performance
+from services.utils.utils import tensor_image_to_b64str
 from test.utils import get_dummy_cv_model, available_devices, get_dog_image
 
 """@pytest.mark.parametrize(
@@ -46,6 +49,7 @@ def test_attack(
         model=model.to(device),
         verbose=False,
         device=device,
+        early_stopping=False
     )
     if hasattr(cnf, "surrogate_model"):
         sm = torchvision.models.resnet18()
@@ -61,4 +65,26 @@ def test_attack(
         device=device
     )
     for k in out.confidence.keys():
-        assert out.confidence[k] == cnf.max_iters
+        assert len(out.confidence[k]) == cnf.max_iters
+
+
+def test_tensor_image_to_b64str_sanitizes_attack_output():
+    """Image serialization must not warn for invalid attack tensor values."""
+    image = torch.tensor([[[float("nan"), float("inf")], [-float("inf"), 2.0]]])
+
+    with warnings.catch_warnings(record=True) as record:
+        warnings.simplefilter("always")
+        encoded = tensor_image_to_b64str(image)
+
+    assert encoded
+    assert not [warning for warning in record if issubclass(warning.category, RuntimeWarning)]
+
+
+if __name__ == "__main__":
+    pil_image: Image = get_dog_image(num_images=1)
+    test_attack(
+        model=get_dummy_cv_model(),
+        pil_image=pil_image,
+        device=torch.device("cpu"),
+        attack_id="fom"
+    )

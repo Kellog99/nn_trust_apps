@@ -37,7 +37,11 @@ def tensor_image_to_b64str(image: torch.Tensor) -> str:
             f"Expected shape (C, H, W), got {tuple(image.shape)}"
         )
 
-    image = image.detach().cpu()
+    # ToPILImage converts floating-point values to uint8 internally.  Attack
+    # outputs can temporarily contain NaN/Inf or values outside the image
+    # range, which otherwise produces RuntimeWarnings during that cast.
+    image = torch.nan_to_num(image.detach().cpu(), nan=0.0, posinf=1.0, neginf=0.0)
+    image = image.clamp(0.0, 1.0)
 
     pil_img = T.ToPILImage()(image)
 
