@@ -96,13 +96,15 @@ class Transformation(BaseModel):
 
 
 MODEL_TYPES = Literal[
+    "model_weights",
     "plain",
     "timm",
     "HuggingFace",
     "torch_script",
     "torch_dynamo",
     "onnx",
-    "api"
+    "api",
+    "ultralytics",
 ]
 
 
