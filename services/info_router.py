@@ -27,11 +27,11 @@ def _str_enum(v) -> str | None:
 
 def _collect_params(atk: str) -> list[ParametersProps]:
     """
-    Collecting all the parameters that are (int, float, str) and returning a list of ParametersProp
+    Collecting all the parameters that are (int, float, str, bool) and returning a list of ParametersProp
     """
     params = []
     seen: set[str] = set()
-    for pid, pinfo in AF.get_config_param(atk, attribute_type=(int, float, str)):
+    for pid, pinfo in AF.get_config_param(atk, attribute_type=(int, float, str, bool)):
         if pid in seen:
             continue
         seen.add(pid)
