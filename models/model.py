@@ -1,4 +1,4 @@
-from typing import Dict, Literal, Optional
+from typing import Any, Dict, Literal, Optional
 
 from pydantic import BaseModel
 
@@ -13,7 +13,7 @@ class ParametersProps(BaseModel):
     min: Optional[float] = None
     max: Optional[float] = None
     step: Optional[float] = None
-    default: float | int | str | bool
+    default: float | int | str | bool | dict[str, Any] | list[Any]
     description: Optional[str] = None
     kind: Optional[Literal["number", "enum"]] = "number"
     options: Optional[list[str]] = None

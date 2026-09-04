@@ -12,6 +12,7 @@ from nn_trust import CVModelAdapter, EvasionAttack
 from nn_trust.target import AvoidOnehotTarget
 from nn_trust.utils.logger import PyTorchCheckpointLogger
 from services.utils.utils import tensor_image_to_b64str
+from models.info import Transformation
 
 
 def single_attack_performance(
@@ -19,6 +20,7 @@ def single_attack_performance(
         attack: EvasionAttack,
         pil_image: Image.Image,
         input_dimensionality: list[int] | int = [224, 224],
+        transformation: Transformation | None = None,
         device: torch.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 ) -> SingleAttackOutput:
     ################## IMAGE ##################
@@ -39,12 +41,16 @@ def single_attack_performance(
     print(original_input.shape)
     C, H, W = original_input.shape
 
+    mean = transformation.mean if transformation is not None else [0.485, 0.456, 0.406]
+    std = transformation.std if transformation is not None else [0.229, 0.224, 0.225]
+
     transformations = T.Compose([
         T.Resize(size=input_dimensionality),
         T.ToImage(),
         T.ToDtype(torch.float32, scale=True),
-        T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+        T.Normalize(mean=mean, std=std)
     ])
+
     x: torch.Tensor = transformations(pil_image)
     if x.dim() == 3:
         x = x.unsqueeze(0)
@@ -56,16 +62,14 @@ def single_attack_performance(
 
     ################## Results ##################
     with torch.no_grad():
-        y = model(x)
-    if not torch.isfinite(y).all():
+        out = model(x)
+    #if not torch.isfinite(y).all():
+    if not torch.isfinite(out).all():    
         raise RuntimeError(
             "The model produced non-finite logits for the original image. "
             "Check the model weights and preprocessing configuration."
         )
-    labels = y.argmax(-1).tolist()
-    num_classes: int = y.shape[-1]
-
-    target = AvoidOnehotTarget(num_classes=num_classes)(labels).to(device)
+    labels = out.argmax(-1).tolist()
 
     out_path = Path(f"./tmp/{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}")
     logger: PyTorchCheckpointLogger = PyTorchCheckpointLogger(
@@ -76,7 +80,7 @@ def single_attack_performance(
     start = time.time()
     x_adv = attack.generate(
         x=x,
-        y=target,
+        y=out.detach(),
         logger=logger
     ).detach()
     end = time.time()
@@ -109,8 +113,8 @@ def single_attack_performance(
     ################## Invert transform ################
     inv_transform = T.Compose([
         T.Normalize(
-            mean=[-0.485 / 0.229, -0.456 / 0.224, -0.406 / 0.225],
-            std=[1 / 0.229, 1 / 0.224, 1 / 0.225]
+            mean=[-m / s for m, s in zip(mean, std)],
+            std=[1 / s for s in std]
         ),
         T.Resize(size=(H, W), interpolation=InterpolationMode.BICUBIC),
     ])
@@ -118,8 +122,8 @@ def single_attack_performance(
     # A perturbation has no mean component: inverse-normalize it by scaling
     # with the channel standard deviation only. Applying Normalize here would
     # add the ImageNet mean and inflate the reported distance.
-    std = torch.tensor([0.229, 0.224, 0.225], dtype=pert.dtype).view(1, 3, 1, 1)
-    pert = T.Resize(size=(H, W), interpolation=InterpolationMode.BICUBIC)(pert * std)
+    std_tensor = torch.tensor(std, dtype=pert.dtype).view(1, 3, 1, 1)
+    pert = T.Resize(size=(H, W), interpolation=InterpolationMode.BICUBIC)(pert * std_tensor)
     x_adv = inv_transform(x_adv.cpu())
 
     return SingleAttackOutput(

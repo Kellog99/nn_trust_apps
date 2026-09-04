@@ -78,7 +78,7 @@ async def single_attack(
         task=task,
         **{
             param.id: param.default
-            for param in attack.parameters
+            for param in atk.parameters
         }
     )
     print(" Attack Created ".center(40, "#"))
@@ -88,6 +88,7 @@ async def single_attack(
         attack=attack,
         pil_image=b64str_to_pil(body.input),
         input_dimensionality=model_info.input_dimensionality,
+        transformation=model_info.transformation,
         device=device
     )
     print(out.confidence, out.advance_metrics)
