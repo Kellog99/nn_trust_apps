@@ -1,6 +1,7 @@
 import importlib
 from importlib import util
 from pathlib import Path
+import os
 from typing import Optional
 
 import timm
@@ -8,7 +9,12 @@ import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 from nn_trust import ModelAdapter, Task
-from nn_trust.attack.nlp.adapters import HuggingFaceNLPAdapter, OllamaNLPAdapter
+from nn_trust.attack.nlp.adapters import (
+    HuggingFaceNLPAdapter,
+    OllamaNLPAdapter,
+    GeminiAIStudioAdapter,
+    OpenAINLPAdapter,
+)
 from nn_trust.models.api_model import APICVModel
 
 
@@ -93,6 +99,26 @@ def load_model(
             model = OllamaNLPAdapter(
                 model_id=model_id,
                 base_url=model_api or "http://localhost:11434",
+                name=model_id,
+                **kwargs,
+            )
+            return model
+
+        case "Gemini":
+            model = GeminiAIStudioAdapter(
+                model_id=model_id,
+                base_url=model_api or "https://generativelanguage.googleapis.com",
+                api_key=kwargs.pop("api_key", None),
+                name=model_id,
+                **kwargs,
+            )
+            return model
+
+        case "OpenRouter":
+            model = OpenAINLPAdapter(
+                model_id=model_id,
+                base_url=model_api or "https://openrouter.ai/api",
+                api_key=kwargs.pop("api_key", None) or os.environ.get("OPENROUTER_API_KEY"),
                 name=model_id,
                 **kwargs,
             )
