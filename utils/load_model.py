@@ -15,6 +15,7 @@ from utils._loaders_cvmodels import (
     _load_model_weights,
     _load_torch_dynamo,
     _load_torch_script,
+    _load_ultralytics
 )
 
 
@@ -67,6 +68,7 @@ _LOADERS: dict[MODEL_TYPES, Callable[..., CVModelAdapter | NLPModelAdapter]] = {
     "torch_dynamo": _load_torch_dynamo,
     "onnx": _load_onnx,
     "api": _load_api,
+    "ultralytics": _load_ultralytics
 }
 
 

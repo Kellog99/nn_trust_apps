@@ -56,9 +56,6 @@ async def single_attack(
     elif isinstance(task, str):
         task: Task = Task.from_str(task)
 
-    if task != Task.Classification:
-        raise ValueError("For this service the task must be Classification.")
-
     model = load_model(
         model_type=model_info.model_type,
         model_path=model_info.repository,
@@ -86,6 +83,7 @@ async def single_attack(
     out: SingleAttackOutput = single_attack_performance(
         model=model,
         attack=attack,
+        task=task,
         pil_image=b64str_to_pil(body.input),
         input_dimensionality=model_info.input_dimensionality,
         transformation=model_info.transformation,
