@@ -15,7 +15,7 @@ class ParametersProps(BaseModel):
     step: Optional[float] = None
     default: float | int | str | bool | dict[str, Any] | list[Any]
     description: Optional[str] = None
-    kind: Optional[Literal["number", "enum"]] = "number"
+    kind: Optional[Literal["number", "enum", "boolean"]] = "number"
     options: Optional[list[str]] = None
 
 

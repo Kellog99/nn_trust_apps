@@ -99,13 +99,24 @@ def get_parameter_prop(
         default = str(_get_value(param_info.default, ""))
         return ParametersProps(id=id, name=name, default=default, description=param_info.description)
 
+    if ann is bool:
+        default = bool(_get_value(param_info.default, False))
+        return ParametersProps(
+            id=id, name=name, default=default,
+            description=param_info.description, kind="boolean",
+        )
+
     is_int = ann is int
     lo, hi = _parse_bounds(param_info.metadata)
     lo = max(lo, 0.0)
     hi = min(hi, float(max_value))
 
     raw_default = _get_value(param_info.default, None)
-    default = raw_default or lo + (hi - lo) / 2
+    # Zero is a valid and meaningful default for several optimizer
+    # parameters (for example FOM's momentum and dampening).  Do not use
+    # truthiness here, otherwise an explicit default of 0 is replaced by the
+    # midpoint of the allowed range.
+    default = (lo + (hi - lo) / 2) if raw_default is None else raw_default
     default = _clamp(default, lo, hi)
 
     if lo >= hi:
