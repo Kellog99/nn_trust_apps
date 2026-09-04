@@ -20,6 +20,10 @@ class SharableVariables(BaseModel):
         default=1234,
         description="Seed for the random number generator (default: 1234)"
     )
+    reload: bool = Field(
+        default=False,
+        description="Enable auto-reload (default: False)"
+    )
 
     ########################## PATH ##########################
     path_ds_repo: str = Field(

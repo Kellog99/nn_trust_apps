@@ -1,8 +1,6 @@
 import base64
 import io
-import math
-import os
-from typing import Literal, get_args, get_origin
+from typing import Literal, get_args, get_origin, Any
 
 import torch
 from PIL import Image
@@ -21,145 +19,108 @@ def b64str_to_pil(b64_image_str: str) -> Image.Image:
 
 def tensor_image_to_b64str(image: torch.Tensor) -> str:
     """
-    This function allows to transform a proper tensor into a base64 string.
+    Convert an image tensor to a PNG encoded as a Base64 string.
 
-    Tensor -> PIL image -> base64 string
-
+    Expected shape:
+        - (C, H, W), or
+        - (1, C, H, W)
     """
-    pil_img = T.ToPILImage()(image.squeeze())
+    if image.ndim == 4:
+        if image.shape[0] != 1:
+            raise ValueError(
+                f"Expected a batch of size 1, got shape {tuple(image.shape)}"
+            )
+        image = image[0]
+
+    if image.ndim != 3:
+        raise ValueError(
+            f"Expected shape (C, H, W), got {tuple(image.shape)}"
+        )
+
+    # ToPILImage converts floating-point values to uint8 internally.  Attack
+    # outputs can temporarily contain NaN/Inf or values outside the image
+    # range, which otherwise produces RuntimeWarnings during that cast.
+    image = torch.nan_to_num(image.detach().cpu(), nan=0.0, posinf=1.0, neginf=0.0)
+    image = image.clamp(0.0, 1.0)
+
+    pil_img = T.ToPILImage()(image)
+
     buffered = io.BytesIO()
     pil_img.save(buffered, format="PNG")
+
     return base64.b64encode(buffered.getvalue()).decode("utf-8")
 
 
+_DEFAULT_LO, _DEFAULT_HI = 0.0, 200.0
+
+
 def _param_name(id: str, info: FieldInfo) -> str:
-    return getattr(info, "title") or id
+    return getattr(info, "title", None) or id
 
 
-def _parse_bounds(metadata: list) -> tuple[float, float, bool, bool]:
-    lo, hi = 0.0, 1000.0
-    has_lo, has_hi = False, False
+def _get_value(value: Any, default: Any) -> Any:
+    return default if value is PydanticUndefined else value
+
+
+def _parse_bounds(metadata: list[Any]) -> tuple[float, float]:
+    lo, hi = _DEFAULT_LO, _DEFAULT_HI
     for val in metadata:
         if isinstance(val, (Gt, Ge)):
-            lo = getattr(val, "ge" if isinstance(val, Ge) else "gt")
-            has_lo = True
+            lo = float(getattr(val, "ge" if isinstance(val, Ge) else "gt"))
         elif isinstance(val, (Lt, Le)):
-            hi = getattr(val, "le" if isinstance(val, Le) else "lt")
-            has_hi = True
-    return lo, hi, has_lo, has_hi
+            hi = float(getattr(val, "le" if isinstance(val, Le) else "lt"))
+    return lo, hi
 
 
 def _clamp(v: float, lo: float, hi: float) -> float:
     return max(lo, min(hi, v))
 
 
-def get_parameter_prop(id: str, param_info: FieldInfo) -> ParametersProps:
+def get_parameter_prop(
+        id: str,
+        param_info: FieldInfo,
+        max_value: int = 200,
+) -> ParametersProps:
+    """Characterizes an attack's parameter as a ParametersProps object."""
     name = _param_name(id, param_info)
     ann = param_info.annotation
 
-    # --- enum (Literal or str) ---
     if get_origin(ann) is Literal:
         options = [str(o) for o in get_args(ann)]
-        default = param_info.default if param_info.default is not PydanticUndefined else options[0]
+        default = str(_get_value(param_info.default, options[0]))
         return ParametersProps(
-            id=id,
-            name=name,
-            default=str(default),
-            description=param_info.description,
-            kind="enum",
-            options=options
+            id=id, name=name, default=default,
+            description=param_info.description, kind="enum", options=options,
         )
 
     if ann is str:
-        default = param_info.default if param_info.default is not PydanticUndefined else ""
-        return ParametersProps(
-            id=id,
-            name=name,
-            default=str(default),
-            description=param_info.description
-        )
+        default = str(_get_value(param_info.default, ""))
+        return ParametersProps(id=id, name=name, default=default, description=param_info.description)
 
-    # --- number ---
     is_int = ann is int
-    lo, hi, has_lo, has_hi = _parse_bounds(param_info.metadata)
-    if is_int and not has_lo:
-        lo = 1
+    lo, hi = _parse_bounds(param_info.metadata)
+    lo = max(lo, 0.0)
+    hi = min(hi, float(max_value))
 
-    if math.isinf(hi) or hi > 1e10:
-        hi = 1000
-    if math.isinf(lo) or lo < -1e10:
-        lo = 0
+    raw_default = _get_value(param_info.default, None)
+    default = raw_default or lo + (hi - lo) / 2
+    default = _clamp(default, lo, hi)
 
-    default = param_info.default
-    if default is PydanticUndefined:
-        default = (hi + lo) / 2
-    else:
-        default = float(default)
-        if not has_hi and 0 <= default <= 1:
-            hi = 1
-        if not has_lo and default < lo:
-            lo = min(0, default)
-        if not has_hi and default > hi:
-            hi = default * 2
-        default = _clamp(default, lo, hi)
-
-    if lo > hi:
-        lo, hi = hi, lo
+    if lo >= hi:
+        raise ValueError(f"For the parameter {id}, the min ({lo!r}) must be strictly less than max ({hi!r})")
 
     step = getattr(param_info, "step", None)
     if step is None:
-        step = (hi - lo) / 10000
+        step = (hi - lo) / max_value
         if is_int:
-            step = max(int(step), 1)
+            step = max(round(step), 1)
 
     return ParametersProps(
-        id=id, name=name,
-        min=float(lo), max=float(hi), step=float(step),
-        default=float(default), description=param_info.description,
+        id=id,
+        name=name,
+        min=lo,
+        max=hi,
+        step=float(step),
+        default=default,
+        description=param_info.description,
     )
-
-
-# ------------------ JOBS utility --------------------------
-def find_image(start_dir: str):
-    """
-    Depth-first search through directories starting at `start_dir`
-    to find the first image file. Once found, return the path
-    relative to `start_dir`.
-    Directories and files are explored in alphabetical order.
-    """
-    image_exts = {'.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.tiff', '.tif', '.svg'}
-    stack = [start_dir]
-    visited = set()
-
-    while stack:
-        path = stack.pop()
-        try:
-            if os.path.islink(path):
-                continue
-
-            if os.path.isdir(path):
-                real = os.path.realpath(path)
-                if real in visited:
-                    continue
-                visited.add(real)
-
-                try:
-                    entries = list(os.scandir(path))
-                except PermissionError:
-                    continue
-
-                # Sort entries alphabetically by name
-                entries.sort(key=lambda e: e.name.lower(), reverse=True)
-                # reverse=True because we’re using a stack (LIFO), so we push reversed order
-                for entry in entries:
-                    stack.append(entry.path)
-
-            else:
-                _, ext = os.path.splitext(path)
-                if ext.lower() in image_exts:
-                    abs_path = os.path.abspath(path)
-                    return os.path.join(start_dir.split(os.sep)[-1], os.path.relpath(abs_path, start_dir))
-        except Exception:
-            continue
-
-    return None

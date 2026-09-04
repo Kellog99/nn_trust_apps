@@ -79,7 +79,7 @@ def _load_torch_dynamo(
 def _load_onnx(
         model_path: Path,
         task: Task,
-        **args) -> ONNXCVModel:
+        **args) -> CVModelAdapter:
     ckpt = _require_file(model_path / "model.onnx")
     return ONNXCVModel(model_filepath=ckpt, task=task)
 
@@ -88,7 +88,7 @@ def _load_api(
         api_url: str,
         task: Task,
         **args
-) -> APICVModel:
+) -> CVModelAdapter:
     if not api_url:
         raise ValueError("model_info.api_url is required for the 'api' model type.")
     return APICVModel(
@@ -97,12 +97,12 @@ def _load_api(
     )
 
 
-def _load_huggingface(
+def _load_huggingface_cv(
         model_path: Path,
         info: ModelInfo,
         task: Task,
         **args
-) -> HFCVModel:
+) -> CVModelAdapter:
     ckpt = model_path / "model_state_dict.pth"
     checkpoint_path = ckpt if ckpt.exists() else None
     return HFCVModel(
@@ -111,3 +111,4 @@ def _load_huggingface(
         num_labels=info.num_classes,
         task=task,
     )
+

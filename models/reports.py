@@ -1,4 +1,4 @@
-from typing import Optional, List, Any
+from typing import Optional, List, Any, Literal
 
 from pydantic import BaseModel, ConfigDict
 
@@ -52,11 +52,13 @@ class ReportProps(BaseModel):
 
 ############# Dataset #############
 class DatasetReportProps(ReportProps):
+    type: Literal["dataset_report"] = "dataset_report"
     info: DatasetInfo
 
 
 ############## Model ##############
 class ModelReportProps(ReportProps):
+    type: Literal["model_report"] = "model_report"
     info: ModelInfo
     metrics: ReportMetricsProps
     attacks: dict[str, ReportAttackProps]
