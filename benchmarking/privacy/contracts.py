@@ -1,4 +1,4 @@
-"""App-side protocol contracts for privacy datasets, models, and training."""
+"""App-side protocol contracts for privacy datasets, model, and training."""
 
 from pathlib import Path
 from typing import Protocol, Optional

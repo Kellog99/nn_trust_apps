@@ -6,24 +6,19 @@ import torchvision
 from PIL.Image import Image
 
 from models import SingleAttackOutput
-from nn_trust import CVModelAdapter, AttackConfig
-from nn_trust.attack import AttackFactory as AF, EvasionAttack
+from nn_trust import CVModelAdapter, AttackConfig, EvasionAttack, AttackObjective, Task
+from nn_trust.attack.attack_factory import AttackFactory as AF
 from services.utils.attack import single_attack_performance
 from services.utils.utils import tensor_image_to_b64str
 from test.utils import get_dummy_cv_model, available_devices, get_dog_image
 
-"""@pytest.mark.parametrize(
+
+@pytest.mark.parametrize(
     "attack_id",
     AF.get_list_classes(
         task={Task.Classification},
         objective=[AttackObjective.EVASION],
     )[:2],
-)"""
-
-
-@pytest.mark.parametrize(
-    "attack_id",
-    ["fom"],
 )
 @pytest.mark.parametrize("model", [get_dummy_cv_model()])
 @pytest.mark.parametrize("pil_image", [get_dog_image()])

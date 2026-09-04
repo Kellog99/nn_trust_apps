@@ -58,7 +58,7 @@ def get_info(
         ),
 ) -> list[ModelInfo] | list[DatasetInfo] | list[ModelReportProps] | list[DatasetReportProps]:
     """
-    Get all models/datasets/reports under `repo_path` matching `tasks`.
+    Get all model/datasets/reports under `repo_path` matching `tasks`.
     """
     if isinstance(repo_path, str):
         repo_path: Path = Path(repo_path).expanduser()

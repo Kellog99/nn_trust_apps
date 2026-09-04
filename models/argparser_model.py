@@ -32,7 +32,7 @@ class SharableVariables(BaseModel):
     )
     path_model_repo: str = Field(
         default="~/Desktop/StableAI/model_repository",
-        description="Path to internal storage directory (models)"
+        description="Path to internal storage directory (model)"
     )
     path_model_report_repo: str = Field(
         default="~/Desktop/StableAI/benchmark_repository",

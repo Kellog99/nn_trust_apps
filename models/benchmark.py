@@ -29,8 +29,8 @@ class BenchmarkExecutionConfig(BaseModel):
     metrics: list[RegisteredObject]
     # The web client sends the selected model and dataset IDs.  The router
     # resolves those IDs to their repository metadata before starting a job.
-    model: ModelInfo | str
-    dataset: DatasetInfo | str
+    model: ModelInfo
+    dataset: DatasetInfo
     options: BenchmarkOptionConfig = Field(default_factory=BenchmarkOptionConfig)
 
     # exemplary model_config 
@@ -45,7 +45,7 @@ class BenchmarkExecutionConfig(BaseModel):
                     "num_classes": 10,
                     "input_dimensionality": [3, 32, 32],
                     "model_type": "plain",
-                    "repository": "benchmark_assets/models/cifar10_resnet20",
+                    "repository": "benchmark_assets/model/cifar10_resnet20",
                     "transformation": {
                         "mean": [0.4914, 0.4822, 0.4465],
                         "std": [0.247, 0.2435, 0.2616]

@@ -9,7 +9,7 @@ import zipfile
 from fastapi import APIRouter, UploadFile, Response, Request
 
 benchmarking = importlib.import_module("benchmarking")
-router = APIRouter(prefix="/dataset", tags=["datasets and models"])
+router = APIRouter(prefix="/dataset", tags=["datasets and model"])
 
 
 def find_image(start_dir: str):

@@ -16,7 +16,7 @@ from models.reports import ModelReportProps
 from report import AdversarialReportGenerator
 from services.repository_router import get_info
 
-router = APIRouter(prefix="/report", tags=["datasets and models"])
+router = APIRouter(prefix="/report", tags=["datasets and model"])
 
 
 @router.get("/benchmarks", response_model=list[BenchmarkModelProps])
@@ -59,8 +59,8 @@ def get_benchmarks(
     for report in list_reports:
         # There are three level of filtering
         # 1) the id: the id of the selected model must not be inside the benchmark list
-        # 2) the task: the models inside the benchmark must satisfy the filter for the task
-        # 3) the dataset: the models inside the benchmark must satisfy the filter for the dataset
+        # 2) the task: the model inside the benchmark must satisfy the filter for the task
+        # 3) the dataset: the model inside the benchmark must satisfy the filter for the dataset
         report_dataset = getattr(report.info, "dataset", None)
         if ((id is None or report.info.id != id)
                 and (tasks is None or report.info.task in tasks)

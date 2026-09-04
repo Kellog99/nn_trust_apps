@@ -1,29 +1,25 @@
-from pathlib import Path
 import os
+from pathlib import Path
 from typing import Callable, Optional
 
 import torch
 
 from models.info import MODEL_TYPES, ModelInfo
 from nn_trust import CVModelAdapter, Task, Knowledge, NLPModelAdapter
-from utils._loader_nlp_models import _load_ollama, _load_huggingface_nlp
-from utils._loaders_cvmodels import (
-from models.info import MODEL_TYPES
-from nn_trust import CVModelAdapter, Task, Knowledge
 from nn_trust.attack.nlp.adapters import (
-    HuggingFaceNLPAdapter,
     OllamaNLPAdapter,
     GeminiAIStudioAdapter,
     OpenAINLPAdapter,
 )
-from utils._loaders import (
+from utils.model._loader_nlp_models import _load_ollama, _load_huggingface_nlp
+from utils.model._loaders_cvmodels import (
     _load_plain,
     _load_api,
     _load_onnx,
     _load_timm,
     _load_huggingface_cv,
     _load_torch_dynamo,
-    _load_torch_script
+    _load_torch_script,
 )
 
 
@@ -39,6 +35,17 @@ def load_huggingface_model(
     It has to switch the loading between the CV and the NLP model
     """
     match task:
+        case Task.Language:
+            if model_id is None:
+                raise ValueError("model_id is required for getting the Hugging face model.")
+            if knowledge is None:
+                raise ValueError("knowledge is required for getting the Hugging face model.")
+            return _load_huggingface_nlp(
+                model_id=model_id,
+                knowledge=knowledge,
+                task=task,
+                **kwars,
+            )
         case Task.Classification:
             if model_path is None:
                 raise ValueError("model_path is required for Classification")
@@ -48,17 +55,6 @@ def load_huggingface_model(
             return _load_huggingface_cv(
                 model_path=model_path,
                 info=info,
-                task=task,
-                **kwars,
-            )
-        case Task.Classification:
-            if model_id is None:
-                raise ValueError("model_id is required for getting the Hugging face model.")
-            if knowledge is None:
-                raise ValueError("knowledge is required for getting the Hugging face model.")
-            return _load_huggingface_nlp(
-                model_id=model_id,
-                knowledge=knowledge,
                 task=task,
                 **kwars,
             )
@@ -91,7 +87,7 @@ def load_model(
 ):
     r"""
     Load a model from disk and wrap it into the shared `CVModelAdapter`
-    interface, supporting multiple serialization formats. LLM models are
+    interface, supporting multiple serialization formats. LLM model are
     wrapped into the `NLPModelAdapter` subclasses `HuggingFaceNLPAdapter`
     (HuggingFace causal LM) or `OllamaNLPAdapter` (remote Ollama API).
 
@@ -111,10 +107,10 @@ def load_model(
         loaded model.
     """
     # ── LLM loading (NLP adapters) ───────────────────────────────────────
-    # Ollama models are always remote LLMs and never go through the CV path.
+    # Ollama model are always remote LLMs and never go through the CV path.
     if model_type == "Ollama":
         if model_id is None:
-            raise ValueError("model_id is required for Ollama models.")
+            raise ValueError("model_id is required for Ollama model.")
         return OllamaNLPAdapter(
             model_id=model_id,
             base_url=api_url or "http://localhost:11434",
@@ -124,7 +120,7 @@ def load_model(
 
     if model_type == "Gemini":
         if model_id is None:
-            raise ValueError("model_id is required for Gemini models.")
+            raise ValueError("model_id is required for Gemini model.")
         return GeminiAIStudioAdapter(
             model_id=model_id,
             base_url=api_url or "https://generativelanguage.googleapis.com",
@@ -135,7 +131,7 @@ def load_model(
 
     if model_type == "OpenRouter":
         if model_id is None:
-            raise ValueError("model_id is required for OpenRouter models.")
+            raise ValueError("model_id is required for OpenRouter model.")
         return OpenAINLPAdapter(
             model_id=model_id,
             base_url=api_url or "https://openrouter.ai/api",

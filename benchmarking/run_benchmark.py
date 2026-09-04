@@ -12,7 +12,7 @@ from models import BenchmarkOptionConfig, ModelInfo, DatasetInfo, ModelReportPro
 from models.reports import ReportMetricsProps, ReportAttackProps
 from nn_trust import AttackFactory as AF, StatisticComposer, StatisticsFactory as SF, ModelAdapter, Task
 from utils import load_model, get_dataloader
-from utils.dataset_utils import get_transformation
+from utils.load_dataset import get_transformation
 
 
 def run_benchmark(
@@ -89,7 +89,9 @@ def run_benchmark(
                 subset=options.subset,
                 transform=transform,
                 num_workers=dataset_cnf.num_workers,
-                name=dataset_cnf.name
+                name=dataset_cnf.name,
+                dataset_type=dataset_cnf.dataset_type,
+                split=dataset_cnf.split,
             )
             #################### Defining the Statistic Composer ####################
             num_classes = model_cnf.num_classes

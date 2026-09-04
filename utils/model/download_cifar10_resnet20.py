@@ -2,11 +2,11 @@ from pathlib import Path
 import json
 import torch
 
-model_dir = Path("benchmark_assets/models/cifar10_resnet20")
+model_dir = Path("benchmark_assets/model/cifar10_resnet20")
 model_dir.mkdir(parents=True, exist_ok=True)
 
 model = torch.hub.load(
-    "chenyaofo/pytorch-cifar-models",
+    "chenyaofo/pytorch-cifar-model",
     "cifar10_resnet20",
     pretrained=True,
     trust_repo=True,

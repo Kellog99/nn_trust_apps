@@ -20,8 +20,8 @@ tags:
     description: Services to manage jobs
   - name: jobs utils
     description: Utility services for jobs management
-  - name: datasets and models
-    description: Services to manage datasets and models
+  - name: datasets and model
+    description: Services to manage datasets and model
    
 paths:
   /job/start:
@@ -212,7 +212,7 @@ paths:
   /dataset/upload:
     post:
       tags:
-        - datasets and models
+        - datasets and model
       summary: Upload a dataset to the TITANN backend.
       description: Upload a dataset to the TITANN backend.
       operationId: uploadDataset
@@ -253,7 +253,7 @@ paths:
   /dataset/getDatasets:
     get:
       tags:
-        - datasets and models
+        - datasets and model
       summary: Get all datasets of the TITANN backend.
       description: Get all datasets of the TITANN backend.
       operationId: getDatasets
@@ -286,7 +286,7 @@ paths:
   /model/upload:
     post:
       tags:
-        - datasets and models
+        - datasets and model
       summary: Upload a model to the TITANN backend.
       description: Upload a model to the TITANN backend.
       operationId: uploadModel
@@ -327,9 +327,9 @@ paths:
   /model/getModels:
     get:
       tags:
-        - datasets and models
-      summary: Get all models of the TITANN backend.
-      description: Get all models of the TITANN backend.
+        - datasets and model
+      summary: Get all model of the TITANN backend.
+      description: Get all model of the TITANN backend.
       operationId: getModels
       responses:
         '200':
@@ -345,7 +345,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
         '404':
-          description: No models found
+          description: No model found
           content:
             application/json:
               schema:

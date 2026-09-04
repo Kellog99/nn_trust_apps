@@ -102,26 +102,42 @@ async def jailbreaking(
         device: str = Query(
             default="cuda",
             description="The device to run the model on.",
-            examples=["cpu"]
+            example="cpu"
         )
 
 ) -> dict:
     """
     Handle the POST request for executing a jailbreak attack.
     """
-    if device in ["cpu", "cuda"]:
-        device = torch.device(device)
-    else:
-        device = torch.device("cpu")
+    if device == "cuda" and not torch.cuda.is_available():
+        device = "cpu"
+    elif device == "mps" and not torch.backends.mps.is_available():
+        device = "cpu"
+    device = torch.device(device if device in ["cpu", "cuda", "mps"] else "cpu")
 
     model_info = body.get("model")
     attack_info = body.get("attack")
     goal = body.get("input")
     attacker_info = body.get("attacker")
     judge_info = body.get("judge")
+    max_new_tokens = body.get("max_new_tokens", 2048)
 
-    # ── 1. Load models ──────────────────────────────────────────────────────
-    def _load_nlp_model(info: dict):
+    missing = [
+        name for name, value in (
+            ("model", model_info),
+            ("attack", attack_info),
+            ("input", goal),
+        )
+        if value is None
+    ]
+    if missing:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Missing required field(s): {', '.join(missing)}",
+        )
+
+    # ── 1. Load model ──────────────────────────────────────────────────────
+    def _load_nlp_model(info: dict, max_tokens: int = 256):
         """Load an NLP model adapter from its info dict."""
         m = load_model(
             model_type=info.get("model_type", "HuggingFace"),
@@ -129,23 +145,25 @@ async def jailbreaking(
             task=Task.from_str(info.get("task", "language")),
             model_api=info.get("api"),
             model_id=info.get("id"),
+            api_key=info.get("api_key") or info.get("key"),
+            max_new_tokens=max_tokens,
         )
         if hasattr(m, "model") and hasattr(m.model, "parameters"):
             m = m.to(device)
             m.eval()
         return m
 
-    def _load_if_provided(info: dict | None, fallback_model, fallback_info: dict):
+    def _load_if_provided(info: dict | None, fallback_model, fallback_info: dict, max_tokens: int = 256):
         if info is None or info.get("id") == fallback_info.get("id"):
             return fallback_model
-        return _load_nlp_model(info)
+        return _load_nlp_model(info, max_tokens=max_tokens)
 
     # Target model (always uses the route model from the store)
-    target_model = _load_nlp_model(model_info)
+    target_model = _load_nlp_model(model_info, max_tokens=max_new_tokens)
 
     # Attacker and judge — fall back to target when not provided or same ID
-    attacker_model = _load_if_provided(attacker_info, target_model, model_info)
-    judge_model = _load_if_provided(judge_info, target_model, model_info)
+    attacker_model = _load_if_provided(attacker_info, target_model, model_info, max_tokens=max_new_tokens)
+    judge_model = _load_if_provided(judge_info, target_model, model_info, max_tokens=16)
 
     # ── 2. Instantiate the attack ───────────────────────────────────────────
     kwargs = {param.get("id"): param.get("default") for param in attack_info.get("parameters", [])}
@@ -166,38 +184,34 @@ async def jailbreaking(
     # The ConversationState has: goal, success, best_response, best_score,
     # attempts (list[AttackAttempt]), metadata, stateful flag, etc.
 
-    # Derive best_prompt from the highest-scored attempt
+    # Derive the best prompt from the highest-scored recorded attempt.
     best_prompt = ""
-    scored_attempts = [a for a in state.attempts if a.score is not None]
+    scored_attempts = [attempt for attempt in state.attempts if attempt.score is not None]
     if scored_attempts:
-        best_attempt = max(scored_attempts, key=lambda a: a.score)
-        best_prompt = best_attempt.prompt
+        best_prompt = max(scored_attempts, key=lambda attempt: attempt.score).prompt
 
     if state.stateful:
-        # Stateful attack (e.g. Red Queen): one continuous conversation.
-        # The target_context holds the full dialogue (system, user, assistant).
+        # Stateful attacks keep one continuous conversation in target_context.
         conversations = [[
             {
-                "role": "attacker" if m.role == "user" else "target",
-                "content": m.content,
+                "role": "attacker" if message.role == "user" else "target",
+                "content": message.content,
                 "score": None,
             }
-            for m in state.target_context
-            if m.role != "system"  # exclude internal system prompt from display
+            for message in state.target_context
+            if message.role != "system"
         ]]
-        # Flat history == same as the single conversation (no separate attempts to show)
         history = conversations[0]
     else:
-        # Stateless attack (PAIR, GCG, Prefill, …): each attempt is an
-        # independent target query that starts a fresh conversation.
-        conversations = []
-        for attempt in state.attempts:
-            conversations.append([
+        # Stateless attacks record independent prompt/response attempts.
+        conversations = [
+            [
                 {"role": "attacker", "content": attempt.prompt, "score": attempt.score},
                 {"role": "target", "content": attempt.response, "score": attempt.score},
-            ])
-        # Flat history: all turns concatenated (for the "full history" view)
-        history = [turn for chat in conversations for turn in chat]
+            ]
+            for attempt in state.attempts
+        ]
+        history = [turn for conversation in conversations for turn in conversation]
 
     ret: dict = {
         "goal": state.goal,

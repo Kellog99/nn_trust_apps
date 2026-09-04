@@ -2,44 +2,24 @@ import base64
 import json
 import logging
 import os
-from pathlib import Path
+from typing import Optional
 
 import ray
 import requests
-from fastapi import APIRouter, Response, Body, Query, Request, HTTPException
+from fastapi import APIRouter, Response, Body, Query, Request
 
 from benchmarking import run_benchmark, executor
 from models import BenchmarkExecutionConfig, DatasetInfo, ModelInfo
+from services.utils.benchmark import _load_resource_info
 
 router = APIRouter(prefix="/job", tags=["jobs management", "jobs utils"])
 
 
-def _load_resource_info(resource_id: str, repository: str, *, dataset: bool):
-    """Resolve the ID-only representation used by the web client."""
-    repository_root = Path(repository).expanduser().resolve()
-    root = (repository_root / resource_id).resolve()
-    try:
-        root.relative_to(repository_root)
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid resource ID")
-    info_path = root / "info.json"
-    if not info_path.is_file():
-        raise HTTPException(status_code=404, detail=f"{'Dataset' if dataset else 'Model'} '{resource_id}' not found")
-
-    with info_path.open("r", encoding="utf-8") as info_file:
-        info = json.load(info_file)
-    info["id"] = info.get("id", resource_id)
-    info["name"] = info.get("name", resource_id)
-    info["repository"] = str(root / "data" if dataset and (root / "data").is_dir() else root)
-    if not dataset:
-        # Older generated metadata calls this field `api`, while ModelInfo
-        # uses `model_type`.
-        info.setdefault("model_type", info.get("api", "plain"))
-    return DatasetInfo.model_validate(info) if dataset else ModelInfo.model_validate(info)
-
-
 @router.post("/start_benchmark")
-async def start_benchmark_job(body: BenchmarkExecutionConfig = Body(...), request: Request = None) -> list[dict]:
+async def start_benchmark_job(
+        body: BenchmarkExecutionConfig = Body(...),
+        request: Optional[Request] = None
+) -> list[dict]:
     """
     Start a new TITANN benchmark job.
     """
@@ -53,7 +33,7 @@ async def start_benchmark_job(body: BenchmarkExecutionConfig = Body(...), reques
         model = _load_resource_info(model, config.path_model_repo, dataset=False)
 
     # run_benchmark consumes serializable mappings, not the API metadata
-    # models returned by /info/attacks and /info/metrics.
+    # model returned by /info/attacks and /info/metrics.
     attacks = [attack.model_dump(exclude_none=True) for attack in body.attacks]
     metrics = [metric.model_dump(exclude_none=True) for metric in body.metrics]
     options = body.options

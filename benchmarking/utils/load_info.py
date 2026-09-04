@@ -13,7 +13,7 @@ def load_info(
         info_cls: Type[T]
 ) -> T:
     """
-    Build a ModelInfo/DatasetInfo from one entry of the config's "models"/"datasets"
+    Build a ModelInfo/DatasetInfo from one entry of the config's "model"/"datasets"
     list. Two shapes are supported:
 
       - {"source_path": "..."}                -> info is read from <source_path>/info.json,

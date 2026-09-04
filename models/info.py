@@ -71,6 +71,20 @@ class Info(BaseModel):
 class DatasetInfo(Info):
     type: Literal["dataset"] = "dataset"
 
+    dataset_type: str = Field(
+        default="auto",
+        title="Dataset Format",
+        description=(
+            "How the repository is loaded: class folders (ImageFolder), a flat "
+            "image directory, or automatic detection."
+        ),
+    )
+    split: Optional[str] = Field(
+        default=None,
+        title="Split",
+        description="Optional split below the repository, for example 'test' or 'val'.",
+    )
+
     num_samples: Optional[int] = Field(
         default=None,
         title="Number of Samples",
@@ -121,6 +135,14 @@ class ModelInfo(Info):
         title="Dataset",
         description="Dataset where the model had been optimized on"
     )
+    dataset_format: Optional[str] = Field(
+        default=None,
+        title="Training Dataset Format",
+        description=(
+            "Format of the data used to train the model, for example ImageFolder, "
+            "flat images, COCO, or a custom dataset."
+        ),
+    )
     parameters: Optional[int] = Field(
         default=None,
         title="Parameters",
@@ -162,11 +184,11 @@ class ModelInfo(Info):
                 )
         elif self.model_type == "HuggingFace" and "/" not in self.id:
             raise ValueError(
-                "HuggingFace models should have an id like 'owner/model'"
+                "HuggingFace model should have an id like 'owner/model'"
             )
         elif self.model_type == "Ollama" and "/" in self.id:
             raise ValueError(
-                "Ollama models should have an id without '/', e.g. 'llama3:8b-instruct'"
+                "Ollama model should have an id without '/', e.g. 'llama3:8b-instruct'"
             )
 
         return self

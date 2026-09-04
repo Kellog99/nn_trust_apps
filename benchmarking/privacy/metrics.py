@@ -1,6 +1,6 @@
-"""Privacy result models and reusable metric helpers.
+"""Privacy result model and reusable metric helpers.
 
-Includes Pydantic models for execution results, artifacts, and pending payloads,
+Includes Pydantic model for execution results, artifacts, and pending payloads,
 plus metric-computation helpers for membership inference, property inference,
 reconstruction, model inversion, and other common privacy attacks. Plugs into
 the nn_trust privacy benchmarking framework's result serialization and analysis

@@ -131,7 +131,7 @@ def get_privacy_datasets() -> list[dict]:
     return [spec.info() for spec in get_privacy_dataset_factory().list_specs()]
 
 
-@router.get("/privacy/models")
+@router.get("/privacy/model")
 def get_privacy_models() -> list[dict]:
     factory = get_default_model_factory()
     if isinstance(factory, AppPrivacyModelFactory):

@@ -66,7 +66,7 @@ def resolve_trained_target_output_dir(job: PrivacyJobConfig) -> Path:
     return (
             Path(job.dataset.root)
             / job.dataset.dataset_id
-            / "models"
+            / "model"
             / job.target_model.model_id
             / compute_privacy_target_model_fingerprint(job)
     )

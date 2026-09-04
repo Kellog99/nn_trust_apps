@@ -9,9 +9,9 @@ def _load_ollama(
         api_url: str,
         **kwargs
 ) -> NLPModelAdapter:
-    # Ollama models are always remote LLMs and never go through the CV path.
+    # Ollama model are always remote LLMs and never go through the CV path.
     if model_id is None:
-        raise ValueError("model_id is required for Ollama models.")
+        raise ValueError("model_id is required for Ollama model.")
     return OllamaNLPAdapter(
         model_id=model_id,
         base_url=api_url or "http://localhost:11434",

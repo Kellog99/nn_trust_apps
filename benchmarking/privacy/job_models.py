@@ -1,4 +1,4 @@
-"""App-side privacy job models."""
+"""App-side privacy job model."""
 
 from enum import Enum
 from pathlib import Path
@@ -124,7 +124,7 @@ class PrivacyTargetTrainingOverrideConfig(BaseModel):
         Note: the returned mapping may include ``optimizer`` when explicitly set
         in the override config.  Callers that layer overrides on top of a recipe
         should be aware that the recipe's optimizer choice will be silently
-        replaced.  This is intentional for property-inference shadow models
+        replaced.  This is intentional for property-inference shadow model
         (which always use Adam) but may be surprising for other recipes if the
         override config inadvertently sets ``optimizer``.
         """

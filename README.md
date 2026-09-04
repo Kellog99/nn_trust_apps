@@ -153,6 +153,15 @@ model_repository/
 
 The dataset repository follows the same organization.
 
+For image classification, `dataset_type: "auto"` detects the common
+`class_name/image` layout. Use `"image_folder"` to require that layout, or
+`"flat"` for a directory of images. Flat directories may include a
+`labels.csv` file with `file,label` columns (or a `labels.json` mapping) when
+classification labels are available. Other computer-vision formats, such as
+COCO, YOLO, video, or medical volumes, should be instantiated as a compatible
+`torch.utils.data.Dataset` and passed to `get_dataloader(dataset=...)` so that
+their annotation semantics are not guessed from a path.
+
 ```text
 dataset_repository/
 ├── dataset_1/

@@ -53,7 +53,7 @@ The default configuration file, which can be edited directly in the request body
     "num_classes": 10,
     "input_dimensionality": [3, 32, 32],
     "model_type": "plain",
-    "repository": "benchmark_assets/models/cifar10_resnet20",
+    "repository": "benchmark_assets/model/cifar10_resnet20",
     "transformation": {
       "mean": [0.4914, 0.4822, 0.4465],
       "std": [0.247, 0.2435, 0.2616]

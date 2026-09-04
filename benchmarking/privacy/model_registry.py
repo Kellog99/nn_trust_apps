@@ -1,6 +1,6 @@
 """App-owned privacy model registry.
 
-Registry and builder utilities for privacy benchmarking models.
+Registry and builder utilities for privacy benchmarking model.
 """
 
 from __future__ import annotations
