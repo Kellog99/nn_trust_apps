@@ -23,6 +23,7 @@ from utils._loaders import (
     _load_torch_dynamo,
     _load_torch_script
 )
+from nn_trust.attack.nlp.judges import LlamaGuardJudge
 
 _LOADERS: dict[str, Callable[..., CVModelAdapter]] = {
     "plain": _load_plain,
@@ -101,6 +102,24 @@ def load_model(
             name=model_id,
             **kwargs,
         )
+
+    # LlamaGuard judge (logit-based safety classifier) ──────────────────────
+    if model_type == "LlamaGuard":
+        if model_id is None:
+            raise ValueError("model_id is required for LlamaGuard models.")
+        llm = AutoModelForCausalLM.from_pretrained(model_id)
+        tok = AutoTokenizer.from_pretrained(model_id)
+        # Create base adapter then wrap in LlamaGuardJudge
+        base_adapter = HuggingFaceNLPAdapter(
+            model=llm,
+            tokenizer=tok,
+            name=model_id,
+            threat_model=Knowledge.White,
+            task=Task.Language,
+            **kwargs,
+        )
+        # Return the logit-based judge (BaseJudge subclass)
+        return LlamaGuardJudge(adapter=base_adapter)
 
     # HuggingFace can be a CV model (local checkpoint via the CV path below)
     # or an LLM (hub causal LM). Ambiguity is resolved by task: a Language

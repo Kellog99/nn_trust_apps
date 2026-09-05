@@ -105,6 +105,7 @@ MODEL_TYPES = Literal[
     "plain",
     "timm",
     "HuggingFace",
+    "LlamaGuard",
     "torch_script",
     "torch_dynamo",
     "onnx",
@@ -166,6 +167,10 @@ class ModelInfo(Info):
         elif self.model_type == "Ollama" and "/" in self.id:
             raise ValueError(
                 "Ollama models should have an id without '/', e.g. 'llama3:8b-instruct'"
+            )
+        elif self.model_type == "LlamaGuard" and "/" not in self.id:
+            raise ValueError(
+                "LlamaGuard models should have an id like 'owner/model'"
             )
 
         return self
