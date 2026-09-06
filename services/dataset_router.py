@@ -92,10 +92,6 @@ def get_datasets():
                     "name": item,
                     "size": len(datasetObject),
                     "task": task
-                    # "prototype": {
-                    #    "datas":[b64_string],
-                    #    "type": image_type
-                    # }
                 }
                 datasets.append(out_item)
         if len(datasets) == 0:

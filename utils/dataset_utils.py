@@ -11,7 +11,7 @@ from PIL import Image as PILImage
 from torch.utils.data import Subset, DataLoader
 from torchvision.transforms import transforms
 from nn_trust import Task
-from nn_trust.attack.detection_utils import LetterboxCocoTransform
+from nn_trust.attack.utils.detection import LetterboxCocoTransform
 from torchvision.datasets import CocoDetection
 
 from models.info import Transformation

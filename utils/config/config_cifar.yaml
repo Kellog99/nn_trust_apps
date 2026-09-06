@@ -8,7 +8,9 @@ datasets:
 
 attacks:
  - id: zoo
-   max_iters: 5
+   seed: 1
+   max_iters: 50
+   targeted: false
    c: 10000.0
    gradient_estimator_args:
      num_samples: 1000

@@ -14,7 +14,7 @@ from nn_trust import ModelAdapter, StatisticComposer, Task
 from nn_trust.attack import EvasionAttack
 from nn_trust.utils import PyTorchCheckpointLogger
 
-from nn_trust.attack.detection_utils import nms
+from nn_trust.attack.utils.detection import nms
 
 
 def evaluate_attack(
@@ -78,6 +78,7 @@ def evaluate_attack(
     # subtly, desynchronize state) so the loop below iterates zero times.
     base_iter = iter(dataloader)
     first_batch, first_label = next(base_iter)
+
     full_iter = itertools.chain([(first_batch, first_label)], base_iter)
 
     total_batches = len(dataloader) if hasattr(dataloader, "__len__") else None

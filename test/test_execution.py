@@ -13,7 +13,7 @@ from benchmarking import BenchmarkExecutor
 from benchmarking.utils.evaluation import evaluate_attack
 from models.reports import ReportAttackProps, AttackMetricsProps
 from nn_trust import StatisticComposer, ModelAdapter
-from test.test_attack import available_devices
+from test.test_single_attack import available_devices
 from test.utils import get_dummy_cv_model, get_dummy_dataloader
 
 

@@ -66,5 +66,6 @@ if __name__ == "__main__":
         host=config.host,
         port=config.port,
         workers=config.workers,
-        factory=True
+        factory=True,
+        reload=config.reload
     )

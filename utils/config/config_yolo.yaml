@@ -10,9 +10,10 @@ attacks:
  - id: zoo
    seed: 1
    max_iters: 50
+   targeted: false
    c: 10000.0
    gradient_estimator_args:
-     num_samples: 200
+     num_samples: 100
      epsilon: 0.01
    optimizer_args:
      lr: 0.1
@@ -65,7 +66,7 @@ metrics:
 options:
   load_results: false                 # loading any existing results.
   overwrite: true                     # overwriting the results if a benchmarking is performed
-  max_saved_elements: 1
+  max_saved_elements: 10
   num_workers: 1
   verbose: true
   save_perturbation: false
@@ -74,4 +75,4 @@ options:
   create_pdf: true
   output_path: "/home/antonio-liguori/Documents/Projects/StableAI/nn_trust_personal/benchmark_output"
   targeted: false
-  subset: 1
+  subset: 10
