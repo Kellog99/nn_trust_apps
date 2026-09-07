@@ -1,7 +1,7 @@
-from typing import Optional, List, Literal, Any, Annotated
+from typing import Optional, List, Literal, Any
 
 import timm
-from pydantic import BaseModel, Field, model_validator, field_validator
+from pydantic import BaseModel, Field, model_validator
 
 from nn_trust import Task
 
@@ -68,10 +68,31 @@ class Info(BaseModel):
     )
 
 
-class DatasetInfo(Info):
-    type: Literal["dataset"] = "dataset"
+DATASET_TYPES = Literal[
+    "auto",
+    "image_folder",
+    "flat",
+    "parquet",
+]
 
-    dataset_type: str = Field(
+
+class ParquetInfo(BaseModel):
+    image_col: str = Field(
+        default="image",
+        description="It represents the column of the dataframe where the image is stored."
+    )
+    label: str = Field(
+        default="bytes",
+        description="It represents the key containing encoded image bytes."
+    )
+    label_column: Optional[str] = Field(
+        default="label",
+        description="The Parquet column containing the classification target."
+    )
+
+
+class DatasetInfo(Info):
+    dataset_type: DATASET_TYPES = Field(
         default="auto",
         title="Dataset Format",
         description=(
@@ -105,6 +126,19 @@ class DatasetInfo(Info):
         title="Label Dictionary",
         description="It represent the Label dictionary for extracting the name of the index that the model predicts."
     )
+    parquet_info: Optional[ParquetInfo] = Field(
+        default=None,
+        title="Parquet Information",
+        description="It contains all the additional information that are needed for handling the Parquet format dataset."
+    )
+
+    @model_validator(mode="after")
+    def validate_parquet(self):
+        if self.dataset_type == "parquet" and self.parquet_info is None:
+            raise ValueError(
+                "parquet_info is required when dataset_type is 'parquet'."
+            )
+        return self
 
 
 class Transformation(BaseModel):
@@ -116,9 +150,9 @@ class Transformation(BaseModel):
 
 MODEL_TYPES = Literal[
     "Ollama",
-    "HuggingFace",
     "Gemini",
     "OpenRouter",
+    "HuggingFace",
     "plain",
     "timm",
     "torch_script",
@@ -129,7 +163,6 @@ MODEL_TYPES = Literal[
 
 
 class ModelInfo(Info):
-
     dataset: Optional[str] = Field(
         default=None,
         title="Dataset",

@@ -1,10 +1,10 @@
 from pathlib import Path
 from typing import Optional
 
-from torchvision import transforms as T
 from torch.utils.data import Dataset
+from torchvision import transforms as T
 
-from utils.dataset.dataset import ImageDatasetFolder, FlatImageDataset, ParquetImageDataset
+from utils.dataset.datasets import ImageDatasetFolder, FlatImageDataset, ParquetImageDataset
 from utils.dataset.utils import _read_labels, _resolve_dataset_root, _is_valid_image
 
 

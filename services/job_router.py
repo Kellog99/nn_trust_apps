@@ -2,8 +2,6 @@ import base64
 import json
 import logging
 import os
-from typing import Optional
-
 import ray
 import requests
 from fastapi import APIRouter, Response, Body, Query, Request
@@ -17,14 +15,14 @@ router = APIRouter(prefix="/job", tags=["jobs management", "jobs utils"])
 
 @router.post("/start_benchmark")
 async def start_benchmark_job(
-        body: BenchmarkExecutionConfig = Body(...),
-        request: Optional[Request] = None
+        request: Request,
+        body: BenchmarkExecutionConfig = Body(...)
 ) -> list[dict]:
     """
     Start a new TITANN benchmark job.
     """
 
-    config = request.app.state.config if request is not None else None
+    config = request.app.state.config
     dataset: DatasetInfo = body.dataset
     model: ModelInfo = body.model
     if isinstance(dataset, str):

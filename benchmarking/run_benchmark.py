@@ -92,6 +92,15 @@ def run_benchmark(
                 name=dataset_cnf.name,
                 dataset_type=dataset_cnf.dataset_type,
                 split=dataset_cnf.split,
+                **(
+                    {
+                        "image_column": dataset_cnf.parquet_info.image_col,
+                        "image_key": dataset_cnf.parquet_info.label,
+                        "label_column": dataset_cnf.parquet_info.label_column,
+                    }
+                    if dataset_cnf.parquet_info is not None
+                    else {}
+                ),
             )
             #################### Defining the Statistic Composer ####################
             num_classes = model_cnf.num_classes

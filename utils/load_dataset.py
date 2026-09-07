@@ -8,16 +8,15 @@ import torchvision.transforms as T
 from torch.utils.data import Dataset, Subset, DataLoader
 from torchvision.transforms import transforms
 
-from models.info import Transformation
+from models.info import Transformation, DATASET_TYPES, DatasetInfo
 from utils.dataset._load_classification_dataset import (
     _load_auto,
     _load_image_folder,
     _load_flat,
     _load_parquet
 )
-from utils.dataset.dataset import ImageDatasetFolder, FlatImageDataset, ParquetImageDataset
 
-_LOADERS: dict[str, Callable[..., Dataset]] = {
+_LOADERS: dict[DATASET_TYPES, Callable[..., Dataset]] = {
     "auto": _load_auto,
     "image_folder": _load_image_folder,
     "flat": _load_flat,
@@ -42,12 +41,12 @@ def get_transformation(transformation: Transformation):
 
 def get_dataloader(
         dataset_path: str,
+        dataset_info: DatasetInfo,
         batch: int,
         transform: T.Compose,
         subset: Optional[int] = None,
         num_workers: int = 4,
-        name: Optional[str] = None,
-        dataset_type: str = "auto",
+        dataset_type: DATASET_TYPES = "auto",
         split: Optional[str] = None,
         **kwargs,
 ) -> DataLoader:
@@ -69,19 +68,7 @@ def get_dataloader(
             "For COCO, YOLO, video, medical volumes, or another custom "
             "format, pass a torch.utils.data.Dataset instance."
         ) from None
-    dataset = loader(root=root, transform=transform, split=split, **kwargs)
-
-    dataset.name = name if name is not None else root.name
-    if dataset_type == "auto":
-        if isinstance(dataset, ImageDatasetFolder):
-            dataset_type = "image_folder"
-        elif isinstance(dataset, FlatImageDataset):
-            dataset_type = "flat"
-        elif isinstance(dataset, ParquetImageDataset):
-            dataset_type = "parquet"
-        else:
-            dataset_type = "custom"
-    dataset.dataset_type = dataset_type
+    dataset: Dataset = loader(root=root, transform=transform, split=split, **kwargs)
 
     if subset is None or subset < 0:
         indices = list(range(len(dataset)))

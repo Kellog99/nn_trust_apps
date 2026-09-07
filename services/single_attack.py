@@ -3,12 +3,27 @@ from fastapi import APIRouter, Body, Query, HTTPException
 from pydantic import ValidationError
 
 from models import SingleAttackOutput, SingleAttackProps, ModelInfo, RegisteredObject
-from nn_trust import Task, EvasionAttack, AttackFactory as AF
+from nn_trust import Task, EvasionAttack, AttackFactory as AF, NLPModelAdapter, CVModelAdapter
 from services.utils.attack import single_attack_performance
 from services.utils.utils import b64str_to_pil
 from utils import load_model
 
 router = APIRouter(prefix="/test", tags=["jobs management", "jobs utils"])
+
+
+def _normalize_attack_parameters(attack_id: str | None, parameters: dict) -> dict:
+    """Make attack parameters compatible with the optimizer constraints.
+
+    Older clients can submit FOM's ``nesterov`` flag without updating the
+    momentum field from its default value of zero.  PyTorch's SGD requires
+    positive momentum and zero dampening when Nesterov acceleration is used.
+    Preserve the requested Nesterov mode while filling in those constraints.
+    """
+    if (attack_id or "").lower() == "fom" and parameters.get("nesterov") is True:
+        if float(parameters.get("momentum", 0)) <= 0:
+            parameters["momentum"] = 0.9
+        parameters["dampening"] = 0
+    return parameters
 
 
 # --- Single attack --- #
@@ -66,20 +81,23 @@ async def single_attack(
         model_api=model_info.api,
         model_id=model_info.id,
     )
-    model = model.to(device)
+    if isinstance(model, NLPModelAdapter):
+        raise ValidationError("The model has been validated as an NLP model while it should be a CV model.")
+    model: CVModelAdapter = model.to(device)
     model.eval()
     print(" Model loaded ".center(40, "#"))
 
     ################## ATTACK ##################
     atk: RegisteredObject = body.attack
+    attack_parameters = _normalize_attack_parameters(
+        atk.id,
+        {param.id: param.default for param in attack.parameters},
+    )
     attack: EvasionAttack = AF.create(
         model=model.to(device),
         class_id=atk.id,
         task=task,
-        **{
-            param.id: param.default
-            for param in attack.parameters
-        }
+        **attack_parameters
     )
     print(" Attack Created ".center(40, "#"))
     ############################################
@@ -109,10 +127,6 @@ async def jailbreaking(
     """
     Handle the POST request for executing a jailbreak attack.
     """
-    if device == "cuda" and not torch.cuda.is_available():
-        device = "cpu"
-    elif device == "mps" and not torch.backends.mps.is_available():
-        device = "cpu"
     device = torch.device(device if device in ["cpu", "cuda", "mps"] else "cpu")
 
     model_info = body.get("model")
@@ -137,7 +151,10 @@ async def jailbreaking(
         )
 
     # ── 1. Load model ──────────────────────────────────────────────────────
-    def _load_nlp_model(info: dict, max_tokens: int = 256):
+    def _load_nlp_model(
+            info: dict,
+            max_tokens: int = 256
+    ) -> NLPModelAdapter:
         """Load an NLP model adapter from its info dict."""
         m = load_model(
             model_type=info.get("model_type", "HuggingFace"),
@@ -153,7 +170,12 @@ async def jailbreaking(
             m.eval()
         return m
 
-    def _load_if_provided(info: dict | None, fallback_model, fallback_info: dict, max_tokens: int = 256):
+    def _load_if_provided(
+            info: dict | None,
+            fallback_model,
+            fallback_info: dict,
+            max_tokens: int = 256
+    ) -> NLPModelAdapter:
         if info is None or info.get("id") == fallback_info.get("id"):
             return fallback_model
         return _load_nlp_model(info, max_tokens=max_tokens)
@@ -166,7 +188,10 @@ async def jailbreaking(
     judge_model = _load_if_provided(judge_info, target_model, model_info, max_tokens=16)
 
     # ── 2. Instantiate the attack ───────────────────────────────────────────
-    kwargs = {param.get("id"): param.get("default") for param in attack_info.get("parameters", [])}
+    kwargs = _normalize_attack_parameters(
+        attack_info.get("id"),
+        {param.get("id"): param.get("default") for param in attack_info.get("parameters", [])},
+    )
     attack = AF.create(
         class_id=attack_info.get("id"),
         model=target_model,
