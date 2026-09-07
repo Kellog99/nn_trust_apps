@@ -67,18 +67,21 @@ def run_benchmark(
 
     list_reports: list[ModelReportProps] = []
     for model_cnf in models:
-        task: Task = model_cnf.task if isinstance(model_cnf.task, Task) else Task.from_str(model_cnf.task)
+        task_model: Task = model_cnf.task if isinstance(model_cnf.task, Task) else Task.from_str(model_cnf.task)
         model: ModelAdapter = load_model(
             model_id=model_cnf.id or model_cnf.name,
             model_type=model_cnf.model_type,
             model_path=model_cnf.repository,
             api_url=model_cnf.api,
-            task=task,
+            task=task_model,
             device=device
         )
         transform = get_transformation(transformation=model_cnf.transformation)
 
         for dataset_cnf in datasets:
+            task_dataset: Task = dataset_cnf.task if isinstance(dataset_cnf.task, Task) else Task.from_str(dataset_cnf.task)
+            if task_model != task_dataset:
+                raise ValueError(f"Task mismatch between model {model_cnf.id} ({task_model}) and dataset {dataset_cnf.id} ({task_dataset}).")
             if dataset_cnf.repository is None:
                 raise ValueError("No dataset to load.")
             dataloader: DataLoader = get_dataloader(
@@ -88,7 +91,7 @@ def run_benchmark(
                 transform=transform,
                 num_workers=dataset_cnf.num_workers,
                 name=dataset_cnf.name,
-                task=task
+                task=task_dataset
             )
             #################### Defining the Statistic Composer ####################
             num_classes = model_cnf.num_classes
@@ -100,7 +103,7 @@ def run_benchmark(
             if metrics is None or len(metrics) == 0:
                 metrics = [
                     {"id": metric}
-                    for metric in SF.get_list_classes(task={task})
+                    for metric in SF.get_list_classes(task={task_dataset})
                 ]
             metrics: list[dict] = [
                 {
@@ -110,7 +113,7 @@ def run_benchmark(
                     "device": options.gpu,
                     "num_classes": num_classes,
                 }
-                for metric in metrics if metric.get("id") in SF.get_list_classes(task={task})
+                for metric in metrics if metric.get("id") in SF.get_list_classes(task={task_dataset})
             ]
             statistics_composer = StatisticComposer(
                 statistics=metrics,
