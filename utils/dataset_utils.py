@@ -72,7 +72,7 @@ class CocoDetectionDataset(CocoDetection):
         self.cat_id_to_label = cat_id_to_label
 
 
-def get_transformation(transformation: Transformation):
+def transformation_classification(transformation: Transformation):
     out = [
         transforms.ToTensor(),
         transforms.Normalize(
@@ -90,7 +90,7 @@ def get_transformation(transformation: Transformation):
 def get_dataloader(
         dataset_path: str,
         batch: int,
-        transform: T.Compose,
+        model_transformation: Transformation,
         subset: Optional[int] = None,
         num_workers: int = 4,
         name: Optional[str] = None,
@@ -130,6 +130,8 @@ def get_dataloader(
                 ann_file=dataset_path / annotations_file_,
             )
         case Task.Classification:
+            transform = transformation_classification(transformation=model_transformation)
+
             dataset = ImageDatasetFolder(
                 dataset_path,
                 transform=transform,

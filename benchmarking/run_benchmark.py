@@ -13,7 +13,6 @@ from models import BenchmarkOptionConfig, ModelInfo, DatasetInfo, ModelReportPro
 from models.reports import ReportMetricsProps, ReportAttackProps
 from nn_trust import AttackFactory as AF, StatisticComposer, StatisticsFactory as SF, ModelAdapter, Task
 from utils import load_model, get_dataloader
-from utils.dataset_utils import get_transformation
 
 
 def run_benchmark(
@@ -76,7 +75,6 @@ def run_benchmark(
             task=task_model,
             device=device
         )
-        transform = get_transformation(transformation=model_cnf.transformation)
 
         for dataset_cnf in datasets:
             task_dataset: Task = dataset_cnf.task if isinstance(dataset_cnf.task, Task) else Task.from_str(dataset_cnf.task)
@@ -88,7 +86,7 @@ def run_benchmark(
                 dataset_path=dataset_cnf.repository,
                 batch=dataset_cnf.batch_size,
                 subset=options.subset,
-                transform=transform,
+                model_transformation=model_cnf.transformation,
                 num_workers=dataset_cnf.num_workers,
                 name=dataset_cnf.name,
                 model_type = model_cnf.model_type,
