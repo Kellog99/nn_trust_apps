@@ -94,7 +94,10 @@ def get_dataloader(
         subset: Optional[int] = None,
         num_workers: int = 4,
         name: Optional[str] = None,
+        model_type: Optional[str] = None,
         task: Optional[Task] = None,
+        images_dir: Optional[str] = None,
+        annotations_file: Optional[str] = None,
         **kwargs,
 ) -> DataLoader:
     """
@@ -115,9 +118,16 @@ def get_dataloader(
 
     match task:
         case Task.Detection:
+            if "coco" not in name.lower():
+                raise ValueError("Only COCO dataset is supported for detection task.")
+            if model_type != "ultralytics":
+                raise ValueError("The current detection dataloader supports only ultralytics models.")
+            images_dir_ = images_dir if images_dir is not None else "val2017"
+            annotations_file_ = annotations_file if annotations_file is not None else "annotations/instances_val2017.json"
+
             dataset = CocoDetectionDataset(
-                root=dataset_path / "val2017",
-                ann_file=dataset_path / "annotations" / "instances_val2017.json",
+                root=dataset_path / images_dir_,
+                ann_file=dataset_path / annotations_file_,
             )
         case Task.Classification:
             dataset = ImageDatasetFolder(

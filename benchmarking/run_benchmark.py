@@ -91,7 +91,10 @@ def run_benchmark(
                 transform=transform,
                 num_workers=dataset_cnf.num_workers,
                 name=dataset_cnf.name,
-                task=task_dataset
+                model_type = model_cnf.model_type,
+                task=task_dataset,
+                images_dir=dataset_cnf.images_dir,
+                annotations_file=dataset_cnf.annotations_file,
             )
             #################### Defining the Statistic Composer ####################
             num_classes = model_cnf.num_classes

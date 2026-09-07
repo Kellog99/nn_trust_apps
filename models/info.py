@@ -91,6 +91,16 @@ class DatasetInfo(Info):
         title="Label Dictionary",
         description="It represent the Label dictionary for extracting the name of the index that the model predicts."
     )
+    images_dir: Optional[str] = Field(
+        default=None,
+        title="images directory",
+        description="The directory where detection images are stored"
+    )
+    annotations_file: Optional[str] = Field(
+        default=None,
+        title="annotations file",
+        description="The file where detection annotations are stored"
+    )
 
 
 class Transformation(BaseModel):
