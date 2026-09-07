@@ -103,6 +103,8 @@ class Transformation(BaseModel):
 MODEL_TYPES = Literal[
     "Ollama",
     "HuggingFace",
+    "Gemini",
+    "OpenRouter",
     "plain",
     "timm",
     "torch_script",
