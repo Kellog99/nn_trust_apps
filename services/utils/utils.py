@@ -138,7 +138,7 @@ def get_parameter_prop(
         description=param_info.description,
     )
 
-def filter_predictions(pred, top_k=20):
+def filter_predictions(pred, display_top_k):
     '''
     Filter predictions based on top_k
     '''
@@ -149,8 +149,8 @@ def filter_predictions(pred, top_k=20):
     idx = torch.arange(len(labels))
 
     # rank the predictions based on scores and select top_k
-    if scores is not None and idx.numel() > top_k:
-        idx = idx[scores[idx].topk(top_k).indices]
+    if display_top_k is not None and idx.numel() > display_top_k:
+        idx = idx[scores[idx].topk(display_top_k).indices]
 
     return {
         "boxes": boxes[idx],
@@ -159,13 +159,13 @@ def filter_predictions(pred, top_k=20):
     }
 
 
-def draw_predictions(image, pred):
+def draw_predictions(image, pred, display_top_k):
     '''
     Draw predictions on the image
     '''
 
     # filter predictions based on top_k
-    pred = filter_predictions(pred, top_k=15)
+    pred = filter_predictions(pred, display_top_k)
 
     # convert image to uint8 and get its height and width
     image_uint8 = (image.detach().cpu().clamp(0, 1) * 255).to(torch.uint8)

@@ -193,8 +193,8 @@ def single_attack_performance(
             )
 
             # Draw predictions on the original and adversarial images
-            x_with_pred = draw_predictions(x[0], post_nms_preds[0])
-            x_adv_with_pred = draw_predictions(x_adv[0], post_nms_preds_adv[0])
+            x_with_pred = draw_predictions(x[0], post_nms_preds[0], display_top_k=attack.config.display_top_k)
+            x_adv_with_pred = draw_predictions(x_adv[0], post_nms_preds_adv[0], display_top_k=attack.config.display_top_k)
 
             # Convert the images with predictions to base64 strings for output
             y_pred = tensor_image_to_b64str(x_with_pred.float() / 255)
