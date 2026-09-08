@@ -157,8 +157,7 @@ def single_attack_performance(
 
             if not torch.isfinite(x_adv).all():
                 raise RuntimeError(
-                    "The attack produced non-finite values. Reduce the attack epsilon/learning rate "
-                    "or enable epsilon-ball projection."
+                    "The attack produced non-finite values"
                 )
 
             with torch.no_grad():
