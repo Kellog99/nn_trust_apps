@@ -13,7 +13,8 @@ from nn_trust.models.ultralytics_models import UltralyticsCVModel
 from nn_trust.utils.logger import PyTorchCheckpointLogger
 from services.utils.utils import tensor_image_to_b64str, draw_predictions
 from models.info import Transformation
-from nn_trust.attack.utils.detection import nms
+from utils.dataset_utils import transformation_classification
+from nn_trust.attack.utils.detection import nms, LetterboxCocoTransform
 
 
 def single_attack_performance(
@@ -37,29 +38,43 @@ def single_attack_performance(
 
     # Force a fixed, model-expected channel count (fixes silent C-mismatch -> CUDA assert)
     pil_image = pil_image.convert("RGB")
+    H, W = pil_image.height, pil_image.width
 
     ############ image transformation ############
-    original_input: torch.Tensor = T.ToTensor()(pil_image)
-    print(original_input.shape)
-    C, H, W = original_input.shape
+    match task:
+        case Task.Classification:
+            transformations = transformation_classification(
+                transformation=transformation
+            )
 
-    mean = transformation.mean if transformation is not None else [0.485, 0.456, 0.406]
-    std = transformation.std if transformation is not None else [0.229, 0.224, 0.225]
+            mean = transformation.mean
+            std = transformation.std
 
-    transformations = T.Compose([
-        T.Resize(size=input_dimensionality),
-        T.ToImage(),
-        T.ToDtype(torch.float32, scale=True),
-        T.Normalize(mean=mean, std=std)
-    ])
+            inv_transform = T.Compose([
+                T.Normalize(
+                    mean=[-m / s for m, s in zip(mean, std)],
+                    std=[1 / s for s in std],
+                ),
+                T.Resize(
+                    size=(H, W),
+                ),
+            ])
 
-    inv_transform = T.Compose([
-        T.Normalize(
-            mean=[-m / s for m, s in zip(mean, std)],
-            std=[1 / s for s in std]
-        ),
-        T.Resize(size=(H, W), interpolation=InterpolationMode.BICUBIC),
-    ])
+        case Task.Detection:
+            if not isinstance(model, UltralyticsCVModel):
+                raise ValueError("The model must be an instance of UltralyticsCVModel for detection tasks.")
+            
+            letterbox = LetterboxCocoTransform(
+                cat_id_to_label={},
+                new_shape= tuple(input_dimensionality),
+            )
+
+            def transformations(image):
+                image, _ = letterbox(image, [])
+                return image
+
+        case _:
+            raise ValueError(f"Unsupported task: {task}")
 
     x: torch.Tensor = transformations(pil_image)
     if x.dim() == 3:
@@ -68,7 +83,6 @@ def single_attack_performance(
     if not torch.isfinite(x).all():
         raise ValueError("Image preprocessing produced non-finite values.")
     print(" Image loaded ".center(40, "#"))
-    ###############################################
 
     ################## Results ##################
     with torch.no_grad():
@@ -82,7 +96,6 @@ def single_attack_performance(
     
     match task:
         case Task.Classification:
-            #if not torch.isfinite(y).all():
             if not torch.isfinite(out).all():    
                 raise RuntimeError(
                     "The model produced non-finite logits for the original image. "
@@ -128,8 +141,8 @@ def single_attack_performance(
                     "Expected YOLO-style detection output: boxes [B, N, 4], scores [B, N, C]."
                 )
 
-            iou_threshold = attack.config.iou_threshold_targeted
-            score_threshold = attack.config.score_threshold_targeted
+            iou_threshold = attack.config.iou_threshold_evaluation
+            score_threshold = attack.config.score_threshold_evaluation
 
             print(" Executing the Attack ".center(40, "#"))
             start = time.time()
@@ -179,12 +192,11 @@ def single_attack_performance(
                 score_threshold=score_threshold,
             )
 
-            x_vis = inv_transform(x.cpu())[0].clamp(0, 1)
-            x_adv_vis = inv_transform(x_adv.cpu())[0].clamp(0, 1)
+            # Draw predictions on the original and adversarial images
+            x_with_pred = draw_predictions(x[0], post_nms_preds[0])
+            x_adv_with_pred = draw_predictions(x_adv[0], post_nms_preds_adv[0])
 
-            x_with_pred = draw_predictions(x_vis, post_nms_preds[0])
-            x_adv_with_pred = draw_predictions(x_adv_vis, post_nms_preds_adv[0])
-
+            # Convert the images with predictions to base64 strings for output
             y_pred = tensor_image_to_b64str(x_with_pred.float() / 255)
             y_pred_adv = tensor_image_to_b64str(x_adv_with_pred.float() / 255)
 
@@ -199,17 +211,22 @@ def single_attack_performance(
 
     conf_original: list[float] = [conf[0] for conf in conf_original]
     conf_adversarial: list[float] = [conf[0] for conf in conf_adversarial]
+    
     ################## Invert transform ################
     pert: torch.Tensor = x_adv.cpu() - x.cpu()
-    # A perturbation has no mean component: inverse-normalize it by scaling
-    # with the channel standard deviation only. Applying Normalize here would
-    # add the ImageNet mean and inflate the reported distance.
-    std_tensor = torch.tensor(std, dtype=pert.dtype).view(1, 3, 1, 1)
-    pert = T.Resize(size=(H, W), interpolation=InterpolationMode.BICUBIC)(pert * std_tensor)
-    x_adv = inv_transform(x_adv.cpu())
+
+    if task == Task.Classification:
+
+        std_tensor = torch.tensor(std, dtype=pert.dtype).view(1, 3, 1, 1)
+        pert = T.Resize(size=(H, W))(pert * std_tensor)
+        x_adv_output = inv_transform(x_adv.cpu())
+
+    else:
+        # Detection tensors are already in YOLO letterboxed [0, 1] space.
+        x_adv_output = x_adv.cpu()
 
     return SingleAttackOutput(
-        x_adv=tensor_image_to_b64str(x_adv.cpu()),
+        x_adv=tensor_image_to_b64str(x_adv_output.cpu()),
         adv_perturbation=tensor_image_to_b64str(pert.cpu()),
         original_prediction=y_pred,
         adversarial_prediction=y_pred_adv,

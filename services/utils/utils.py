@@ -138,58 +138,53 @@ def get_parameter_prop(
         description=param_info.description,
     )
 
-def filter_predictions(pred, score_threshold=0.25, top_k=20, label_filter=None):
+def filter_predictions(pred, top_k=20):
+    '''
+    Filter predictions based on top_k
+    '''
     boxes = pred["boxes"].detach().cpu()
     labels = pred["labels"].detach().cpu()
+    scores = pred["scores"].detach().cpu() 
 
-    if "scores" in pred:
-        scores = pred["scores"].detach().cpu()
-        keep = scores >= score_threshold
-    else:
-        scores = None
-        keep = torch.ones(len(labels), dtype=torch.bool)
+    idx = torch.arange(len(labels))
 
-    if label_filter is not None:
-        keep = keep & (labels == label_filter)
-
-    idx = torch.where(keep)[0]
-
+    # rank the predictions based on scores and select top_k
     if scores is not None and idx.numel() > top_k:
         idx = idx[scores[idx].topk(top_k).indices]
-    else:
-        idx = idx[:top_k]
 
-    out = {
+    return {
         "boxes": boxes[idx],
         "labels": labels[idx],
+        "scores": scores[idx],
     }
-
-    if scores is not None:
-        out["scores"] = scores[idx]
-
-    return out
 
 
 def draw_predictions(image, pred):
-    pred = filter_predictions(
-        pred,
-        score_threshold=0.25,
-        top_k=15,
-        label_filter=None,
-    )
+    '''
+    Draw predictions on the image
+    '''
 
+    # filter predictions based on top_k
+    pred = filter_predictions(pred, top_k=15)
+
+    # convert image to uint8 and get its height and width
     image_uint8 = (image.detach().cpu().clamp(0, 1) * 255).to(torch.uint8)
     _, h, w = image_uint8.shape
 
+
     boxes = pred["boxes"]
 
+    # convert boxes from xywh to xyxy format
     boxes = xywh2xyxy(boxes)
+
+    # convert boxes to absolute coordinates if they are in relative coordinates
     if boxes.numel() > 0 and boxes.max() <= 1.5:
         boxes[:, [0, 2]] *= w
         boxes[:, [1, 3]] *= h
 
     labels_tensor = pred["labels"]
 
+    # if scores are available, format the labels with their corresponding scores
     if "scores" in pred:
         scores = pred["scores"]
         labels = [

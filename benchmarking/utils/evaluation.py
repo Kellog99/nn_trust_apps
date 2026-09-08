@@ -112,8 +112,8 @@ def evaluate_attack(
                 boxes, scores = out
                 num_classes = scores.shape[-1]
 
-                iou_threshold = attack.config.iou_threshold_targeted
-                score_threshold = attack.config.score_threshold_targeted
+                iou_threshold = attack.config.iou_threshold_evaluation
+                score_threshold = attack.config.score_threshold_evaluation
                 targeted = attack.config.targeted
                 label_target = attack.config.label_target
 
