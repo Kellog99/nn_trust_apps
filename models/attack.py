@@ -12,6 +12,19 @@ class SingleAttackProps(BaseModel):
     model: ModelInfo
 
 
+class JailbreakAttackProps(BaseModel):
+    input: str
+    attack: RegisteredObject
+    model: ModelInfo
+    attacker: Optional[ModelInfo] = None
+    judge: Optional[ModelInfo] = None
+    max_new_tokens: Optional[int] = 2048
+
+    model_config = ConfigDict(
+        arbitrary_types_allowed=True,
+    )
+
+
 class SingleAttackOutput(BaseModel):
     """
     This model has the goal to send the information to the frontend regarding one image attack
@@ -41,8 +54,15 @@ class Bubble(BaseModel):
 
 
 class JailbreakAttackOutput(BaseModel):
-    model_config = ConfigDict(protected_namespaces=())
-    adversarial_prompt: str
-    conversations: Optional[list[list[Bubble]]] = None
-    model_response: str
-    advance_metrics: dict[str, float]
+    model_config = ConfigDict(protected_namespaces=(), arbitrary_types_allowed=True)
+    goal: str
+    success: bool
+    best_prompt: str
+    best_response: str
+    best_score: float
+    history: list[dict]
+    conversations: Optional[list[list[dict]]] = None
+    metadata: dict
+    adversarial_prompt: Optional[str] = None
+    model_response: Optional[str] = None
+    advance_metrics: Optional[dict[str, float]] = None

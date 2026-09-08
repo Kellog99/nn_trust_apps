@@ -1,5 +1,5 @@
 from models.argparser_model import ServerConfig, parsed_argument, config_field, SharableVariables
-from models.attack import SingleAttackOutput, SingleAttackProps, JailbreakAttackOutput, Bubble
+from models.attack import SingleAttackOutput, SingleAttackProps, JailbreakAttackProps, JailbreakAttackOutput, Bubble
 from models.benchmark import (
     BenchmarkExecutionConfig,
     BenchmarkOptionConfig,

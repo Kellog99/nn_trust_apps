@@ -1,9 +1,11 @@
 import time
 import torch
 from fastapi import APIRouter, Body, Query, HTTPException
-from pydantic import ValidationError
+from pydantic import ValidationError, BaseModel
 
-from models import SingleAttackOutput, SingleAttackProps, JailbreakAttackOutput, Bubble, ModelInfo, RegisteredObject
+from typing import Optional
+
+from models import SingleAttackOutput, SingleAttackProps, JailbreakAttackProps, JailbreakAttackOutput, Bubble, ModelInfo, RegisteredObject
 from nn_trust import Task
 from nn_trust.attack import EvasionAttack, AttackFactory as AF
 from services.utils.attack import single_attack_performance
@@ -91,14 +93,14 @@ async def single_attack(
 
 @router.post("/jailbreaking")
 async def jailbreaking(
-        body: dict = Body(...),
+        body: JailbreakAttackProps = Body(...),
         device: str = Query(
             default="cuda",
             description="The device to run the model on.",
             example="cpu"
         )
 
-) -> dict:
+) -> JailbreakAttackOutput:
     """
     Handle the POST request for executing a jailbreak attack.
     """
@@ -107,23 +109,42 @@ async def jailbreaking(
     else:
         device = torch.device("cpu")
 
-    model_info = body.get("model")
-    attack_info = body.get("attack")
-    goal = body.get("input")
-    attacker_info = body.get("attacker")
-    judge_info = body.get("judge")
-    max_new_tokens = body.get("max_new_tokens", 2048)
+    model_info = body.model
+    attack_info = body.attack
+    goal = body.input
+    attacker_info = body.attacker
+    judge_info = body.judge
+    max_new_tokens = body.max_new_tokens or 2048
 
     # ── 1. Load models ──────────────────────────────────────────────────────
-    def _load_nlp_model(info: dict, max_tokens: int = 256):
-        """Load an NLP model adapter from its info dict."""
+    def _load_nlp_model(info: ModelInfo | dict, max_tokens: int = 256):
+        """Load an NLP model adapter from its info object or dict."""
+        if info is None:
+            return None
+        if isinstance(info, BaseModel):
+            model_type = getattr(info, "model_type", "HuggingFace")
+            repository = info.repository
+            task_val = info.task
+            api = info.api
+            model_id = info.id
+            api_key = getattr(info, "api_key", None) or getattr(info, "key", None)
+        else:
+            model_type = info.get("model_type", "HuggingFace")
+            repository = info.get("repository")
+            task_val = info.get("task", "language")
+            api = info.get("api")
+            model_id = info.get("id")
+            api_key = info.get("api_key") or info.get("key")
+
+        task = Task.from_str(task_val) if isinstance(task_val, str) else task_val
+
         m = load_model(
-            model_type=info.get("model_type", "HuggingFace"),
-            model_path=info.get("repository"),
-            task=Task.from_str(info.get("task", "language")),
-            model_api=info.get("api"),
-            model_id=info.get("id"),
-            api_key=info.get("api_key") or info.get("key"),
+            model_type=model_type,
+            model_path=repository,
+            task=task,
+            model_api=api,
+            model_id=model_id,
+            api_key=api_key,
             max_new_tokens=max_tokens,
         )
         if hasattr(m, "model") and hasattr(m.model, "parameters"):
@@ -131,8 +152,10 @@ async def jailbreaking(
             m.eval()
         return m
 
-    def _load_if_provided(info: dict | None, fallback_model, fallback_info: dict, max_tokens: int = 256):
-        if info is None or info.get("id") == fallback_info.get("id"):
+    def _load_if_provided(info: Optional[ModelInfo | dict], fallback_model, fallback_info: ModelInfo | dict, max_tokens: int = 256):
+        fallback_id = fallback_info.id if isinstance(fallback_info, BaseModel) else fallback_info.get("id")
+        info_id = info.id if isinstance(info, BaseModel) else info.get("id") if info else None
+        if info is None or info_id == fallback_id:
             return fallback_model
         return _load_nlp_model(info, max_tokens=max_tokens)
 
@@ -144,9 +167,18 @@ async def jailbreaking(
     judge_model    = _load_if_provided(judge_info, target_model, model_info, max_tokens=16)
 
     # ── 2. Instantiate the attack ───────────────────────────────────────────
-    kwargs = {param.get("id"): param.get("default") for param in attack_info.get("parameters", [])}
+    params = attack_info.parameters if hasattr(attack_info, "parameters") else attack_info.get("parameters", [])
+    kwargs = {}
+    for param in params:
+        if isinstance(param, BaseModel):
+            kwargs[param.id] = param.default
+        else:
+            kwargs[param.get("id")] = param.get("default")
+
+    attack_id = attack_info.id if hasattr(attack_info, "id") else attack_info.get("id")
+
     attack = AF.create(
-        class_id=attack_info.get("id"),
+        class_id=attack_id,
         model=target_model,
         attacker=attacker_model,
         judge=judge_model,
@@ -158,15 +190,10 @@ async def jailbreaking(
     # 3. Execution
     state = attack.generate(goal=goal)
 
-    # 4. Build response from ConversationState (now a dataclass, not Pydantic)
-    # The ConversationState has: goal, success, best_response, best_score,
-    # attempts (list[AttackAttempt]), metadata, stateful flag, etc.
-
     # 4. Extract conversations polymorphically using the attack instance
     conversations = attack.extract_conversations(state)
 
     # Derive best_prompt, best_response, and best_score from valid conversation paths
-    # (avoiding pruned/abandoned attempts in state.attempts)
     best_prompt = ""
     best_response = state.best_response or ""
     best_score = state.best_score if state.best_score != float("-inf") else 0.0
@@ -189,15 +216,15 @@ async def jailbreaking(
 
     history = [turn for chat in conversations for turn in chat]
 
-    ret: dict = {
-        "goal": state.goal,
-        "success": state.success,
-        "best_prompt": best_prompt,
-        "best_response": state.best_response or "",
-        "best_score": state.best_score if state.best_score != float("-inf") else 0.0,
-        "history": history,
-        "conversations": conversations,
-        "metadata": state.metadata,
-    }
-
-    return ret
+    return JailbreakAttackOutput(
+        goal=state.goal,
+        success=state.success,
+        best_prompt=best_prompt,
+        best_response=state.best_response or "",
+        best_score=state.best_score if state.best_score != float("-inf") else 0.0,
+        history=history,
+        conversations=conversations,
+        metadata=state.metadata,
+        adversarial_prompt=best_prompt,
+        model_response=state.best_response or "",
+    )
