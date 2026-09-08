@@ -7,6 +7,7 @@ from nn_trust import Task
 
 TIMM_MODELS = frozenset(timm.list_models())
 
+
 class Info(BaseModel):
     """
     This class contains all the information common to the model and dataset `info.json` file
@@ -66,6 +67,7 @@ class Info(BaseModel):
         description="Repository of the dataset/model. It is stored the location where the object is saved."
     )
 
+
 class DatasetInfo(Info):
     type: Literal["dataset"] = "dataset"
 
@@ -100,11 +102,11 @@ class Transformation(BaseModel):
 
 MODEL_TYPES = Literal[
     "Ollama",
+    "HuggingFace",
     "Gemini",
     "OpenRouter",
     "plain",
     "timm",
-    "HuggingFace",
     "torch_script",
     "torch_dynamo",
     "onnx",
@@ -113,8 +115,7 @@ MODEL_TYPES = Literal[
 
 
 class ModelInfo(Info):
-    type: Literal["model"] = "model"
-    
+
     dataset: Optional[str] = Field(
         default=None,
         title="Dataset",

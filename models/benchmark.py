@@ -25,11 +25,13 @@ class BenchmarkOptionConfig(BaseModel):
 
 # This class is for handling the type of the benchmark's service input
 class BenchmarkExecutionConfig(BaseModel):
-    model: ModelInfo
-    dataset: DatasetInfo
     attacks: list[RegisteredObject]
     metrics: list[RegisteredObject]
-    options: BenchmarkOptionConfig
+    # The web client sends the selected model and dataset IDs.  The router
+    # resolves those IDs to their repository metadata before starting a job.
+    model: ModelInfo | str
+    dataset: DatasetInfo | str
+    options: BenchmarkOptionConfig = Field(default_factory=BenchmarkOptionConfig)
 
     # exemplary model_config 
     model_config = ConfigDict(

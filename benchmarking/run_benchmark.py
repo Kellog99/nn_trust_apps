@@ -72,7 +72,7 @@ def run_benchmark(
         task: Task = model_cnf.task if isinstance(model_cnf.task, Task) else Task.from_str(model_cnf.task)
         model: ModelAdapter = load_model(
             model_id=model_cnf.id or model_cnf.name,
-            model_type=model_cnf.type,
+            model_type=model_cnf.model_type,
             model_path=model_cnf.repository,
             api_url=model_cnf.api,
             task=task,
