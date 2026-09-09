@@ -12,7 +12,7 @@ from nn_trust.attack.nlp.adapters import (
     GeminiAIStudioAdapter,
     OpenAINLPAdapter,
 )
-from utils._loaders import (
+from utils._loaders_cvmodels import (
     _load_plain,
     _load_api,
     _load_onnx,
