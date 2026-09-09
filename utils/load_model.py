@@ -67,6 +67,7 @@ def load_huggingface_model(
 _LOADERS: dict[MODEL_TYPES, Callable[..., CVModelAdapter | NLPModelAdapter]] = {
     "Ollama": _load_ollama,
     "HuggingFace": load_huggingface_model,
+    "model_weights": _load_model_weights,
     "plain": _load_plain,
     "timm": _load_timm,
     "torch_script": _load_torch_script,
