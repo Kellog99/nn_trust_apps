@@ -4,57 +4,67 @@ from typing import Callable, Optional
 
 import numpy
 import torch
-import torchvision.transforms as T
 from torch.utils.data import Dataset, Subset, DataLoader
-from torchvision.transforms import transforms
+from torchvision import transforms as T
 
-from models.info import Transformation, DATASET_TYPES, DatasetInfo
+from models.info import Transformation, DATASET_TYPES, DatasetInfo, ParquetInfo
 from utils.dataset._load_classification_dataset import (
-    _load_auto,
     _load_image_folder,
     _load_flat,
     _load_parquet
 )
 
 _LOADERS: dict[DATASET_TYPES, Callable[..., Dataset]] = {
-    "auto": _load_auto,
     "image_folder": _load_image_folder,
     "flat": _load_flat,
     "parquet": _load_parquet,
 }
 
 
-def get_transformation(transformation: Transformation):
-    out = [
-        transforms.ToTensor(),
-        transforms.Normalize(
-            mean=getattr(transformation, "mean", (0.5, 0.5, 0.5)),
-            std=getattr(transformation, "std", (0.5, 0.5, 0.5))
+def get_transformation(transformation: Optional[Transformation] = None) -> T.Compose:
+    out: list[Callable[..., object]] = [T.ToTensor()]
+    if transformation is not None:
+        out.append(
+            T.Normalize(
+                mean=getattr(transformation, "mean", (0.5, 0.5, 0.5)),
+                std=getattr(transformation, "std", (0.5, 0.5, 0.5)),
+            )
         )
-    ]
-    if transformation.size is not None:
-        out.append(transforms.Resize((transformation.size, transformation.size)))
-    if transformation.crop is not None:
-        out.append(transforms.CenterCrop(transformation.crop))
-    return transforms.Compose(out)
+        if transformation.size is not None:
+            out.append(T.Resize((transformation.size, transformation.size)))
+        if transformation.crop is not None:
+            out.append(T.CenterCrop(transformation.crop))
+    return T.Compose(out)
 
 
 def get_dataloader(
-        dataset_path: str,
-        dataset_info: DatasetInfo,
+        dataset_path: str | Path | None,
         batch: int,
-        transform: T.Compose,
+        dataset_info: Optional[DatasetInfo] = None,
+        transform: Optional[T.Compose] = None,
         subset: Optional[int] = None,
         num_workers: int = 4,
-        dataset_type: DATASET_TYPES = "auto",
-        split: Optional[str] = None,
+        dataset_type: DATASET_TYPES = "image_folder",
+        folder_data: Optional[str] = None,
+        parquet_info: Optional[ParquetInfo] = None,
         **kwargs,
 ) -> DataLoader:
     """
-    Return the dataloader to use and the inverse transformation to use for displaying the images
+    Return the DataLoader to use and the inverse transformation to use for displaying the images
+
+    ``dataset_info`` is retained for compatibility with callers that pass the
+    parsed dataset metadata. Loader selection and format-specific options are
+    supplied by the explicit arguments below.
     """
 
-    root: Path = Path(dataset_path).expanduser()
+    source = dataset_path or (dataset_info.repository if dataset_info is not None else None)
+    if source is None:
+        raise ValueError(
+            "A dataset path is required. Set dataset_path or "
+            "dataset_info.repository."
+        )
+
+    root: Path = Path(source).expanduser()
     if not root.exists():
         raise ValueError(f"The dataset {root} does not exist.")
 
@@ -68,7 +78,23 @@ def get_dataloader(
             "For COCO, YOLO, video, medical volumes, or another custom "
             "format, pass a torch.utils.data.Dataset instance."
         ) from None
-    dataset: Dataset = loader(root=root, transform=transform, split=split, **kwargs)
+    # Format-specific settings are optional for direct ``get_dataloader``
+    # callers.  Do not pass them to every loader: apart from making a missing
+    # ``parquet_info`` crash, doing so also duplicated explicit keyword
+    # arguments supplied by existing callers.
+    if parquet_info is None and dataset_info is not None:
+        parquet_info = dataset_info.parquet_info
+    if dataset_type == "parquet" and parquet_info is not None:
+        kwargs.setdefault("image_column", parquet_info.image_column)
+        kwargs.setdefault("label_column", parquet_info.label_column)
+        kwargs.setdefault("image_key", parquet_info.image_key)
+
+    dataset: Dataset = loader(
+        root=root,
+        transform=transform if transform is not None else get_transformation(),
+        split=folder_data,
+        **kwargs,
+    )
 
     if subset is None or subset < 0:
         indices = list(range(len(dataset)))

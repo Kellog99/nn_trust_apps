@@ -40,29 +40,17 @@ def _load_parquet(
         root: Path,
         transform: T.Compose,
         split: Optional[str] = None,
+        image_column: str = "image",
+        label_column: str = "label",
+        image_key: str = "image",
         **kwargs
 ) -> Dataset:
     root = root if root.is_file() else _resolve_dataset_root(root, split)
     return ParquetImageDataset(
         root,
         transform=transform,
+        image_column=image_column,
+        label_column=label_column,
+        image_key=image_key,
         **kwargs
     )
-
-
-def _load_auto(
-        root: Path,
-        transform: T.Compose,
-        split: Optional[str] = None,
-        **kwargs
-) -> Dataset:
-    if root.is_file() and root.suffix.lower() == ".parquet":
-        return _load_parquet(root, transform, **kwargs)
-    root = _resolve_dataset_root(root, split)
-    if root.is_dir() and any(root.glob("*.parquet")):
-        return _load_parquet(root, transform, **kwargs)
-    class_dirs = [path for path in root.iterdir() if path.is_dir() and not path.name.startswith(".")]
-    has_classes = bool(class_dirs) and any(
-        any(file.is_file() for file in class_dir.rglob("*")) for class_dir in class_dirs
-    )
-    return _load_image_folder(root, transform) if has_classes else _load_flat(root, transform)

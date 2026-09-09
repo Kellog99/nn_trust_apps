@@ -1,7 +1,7 @@
 from typing import Optional, List, Literal, Any
 
 import timm
-from pydantic import BaseModel, Field, model_validator
+from pydantic import AliasChoices, BaseModel, Field, model_validator
 
 from nn_trust import Task
 
@@ -69,7 +69,6 @@ class Info(BaseModel):
 
 
 DATASET_TYPES = Literal[
-    "auto",
     "image_folder",
     "flat",
     "parquet",
@@ -77,12 +76,14 @@ DATASET_TYPES = Literal[
 
 
 class ParquetInfo(BaseModel):
-    image_col: str = Field(
+    image_column: str = Field(
         default="image",
         description="It represents the column of the dataframe where the image is stored."
     )
-    label: str = Field(
+    image_key: Optional[str] = Field(
         default="bytes",
+        validation_alias=AliasChoices("image_key", "label"),
+        serialization_alias="image_key",
         description="It represents the key containing encoded image bytes."
     )
     label_column: Optional[str] = Field(
@@ -90,20 +91,25 @@ class ParquetInfo(BaseModel):
         description="The Parquet column containing the classification target."
     )
 
+    @property
+    def label(self) -> Optional[str]:
+        """Backward-compatible name for ``image_key`` used by older info files."""
+        return self.image_key
+
 
 class DatasetInfo(Info):
     dataset_type: DATASET_TYPES = Field(
-        default="auto",
+        default="image_folder",
         title="Dataset Format",
         description=(
             "How the repository is loaded: class folders (ImageFolder), a flat "
             "image directory, or automatic detection."
         ),
     )
-    split: Optional[str] = Field(
+    folder_data: Optional[str] = Field(
         default=None,
-        title="Split",
-        description="Optional split below the repository, for example 'test' or 'val'.",
+        title="data",
+        description="The folder in the dataset folder where the data are stored. Default 'data'",
     )
 
     num_samples: Optional[int] = Field(
@@ -134,6 +140,11 @@ class DatasetInfo(Info):
 
     @model_validator(mode="after")
     def validate_parquet(self):
+        # Older dataset info files identify parquet data solely through this
+        # section.  Preserve that format while still allowing an explicit
+        # dataset_type to take precedence.
+        if "dataset_type" not in self.model_fields_set and self.parquet_info is not None:
+            self.dataset_type = "parquet"
         if self.dataset_type == "parquet" and self.parquet_info is None:
             raise ValueError(
                 "parquet_info is required when dataset_type is 'parquet'."

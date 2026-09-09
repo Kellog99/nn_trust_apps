@@ -84,18 +84,19 @@ def run_benchmark(
             if dataset_cnf.repository is None:
                 raise ValueError("No dataset to load.")
             dataloader: DataLoader = get_dataloader(
+                dataset_type=dataset_cnf.dataset_type,
                 dataset_path=dataset_cnf.repository,
+                dataset_info=dataset_cnf,
                 batch=dataset_cnf.batch_size,
                 subset=options.subset,
                 transform=transform,
                 num_workers=dataset_cnf.num_workers,
                 name=dataset_cnf.name,
-                dataset_type=dataset_cnf.dataset_type,
-                split=dataset_cnf.split,
+                folder_data=dataset_cnf.folder_data,
                 **(
                     {
-                        "image_column": dataset_cnf.parquet_info.image_col,
-                        "image_key": dataset_cnf.parquet_info.label,
+                        "image_column": dataset_cnf.parquet_info.image_column,
+                        "image_key": dataset_cnf.parquet_info.image_key,
                         "label_column": dataset_cnf.parquet_info.label_column,
                     }
                     if dataset_cnf.parquet_info is not None

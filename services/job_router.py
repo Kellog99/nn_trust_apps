@@ -2,13 +2,13 @@ import base64
 import json
 import logging
 import os
+
 import ray
 import requests
 from fastapi import APIRouter, Response, Body, Query, Request
 
 from benchmarking import run_benchmark, executor
-from models import BenchmarkExecutionConfig, DatasetInfo, ModelInfo
-from services.utils.benchmark import _load_resource_info
+from models import BenchmarkExecutionConfig, DatasetInfo, ModelInfo, ServerConfig
 
 router = APIRouter(prefix="/job", tags=["jobs management", "jobs utils"])
 
@@ -22,17 +22,17 @@ async def start_benchmark_job(
     Start a new TITANN benchmark job.
     """
 
-    config = request.app.state.config
+    config: ServerConfig = request.app.state.config
     dataset: DatasetInfo = body.dataset
     model: ModelInfo = body.model
-    if isinstance(dataset, str):
-        dataset = _load_resource_info(dataset, config.path_ds_repo, dataset=True)
-    if isinstance(model, str):
-        model = _load_resource_info(model, config.path_model_repo, dataset=False)
 
     # run_benchmark consumes serializable mappings, not the API metadata
     # model returned by /info/attacks and /info/metrics.
-    attacks = [attack.model_dump(exclude_none=True) for attack in body.attacks]
+    attacks = [
+        attack.model_dump(exclude_none=True)
+        for attack in body.attacks if
+        attack.id not in config.excluded_attacks
+    ]
     metrics = [metric.model_dump(exclude_none=True) for metric in body.metrics]
     options = body.options
 
@@ -62,7 +62,7 @@ def get_jobs(id: str = Query(None)):
                 for k, v in tasks.items():
                     output_dict = {}
                     if v["benchmark_id"] == id:
-                        atk_id = k.split(f"_{v['benchmark_id']}")[0]
+                        atk_id = k.folder_data(f"_{v['benchmark_id']}")[0]
                         output_dict["id"] = atk_id
                         output_dict["name"] = router.state.attacks[
                             atk_id].name if atk_id != "reference" else "Reference (Identity Attack)"
