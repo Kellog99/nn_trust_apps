@@ -15,6 +15,13 @@ class ReportMetricsProps(BaseModel):
     confusion_matrix: Optional[List[List[int | float]]] = None
     robustness: Optional[float] = None
     wobbliness: Optional[float] = None
+    expectedcalibrationerror: Optional[float] = None
+    ssim: Optional[float] = None
+    meansquarecontingency: Optional[float] = None
+    map: Optional[float] = None
+    ap: Optional[float] = None
+    iou: Optional[float] = None
+    iou_target: Optional[float] = None
 
 
 # These are the metrics that compute the attack's performance
@@ -28,6 +35,14 @@ class AttackMetricsProps(BaseModel):
     num_queries: Optional[int] = None
     robustness: Optional[float] = None
     confusion_matrix: Optional[List[List[int]]] = None
+    expectedcalibrationerror: Optional[float] = None
+    ssim: Optional[float] = None
+    meansquarecontingency: Optional[float] = None
+    map: Optional[float] = None
+    ap: Optional[float] = None
+    iou: Optional[float] = None
+    iou_target: Optional[float] = None
+    misdetection: Optional[float] = None
 
 
 class ParameterLog(BaseModel):

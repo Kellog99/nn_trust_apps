@@ -130,7 +130,7 @@ class ModelInfoSection(PDFSection):
 
                 # --- Upgrade 2: Dict to Nested Table ---
                 if isinstance(raw_val, BaseModel):
-                    raw_val: dict = raw_val.model_dump()
+                    raw_val: dict = raw_val.model_dump(exclude_none=True)
 
                 if isinstance(raw_val, dict):
                     # Recursively build a table for the dictionary

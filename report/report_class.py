@@ -143,6 +143,7 @@ class AdversarialReportGenerator:
         story.extend(
             self.atk_table.build(
                 data=data.attacks,
+                task=data.info.task,
                 descriptions="""
                         This table contains all the attacks that have been tested and a subset of all the metrics that have been computed for a global comparison.
                         """

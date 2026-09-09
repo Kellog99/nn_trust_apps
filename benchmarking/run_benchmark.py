@@ -3,6 +3,7 @@ from datetime import datetime
 from logging import Logger
 from pathlib import Path
 from typing import List, Optional
+from report import AdversarialReportGenerator
 
 import torch
 from torch.utils.data import DataLoader
@@ -12,7 +13,6 @@ from models import BenchmarkOptionConfig, ModelInfo, DatasetInfo, ModelReportPro
 from models.reports import ReportMetricsProps, ReportAttackProps
 from nn_trust import AttackFactory as AF, StatisticComposer, StatisticsFactory as SF, ModelAdapter, Task
 from utils import load_model, get_dataloader
-from utils.dataset_utils import get_transformation
 
 
 def run_benchmark(
@@ -44,7 +44,10 @@ def run_benchmark(
     # Filtering the attacks
     attacks: list[dict] = attacks or []
     attacks: list[dict] = [
-        attack
+        {
+            **attack,
+            "targeted": attack.get("targeted", options.targeted), # passing option targeted to attacks
+        }
         for attack in attacks
         if attack.get("id", None) in AF.get_list_classes()
     ]
@@ -59,37 +62,37 @@ def run_benchmark(
 
     # Define an execution strategy for the benchmark at hand i.e. create an executor instance
     device: torch.device = torch.device("cuda" if torch.cuda.is_available() and options.gpu else "cpu")
-    output_path: str = options.output_path + f"/{datetime.now().strftime('%Y%m%dT%H%M%S')}"
+    benchmark_output_path: Path = Path(options.output_path).expanduser().resolve() / benchmark_id
 
-    executor = BenchmarkExecutor(
-        verbose=options.verbose,
-        benchmark_id=benchmark_id,
-        use_ray=options.use_ray,
-        output_path=output_path,
-    )
     list_reports: list[ModelReportProps] = []
     for model_cnf in models:
-        task: Task = model_cnf.task if isinstance(model_cnf.task, Task) else Task.from_str(model_cnf.task)
+        task_model: Task = model_cnf.task if isinstance(model_cnf.task, Task) else Task.from_str(model_cnf.task)
         model: ModelAdapter = load_model(
             model_id=model_cnf.id or model_cnf.name,
             model_type=model_cnf.model_type,
             model_path=model_cnf.repository,
             api_url=model_cnf.api,
-            task=task,
+            task=task_model,
             device=device
         )
-        transform = get_transformation(transformation=model_cnf.transformation)
 
         for dataset_cnf in datasets:
+            task_dataset: Task = dataset_cnf.task if isinstance(dataset_cnf.task, Task) else Task.from_str(dataset_cnf.task)
+            if task_model != task_dataset:
+                raise ValueError(f"Task mismatch between model {model_cnf.id} ({task_model}) and dataset {dataset_cnf.id} ({task_dataset}).")
             if dataset_cnf.repository is None:
                 raise ValueError("No dataset to load.")
             dataloader: DataLoader = get_dataloader(
                 dataset_path=dataset_cnf.repository,
                 batch=dataset_cnf.batch_size,
                 subset=options.subset,
-                transform=transform,
+                model_transformation=model_cnf.transformation,
                 num_workers=dataset_cnf.num_workers,
-                name=dataset_cnf.name
+                name=dataset_cnf.name,
+                model_type = model_cnf.model_type,
+                task=task_dataset,
+                images_dir=dataset_cnf.images_dir,
+                annotations_file=dataset_cnf.annotations_file,
             )
             #################### Defining the Statistic Composer ####################
             num_classes = model_cnf.num_classes
@@ -101,22 +104,32 @@ def run_benchmark(
             if metrics is None or len(metrics) == 0:
                 metrics = [
                     {"id": metric}
-                    for metric in SF.get_list_classes(task={task})
+                    for metric in SF.get_list_classes(task={task_dataset})
                 ]
             metrics: list[dict] = [
                 {
                     **metric,
+                    "targeted": metric.get("targeted", options.targeted), # passing option targeted to metrics
                     "model": model,
                     "device": options.gpu,
                     "num_classes": num_classes,
                 }
-                for metric in metrics if metric.get("id") in SF.get_list_classes(task={task})
+                for metric in metrics if metric.get("id") in SF.get_list_classes(task={task_dataset})
             ]
             statistics_composer = StatisticComposer(
                 statistics=metrics,
                 device=device
             )
             # 3.1 Start execution
+            output_path: Path = benchmark_output_path / f"{model_cnf.id}/{dataset_cnf.id}"
+            output_path.mkdir(parents=True, exist_ok=True)
+
+            executor = BenchmarkExecutor(
+                verbose=options.verbose,
+                benchmark_id=benchmark_id,
+                use_ray=options.use_ray,
+                output_path=output_path,
+            )
             results: dict[str, ReportAttackProps] = executor.execute_jobs(
                 model=model,
                 dataloader=dataloader,
@@ -146,9 +159,20 @@ def run_benchmark(
                 attacks=results,
             )
             list_reports.append(model_report)
-            output_path: Path = Path(output_path).expanduser().resolve() / f"{model_cnf.id}/{dataset_cnf.id}"
-            with open(output_path / "report.json", "a") as f:
+
+            ############### Saving the report in JSON format ###############
+            with open(output_path / "report.json", "w") as f:
                 json.dump(model_report.model_dump(), f)
+
+            #################################### PDF generation ####################################
+            # Optionally, after the benchmark, it could be created the PDF report of the vulnerabilities
+            if options.create_pdf:
+                report = AdversarialReportGenerator()
+                report.generate(
+                    data=model_report,
+                    output_path=output_path / "report.pdf",
+                    header_logo_path=None,
+                )
             ######### saving the results #########
             if log:
                 log.info(

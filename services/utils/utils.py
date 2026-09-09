@@ -10,6 +10,8 @@ from pydantic_core import PydanticUndefined
 from torchvision.transforms import v2 as T
 
 from models.model import ParametersProps
+from torchvision.utils import draw_bounding_boxes
+from nn_trust.attack.utils.detection import xywh2xyxy
 
 
 def b64str_to_pil(b64_image_str: str) -> Image.Image:
@@ -134,4 +136,68 @@ def get_parameter_prop(
         step=float(step),
         default=default,
         description=param_info.description,
+    )
+
+def filter_predictions(pred, display_top_k):
+    '''
+    Filter predictions based on top_k
+    '''
+    boxes = pred["boxes"].detach().cpu()
+    labels = pred["labels"].detach().cpu()
+    scores = pred["scores"].detach().cpu() 
+
+    idx = torch.arange(len(labels))
+
+    # rank the predictions based on scores and select top_k
+    if display_top_k is not None and idx.numel() > display_top_k:
+        idx = idx[scores[idx].topk(display_top_k).indices]
+
+    return {
+        "boxes": boxes[idx],
+        "labels": labels[idx],
+        "scores": scores[idx],
+    }
+
+
+def draw_predictions(image, pred, display_top_k):
+    '''
+    Draw predictions on the image
+    '''
+
+    # filter predictions based on top_k
+    pred = filter_predictions(pred, display_top_k)
+
+    # convert image to uint8 and get its height and width
+    image_uint8 = (image.detach().cpu().clamp(0, 1) * 255).to(torch.uint8)
+    _, h, w = image_uint8.shape
+
+
+    boxes = pred["boxes"]
+
+    # convert boxes from xywh to xyxy format
+    boxes = xywh2xyxy(boxes)
+
+    # convert boxes to absolute coordinates if they are in relative coordinates
+    if boxes.numel() > 0 and boxes.max() <= 1.5:
+        boxes[:, [0, 2]] *= w
+        boxes[:, [1, 3]] *= h
+
+    labels_tensor = pred["labels"]
+
+    # if scores are available, format the labels with their corresponding scores
+    if "scores" in pred:
+        scores = pred["scores"]
+        labels = [
+            f"{int(label)}:{float(score):.2f}"
+            for label, score in zip(labels_tensor, scores)
+        ]
+    else:
+        labels = [str(int(label)) for label in labels_tensor]
+
+    return draw_bounding_boxes(
+        image_uint8,
+        boxes,
+        labels=labels,
+        width=2,
+        colors="red",
     )

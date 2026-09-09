@@ -7,6 +7,7 @@ import torch
 from models import ModelInfo
 from nn_trust import CVModelAdapter, Task
 from nn_trust.models import HFCVModel, ONNXCVModel, APICVModel
+from nn_trust.models.ultralytics_models import UltralyticsCVModel
 
 
 def _require_file(path: Path) -> Path:
@@ -112,3 +113,19 @@ def _load_huggingface_cv(
         task=task,
     )
 
+def _load_ultralytics(
+        model_id: str | None,
+        model_path: Path,
+        task: Task,
+        **args,
+    ):
+    if task != Task.Detection:
+        raise ValueError("The 'ultralytics' loader only supports detection models.")
+
+    ckpt = model_path / "model.pt"
+    model_name = str(ckpt) if ckpt.is_file() else model_id
+
+    if model_name is None:
+        raise ValueError("The 'ultralytics' loader requires either model.pt or a model id.")
+
+    return UltralyticsCVModel(model_name=model_name)

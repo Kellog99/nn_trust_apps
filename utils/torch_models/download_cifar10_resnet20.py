@@ -22,15 +22,22 @@ with torch.no_grad():
     traced_model = torch.jit.trace(model, example_input)
 
 #traced_model.save(model_dir / "model.pth")
-torch.save(model, model_dir / "model.pth")
+#torch.save(model, model_dir / "model.pth")
+torch.save(model.state_dict(), model_dir / "model_state_dict.pth")
 
 info = {
     #"type": "torch_script",
-    "type": "plain",
+    "type": "model_weights",
+    #"type": "plain",
     "name": "cifar10_resnet20",
+    "id": "cifar10_resnet20",
     "num_classes": 10,
     "task": "classification",
-    "input_size": 32
+    "input_dimensionality": [3, 32, 32],
+    "transformation": {
+        "mean": [0.4914, 0.4822, 0.4465],
+        "std": [0.247, 0.2435, 0.2616]
+    }
 }
 
 with open(model_dir / "info.json", "w") as f:
