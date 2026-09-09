@@ -11,9 +11,10 @@ attacks:
    seed: 1
    max_iters: 50
    targeted: false
+   early_stopping: true
    c: 10000.0
    gradient_estimator_args:
-     num_samples: 100
+     num_samples: 200
      epsilon: 0.01
    optimizer_args:
      lr: 0.1

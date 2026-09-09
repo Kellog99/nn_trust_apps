@@ -233,6 +233,22 @@ def evaluate_attack(
         statistics.update_aggregate(metric_states)
     statistics.reset()
     atk_parameters: dict = attack.config.model_dump()
+
+    # define detection-only parameters to show in the report
+    detection_only = {
+    "iou_threshold_evaluation",
+    "score_threshold_evaluation",
+    "iou_threshold_optimization",
+    "score_threshold_optimization",
+    "label_target",
+    "top_k",
+     }
+
+    # define non-benchmark parameters to not show in the report
+    non_benchmark_parameters = {
+    "model",
+    "display_top_k",
+    }
     job_result = JobResult(
         id=atk_id,
         result=result,
@@ -244,7 +260,9 @@ def evaluate_attack(
                 value=atk_parameters[key]
             )
             for key, value in attack.config.__class__.model_fields.items()
-            if key != "model" and isinstance(atk_parameters.get(key, None), (int, float, bool))
+            if key not in non_benchmark_parameters 
+            and isinstance(atk_parameters.get(key), (int, float, bool, dict))
+            and (attack.model_task == Task.Detection or key not in detection_only)
         ],
     )
 

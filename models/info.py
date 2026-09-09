@@ -138,10 +138,10 @@ class ModelInfo(Info):
     )
     transformation: Transformation = Field(
         default=Transformation(
-            mean=[0.485, 0.456, 0.406],
-            std=[0.229, 0.224, 0.225],
+            mean=[0.0, 0.0, 0.0],
+            std=[1.0, 1.0, 1.0],
             crop=None,
-            size=254,
+            size=None,
         ),
         description="It represent the transformation to apply to the input.",
         title="Transformation",
