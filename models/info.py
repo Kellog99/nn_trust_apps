@@ -114,6 +114,8 @@ MODEL_TYPES = Literal[
     "model_weights",
     "Ollama",
     "HuggingFace",
+    "Gemini",
+    "OpenRouter",
     "plain",
     "timm",
     "torch_script",

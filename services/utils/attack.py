@@ -83,7 +83,6 @@ def single_attack_performance(
     if not torch.isfinite(x).all():
         raise ValueError("Image preprocessing produced non-finite values.")
     print(" Image loaded ".center(40, "#"))
-
     ################## Results ##################
     with torch.no_grad():
         out = model(x)

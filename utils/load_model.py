@@ -6,7 +6,13 @@ import torch
 from models.info import MODEL_TYPES, ModelInfo
 from nn_trust import CVModelAdapter, Task, Knowledge, NLPModelAdapter
 from utils._loader_nlp_models import _load_ollama, _load_huggingface_nlp
-from utils._loaders_cvmodels import (
+from nn_trust.attack.nlp.adapters import (
+    HuggingFaceNLPAdapter,
+    OllamaNLPAdapter,
+    GeminiAIStudioAdapter,
+    OpenAINLPAdapter,
+)
+from utils._loaders import (
     _load_plain,
     _load_api,
     _load_onnx,
@@ -63,7 +69,6 @@ _LOADERS: dict[MODEL_TYPES, Callable[..., CVModelAdapter | NLPModelAdapter]] = {
     "HuggingFace": load_huggingface_model,
     "plain": _load_plain,
     "timm": _load_timm,
-    "model_weights": _load_model_weights,
     "torch_script": _load_torch_script,
     "torch_dynamo": _load_torch_dynamo,
     "onnx": _load_onnx,
@@ -104,6 +109,28 @@ def load_model(
         CVModelAdapter | NLPModelAdapter: A unified adapter wrapping the
         loaded model.
     """
+
+    if model_type == "Gemini":
+        if model_id is None:
+            raise ValueError("model_id is required for Gemini models.")
+        return GeminiAIStudioAdapter(
+            model_id=model_id,
+            base_url=api_url or "https://generativelanguage.googleapis.com",
+            api_key=kwargs.pop("api_key", None),
+            name=model_id,
+            **kwargs,
+        )
+
+    if model_type == "OpenRouter":
+        if model_id is None:
+            raise ValueError("model_id is required for OpenRouter models.")
+        return OpenAINLPAdapter(
+            model_id=model_id,
+            base_url=api_url or "https://openrouter.ai/api",
+            api_key=kwargs.pop("api_key", None) or os.environ.get("OPENROUTER_API_KEY"),
+            name=model_id,
+            **kwargs,
+        )
 
     # HuggingFace can be a CV model (local checkpoint via the CV path below)
     # or an LLM (hub causal LM). Ambiguity is resolved by task: a Language
