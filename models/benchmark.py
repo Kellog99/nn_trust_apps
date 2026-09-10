@@ -139,4 +139,4 @@ class JobResult(BaseModel):
     id: str
     parameters: Optional[list[ParameterLog]] = None
     result: Optional[dict] = None
-    error: Optional[BaseException] = None
+    error: Optional[BaseException | str] = None

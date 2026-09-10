@@ -10,6 +10,7 @@ import torch
 from torch.utils.data import DataLoader
 
 from benchmarking import BenchmarkExecutor
+from benchmarking.utils.attack import _attack_parameters
 from benchmarking.utils.evaluation import evaluate_attack
 from models.reports import ReportAttackProps, AttackMetricsProps
 from nn_trust import StatisticComposer, ModelAdapter
@@ -118,6 +119,48 @@ def statistics() -> list[dict]:
     ]
 
 
+def test_statistic_composer_accepts_api_metric_metadata():
+    """Display metadata returned by ``/info/metrics`` is not constructor input."""
+    composer = StatisticComposer(statistics=[
+        {
+            "id": "accuracy",
+            "name": "Accuracy",
+            "description": "It computes the accuracy.",
+            "parameters": [],
+            "task": "Classification",
+            "knowledge": None,
+            "objective": None,
+            "privacy_type": None,
+        }
+    ], device=torch.device("cpu"))
+
+    assert set(composer._performance_stats) == {"accuracy"}
+
+
+def test_attack_parameters_accept_api_metadata_and_defaults():
+    parameters = _attack_parameters({
+        "id": "contrastbaseline",
+        "name": "Contrast Baseline",
+        "task": "Classification",
+        "parameters": [
+            {"id": "epsilon", "default": 0.1},
+            {"id": "max_iters", "default": 3},
+        ],
+        "epsilon": 0.2,
+    })
+
+    assert parameters == {"epsilon": 0.2, "max_iters": 3}
+
+
+def test_empty_aggregator_has_no_metrics_to_compute():
+    composer = StatisticComposer(
+        statistics=[{"id": "robustness", "num_classes": 2}],
+        device=torch.device("cpu"),
+    )
+
+    assert composer.compute_aggregator() == {}
+
+
 # ---------------------------------------------------------------------------
 # evaluate_attack
 # ---------------------------------------------------------------------------
@@ -132,7 +175,7 @@ def test_evaluate_attack(
         max_saved_elements: int,
 ):
     mse: int = max_saved_elements or 1
-    tmp_path: Path = tmp_path / mse
+    tmp_path: Path = tmp_path / str(mse)
     tmp_path.mkdir(exist_ok=True, parents=True)
     checkpoint_path = tmp_path / "identitybaseline" / "log.pth"
 

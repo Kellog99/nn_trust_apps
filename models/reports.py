@@ -8,6 +8,11 @@ from models.model import ParametersProps
 
 # These are the metrics associated to the model's performance
 class ReportMetricsProps(BaseModel):
+    # Metric IDs are registered by nn_trust and may be added without a
+    # corresponding API-model release. Preserve every computed metric rather
+    # than silently dropping IDs that are not explicitly typed below.
+    model_config = ConfigDict(extra="allow")
+
     num_samples: Optional[int] = None
     accuracy: Optional[float] = None
     precision: Optional[float] = None
@@ -19,6 +24,10 @@ class ReportMetricsProps(BaseModel):
 
 # These are the metrics that compute the attack's performance
 class AttackMetricsProps(BaseModel):
+    # Keep the complete executor payload so model-level report assembly can
+    # include every requested performance metric from the identity baseline.
+    model_config = ConfigDict(extra="allow")
+
     risk: Optional[float] = None
     accuracy: Optional[float] = None
     precision: Optional[float] = None

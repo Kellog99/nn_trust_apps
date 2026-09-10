@@ -67,6 +67,7 @@ def run_benchmark(
         use_ray=options.use_ray,
         output_path=output_path,
     )
+    LIST_METRICS: list[str] = SF.get_list_classes()
     list_reports: list[ModelReportProps] = []
     for model_cnf in models:
         task: Task = model_cnf.task if isinstance(model_cnf.task, Task) else Task.from_str(model_cnf.task)
@@ -83,6 +84,7 @@ def run_benchmark(
         for dataset_cnf in datasets:
             if dataset_cnf.repository is None:
                 raise ValueError("No dataset to load.")
+
             dataloader: DataLoader = get_dataloader(
                 dataset_type=dataset_cnf.dataset_type,
                 dataset_path=dataset_cnf.repository,
@@ -122,7 +124,8 @@ def run_benchmark(
                     "device": options.gpu,
                     "num_classes": num_classes,
                 }
-                for metric in metrics if metric.get("id") in SF.get_list_classes(task={task})
+                for metric in metrics
+                if metric.get("id") in LIST_METRICS
             ]
             statistics_composer = StatisticComposer(
                 statistics=metrics,
@@ -135,30 +138,28 @@ def run_benchmark(
                 attacks=attacks,
                 statistics=statistics_composer,
                 device=device,
+                log=log,
                 max_saved_elements=options.max_saved_elements or 1,
             )
             global_metrics: dict = statistics_composer.compute_aggregator()
             # Global metrics
             identity: ReportAttackProps = results.pop("identitybaseline")
-            # removing the metrics that I do not want because they refer to the attack's performance
-            metrics: dict = identity.metrics.model_dump(
-                exclude={
-                    "misclassification",
-                    "num_queries",
-                    "robustness",
-                    "risk",
-                    "power"
-                })
+            # The identity baseline contains the requested performance metrics.
+            # Keep them: callers request metrics by ID and expect each ID to be
+            # represented in the model report. Aggregator values (when any)
+            # replace their identity-baseline counterparts below.
+            metrics: dict = identity.metrics.model_dump(exclude_none=True)
             metrics["num_samples"]: int = len(dataloader.dataset)
-            global_metrics.update(metrics)
+            metrics.update(global_metrics)
             # Here, for sure, the results dictionary does not have the "identity baseline" key
             model_report = ModelReportProps(
                 info=model_cnf,
-                metrics=ReportMetricsProps.model_validate(global_metrics),
+                metrics=ReportMetricsProps.model_validate(metrics),
                 attacks=results,
             )
             list_reports.append(model_report)
             output_path: Path = Path(output_path).expanduser().resolve() / f"{model_cnf.id}/{dataset_cnf.id}"
+            output_path.mkdir(parents=True, exist_ok=True)
             with open(output_path / "report.json", "a") as f:
                 json.dump(model_report.model_dump(), f)
             ######### saving the results #########

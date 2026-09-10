@@ -68,7 +68,9 @@ def _iter_local(
         return
     pbar = tqdm(attacks)
     for attack in pbar:
-        pbar.desc = f"{attack['id']}"
+        # Keep progress reporting as tolerant as the execution wrapper: an
+        # attack can be identified by either ``id`` or ``name``.
+        pbar.desc = str(attack.get("id") or attack.get("name", "unknown"))
         yield _run_single_attack(
             attack=attack,
             model=model,

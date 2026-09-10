@@ -87,7 +87,25 @@ class ParquetImageDataset(Dataset):
         total = 0
         for file_index, parquet_file in enumerate(self.files):
             for row_group_index in range(parquet_file.num_row_groups):
-                rows = parquet_file.metadata.row_group(row_group_index).num_rows
+                row_group = parquet_file.metadata.row_group(row_group_index)
+                # ImageNet test shards in the supplied repository use ``-1``
+                # as an unlabeled sentinel.  Classification metrics cannot be
+                # evaluated on those rows.  Skip a whole group only when its
+                # parquet statistics prove that every label is negative; groups
+                # without statistics are retained and validated normally.
+                if label_column is not None:
+                    # ``schema_arrow`` indexes a struct image as one field,
+                    # while row-group metadata indexes its physical children.
+                    column_index = parquet_file.schema.names.index(label_column)
+                    statistics = row_group.column(column_index).statistics
+                    if statistics is not None and statistics.has_min_max:
+                        try:
+                            is_unlabeled_group = int(statistics.max) < 0
+                        except (TypeError, ValueError, OverflowError):
+                            is_unlabeled_group = False
+                        if is_unlabeled_group:
+                            continue
+                rows = row_group.num_rows
                 self.row_groups.append((total, file_index, row_group_index))
                 total += rows
         self.group_starts = [group[0] for group in self.row_groups]

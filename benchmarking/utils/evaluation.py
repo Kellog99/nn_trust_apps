@@ -75,7 +75,10 @@ def evaluate_attack(
     # for IterableDataset-backed loaders this can drain the source (or, more
     # subtly, desynchronize state) so the loop below iterates zero times.
     base_iter = iter(dataloader)
-    first_batch, first_label = next(base_iter)
+    try:
+        first_batch, first_label = next(base_iter)
+    except StopIteration as exc:
+        raise ValueError("The dataloader produced no batches; cannot evaluate an attack.") from exc
     num_classes: int = model(first_batch.to(device)).shape[-1]
     full_iter = itertools.chain([(first_batch, first_label)], base_iter)
 

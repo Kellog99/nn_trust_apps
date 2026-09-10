@@ -85,6 +85,10 @@ class BenchmarkExecutor:
                 if log is not None:
                     log.error(f"Job failed: {jr.id}: {jr.error}")
 
+        if failed:
+            details = "; ".join(f"{job.id}: {job.error}" for job in failed)
+            raise RuntimeError(f"Benchmark job(s) failed: {details}")
+
         return results
 
     def __repr__(self):
