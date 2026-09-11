@@ -1,12 +1,17 @@
 import bisect
 import io
+import logging
 from pathlib import Path
 from typing import Optional
 
+import pyarrow as pa
 import pyarrow.parquet as parquet
 from PIL import Image as PILImage
 from torch.utils.data import Dataset
 from torchvision import transforms as T
+
+
+logger = logging.getLogger(__name__)
 
 
 class ParquetImageDataset(Dataset):
@@ -59,8 +64,16 @@ class ParquetImageDataset(Dataset):
         self.paths: list[Path] = []
         self.files: list[parquet.ParquetFile] = []
         invalid_schemas: list[tuple[Path, set[str]]] = []
+        unreadable_files: list[tuple[Path, str]] = []
         for path in candidate_paths:
-            parquet_file = parquet.ParquetFile(path)
+            try:
+                parquet_file = parquet.ParquetFile(path)
+            except (OSError, pa.ArrowException) as error:
+                # A partially copied shard, or a non-Parquet file with a
+                # ``.parquet`` extension, should not make an otherwise valid
+                # dataset unusable.  Keep scanning the other shards.
+                unreadable_files.append((path, str(error)))
+                continue
             schema_names = set(parquet_file.schema_arrow.names)
             has_columns = image_column in schema_names and (
                 label_column is None or label_column in schema_names
@@ -75,10 +88,25 @@ class ParquetImageDataset(Dataset):
                 f"{path.name}: {sorted(columns)}"
                 for path, columns in invalid_schemas[:3]
             )
+            unreadable_details = "; ".join(
+                f"{path.name}: {reason}"
+                for path, reason in unreadable_files[:3]
+            )
+            available_details = "; ".join(
+                detail for detail in (details, unreadable_details) if detail
+            ) or "none"
             raise ValueError(
-                "No Parquet files match the configured image and label columns "
+                "No usable Parquet files match the configured image and label columns "
                 f"({image_column!r}, {label_column!r}) in {root}. "
-                f"Available columns: {details}."
+                f"Details: {available_details}."
+            )
+        if unreadable_files:
+            skipped_paths = ", ".join(str(path) for path, _ in unreadable_files)
+            logger.warning(
+                "Skipping %d unreadable Parquet shard(s); training will use "
+                "the remaining valid shards: %s",
+                len(unreadable_files),
+                skipped_paths,
             )
         self.image_column = image_column
         self.label_column = label_column

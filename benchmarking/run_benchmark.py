@@ -54,12 +54,12 @@ def run_benchmark(
 
     #################################### 2. Prepare Execution ####################################
     # 2.1 - Generate a unique id under which run all benchmark operations
-    benchmark_id: str = datetime.now().strftime("%Y%m%dT%H%M%S")
+    benchmark_id: str = datetime.now().strftime("%Y%m%dT%H%M%S_%f")
     # 2.2 - create a single dict element with all necessary information to execute operation and merge end result.
 
     # Define an execution strategy for the benchmark at hand i.e. create an executor instance
     device: torch.device = torch.device("cuda" if torch.cuda.is_available() and options.gpu else "cpu")
-    output_path: str = options.output_path + f"/{datetime.now().strftime('%Y%m%dT%H%M%S')}"
+    output_path: str = options.output_path + f"/{benchmark_id}"
 
     executor = BenchmarkExecutor(
         verbose=options.verbose,
