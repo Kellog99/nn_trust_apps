@@ -114,7 +114,8 @@ async def jailbreaking(
     goal = body.input
     attacker_info = body.attacker
     judge_info = body.judge
-    max_new_tokens = body.max_new_tokens or 2048
+    max_new_tokens = body.max_new_tokens or 4096
+    n_ctx = body.n_ctx
 
     # ── 1. Load models ──────────────────────────────────────────────────────
     def _load_nlp_model(info: ModelInfo | dict, max_tokens: int = 256):
@@ -138,7 +139,7 @@ async def jailbreaking(
 
         task = Task.from_str(task_val) if isinstance(task_val, str) else task_val
 
-        m = load_model(
+        load_kwargs = dict(
             model_type=model_type,
             model_path=repository,
             task=task,
@@ -147,6 +148,12 @@ async def jailbreaking(
             api_key=api_key,
             max_new_tokens=max_tokens,
         )
+        # Llamacpp (GGUF) adapters use n_ctx for the context window; only
+        # pass it when supplied so HuggingFace adapters don't choke on it.
+        if n_ctx and model_type == "Llamacpp":
+            load_kwargs["n_ctx"] = n_ctx
+
+        m = load_model(**load_kwargs)
         if hasattr(m, "model") and hasattr(m.model, "parameters"):
             m = m.to(device)
             m.eval()

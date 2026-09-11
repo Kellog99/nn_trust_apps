@@ -102,10 +102,10 @@ MODEL_TYPES = Literal[
     "Ollama",
     "Gemini",
     "OpenRouter",
+    "Llamacpp",
     "plain",
     "timm",
     "HuggingFace",
-    "LlamaGuard",
     "torch_script",
     "torch_dynamo",
     "onnx",
@@ -125,6 +125,16 @@ class ModelInfo(Info):
         default=None,
         title="Parameters",
         description="Number of the model's parameters"
+    )
+    is_judge: bool = Field(
+        default=False,
+        title="Is Judge",
+        description="Whether this model acts as a judge."
+    )
+    judge_type: Optional[str] = Field(
+        default=None,
+        title="Judge Type",
+        description="Type of judge to wrap this model in (e.g. 'llama_guard', 'llm_judge')."
     )
     transformation: Transformation = Field(
         default=Transformation(
@@ -167,10 +177,6 @@ class ModelInfo(Info):
         elif self.model_type == "Ollama" and "/" in self.id:
             raise ValueError(
                 "Ollama models should have an id without '/', e.g. 'llama3:8b-instruct'"
-            )
-        elif self.model_type == "LlamaGuard" and "/" not in self.id:
-            raise ValueError(
-                "LlamaGuard models should have an id like 'owner/model'"
             )
 
         return self
