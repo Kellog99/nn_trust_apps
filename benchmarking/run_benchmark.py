@@ -1,4 +1,5 @@
 import json
+import inspect
 from datetime import datetime
 from logging import Logger
 from pathlib import Path
@@ -10,7 +11,7 @@ from torch.utils.data import DataLoader
 from benchmarking.executor import BenchmarkExecutor
 from models import BenchmarkOptionConfig, ModelInfo, DatasetInfo, ModelReportProps, RegisteredObject
 from models.reports import ReportMetricsProps, ReportAttackProps
-from nn_trust import StatisticComposer, StatisticsFactory as SF, ModelAdapter, Task
+from nn_trust import AttackFactory as AF, StatisticComposer, StatisticsFactory as SF, ModelAdapter, Task
 from utils import load_model, get_dataloader
 from utils.load_dataset import get_transformation
 
@@ -20,13 +21,49 @@ def create_benchmark_id() -> str:
     return datetime.now().strftime("%Y%m%dT%H%M%S_%f")
 
 
-def _normalize_registered_objects(items: Optional[list]) -> List[RegisteredObject]:
-    """Coerce a list of dict/RegisteredObject into RegisteredObject instances."""
-    items = items or []
-    return [
-        item if isinstance(item, RegisteredObject) else RegisteredObject.model_validate(item)
-        for item in items
-    ]
+_REGISTERED_OBJECT_METADATA = {
+    "name",
+    "description",
+    "task",
+    "knowledge",
+    "objective",
+    "privacy_type",
+}
+
+
+def _normalize_specs(
+        items: Optional[list[RegisteredObject] | list[dict]],
+) -> dict[str, dict[str, Any]]:
+    """Convert API metadata or compact execution dictionaries to factory specs."""
+    specs: dict[str, dict[str, Any]] = {}
+
+    for item in items or []:
+        if isinstance(item, RegisteredObject):
+            specs[item.id] = {
+                parameter.id: parameter.default
+                for parameter in item.parameters
+            }
+            continue
+
+        data = dict(item)
+        object_id = str(data.pop("id"))
+        parameters = data.pop("parameters", None)
+        if parameters is not None:
+            if isinstance(parameters, dict):
+                specs[object_id] = dict(parameters)
+            else:
+                specs[object_id] = {
+                    str(parameter["id"]): parameter.get("default")
+                    for parameter in parameters
+                }
+        else:
+            specs[object_id] = {
+                key: value
+                for key, value in data.items()
+                if key not in _REGISTERED_OBJECT_METADATA
+            }
+
+    return specs
 
 
 def run_benchmark(
@@ -55,26 +92,17 @@ def run_benchmark(
         if not Path(model.repository).expanduser().exists():
             raise FileNotFoundError(f"Model path {model.repository} does not exist.")
 
-    ##### 1.2 Attacks: normalize to RegisteredObject, always include the identity baseline
-    attack_list: List[RegisteredObject] = _normalize_registered_objects(attacks)
-    if not any(attack.id == "identitybaseline" for attack in attack_list):
-        attack_list.append(RegisteredObject(
-            id="identitybaseline",
-            name="identitybaseline",
-            parameters=[],
-            task=Task.Classification.name,
-        ))
-    # id -> {param_id: default} spec expected by the executor
-    attack_specs: dict[str, dict[str, Any]] = {
-        atk.id: {
-            param.id: param.default
-            for param in atk.parameters
-        }
-        for atk in attack_list
+    ##### 1.2 Attacks: normalize and always include the identity baseline
+    available_attacks = set(AF.get_list_classes())
+    attack_specs = {
+        attack_id: parameters
+        for attack_id, parameters in _normalize_specs(attacks).items()
+        if attack_id in available_attacks
     }
+    attack_specs.setdefault("identitybaseline", {})
 
     ##### 1.3 Metrics: normalize to RegisteredObject
-    metric_list: List[RegisteredObject] = _normalize_registered_objects(metrics)
+    metric_specs = _normalize_specs(metrics)
 
     #################################### 2. Prepare Execution ####################################
     benchmark_id = benchmark_id or create_benchmark_id()
@@ -127,14 +155,27 @@ def run_benchmark(
             )
 
             #################### Defining the Statistic Composer ####################
-            selected_metrics: dict[str, dict] = {
-                metric.id: {
-                    param.id: param.default
-                    for param in metric.parameters
+            num_classes = model_cnf.num_classes
+            if num_classes is None:
+                batch, _ = next(iter(dataloader))
+                with torch.no_grad():
+                    num_classes = model(batch.to(device)).shape[-1]
+
+            available_metrics = set(SF.get_list_classes(task={task}))
+            selected_metrics: dict[str, dict] = {}
+            for metric_id, parameters in metric_specs.items():
+                if metric_id not in available_metrics:
+                    continue
+
+                metric_parameters = {
+                    **parameters,
+                    "num_classes": num_classes,
                 }
-                for metric in metric_list
-                if metric in SF.get_list_classes(task={task})
-            }
+                metric_class = SF.get_info(metric_id).class_type
+                if "model" in inspect.signature(metric_class).parameters:
+                    metric_parameters["model"] = model
+                selected_metrics[metric_id] = metric_parameters
+
             statistics_composer = StatisticComposer(
                 statistics=selected_metrics,
                 device=device,
@@ -177,7 +218,7 @@ def run_benchmark(
             if log:
                 log.info(
                     "Prepared job(s): %d model(s) x %d dataset(s) x %d attack(s).",
-                    len(models), len(datasets), len(attack_list),
+                    len(models), len(datasets), len(attack_specs),
                 )
 
     return list_reports

@@ -54,6 +54,7 @@ class BenchmarkExecutor:
         if result is not None:
             payload.update(result.model_dump(mode="json"))
         if error is not None:
+            payload["status"] = "error"
             payload["error"] = error
 
         with (attack_path / "results.json").open("w", encoding="utf-8") as file:
@@ -99,6 +100,7 @@ class BenchmarkExecutor:
                     id=id,
                     result=None,
                     parameters=None,
+                    status="error",
                     error=str(exc),
                 )
 
@@ -139,7 +141,7 @@ class BenchmarkExecutor:
         failed: list[JobResult] = []
 
         for jr in results_iter:
-            if jr.error is None and jr.result is not None:
+            if jr.status == "finished" and jr.result is not None:
                 params: list[ParameterLog] | None = jr.parameters
                 if params is None:
                     raise ValueError("The list of parameters is None.")
@@ -150,19 +152,21 @@ class BenchmarkExecutor:
                     metrics=AttackMetricsProps.model_validate(jr.result),
                 )
                 results[jr.id] = attack_result
-                self._save_attack_result(jr.id, result=attack_result)
             else:
                 failed.append(jr)
-                error = str(jr.error or "Attack returned no result")
+                error = jr.error or "Attack returned no result"
                 self._save_attack_result(
                     jr.id,
                     error=error,
                 )
                 if log is not None:
-                    log.error(f"Job failed: {jr.id}: {jr.error}")
+                    log.error(f"Job failed: {jr.id}: {error}")
 
         if failed:
-            details = "; ".join(f"{job.id}: {job.error}" for job in failed)
+            details = "; ".join(
+                f"{job.id}: {job.error or job.status}"
+                for job in failed
+            )
             raise RuntimeError(f"Benchmark job(s) failed: {details}")
 
         return results

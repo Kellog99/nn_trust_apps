@@ -1,3 +1,4 @@
+import json
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable, Optional
@@ -24,7 +25,6 @@ def evaluate_attack(
         verbose: bool = False,
         output_path: Optional[str | Path] = None,
         max_saved_elements: int = 10,
-        progress_callback: Optional[Callable[[int, Optional[int]], None]] = None,
 ) -> JobResult:
     """
     Evaluate the model's vulnerability on the attack that is passed.
@@ -43,8 +43,24 @@ def evaluate_attack(
                 Pass an integer for the same limit on every variable, or a dict keyed by variable name.
                 The default preserves the current behavior of saving one element. Pass ``None`` to save all.
             output_path:
-            progress_callback: Optional callback invoked after every processed batch.
     """
+    ### Creating the dumping file ###
+    if output_path is None:
+        output_path = Path("./tmp") / datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+    if isinstance(output_path, str):
+        output_path = Path(output_path)
+    output_path: Path = output_path.expanduser().resolve() / attack_id
+    output_path.mkdir(parents=True, exist_ok=True)
+    res_path: Path = output_path / "results.json"
+
+    job_result = JobResult(
+        id=attack_id,
+        status="pending",
+        progress=0,
+        total=len(dataloader.dataset)
+    )
+    with open(res_path, "w") as f:
+        json.dump(job_result.model_dump(), f)
 
     ### PREPARE EXECUTION ###
     parameters: dict = parameters or {}
@@ -56,13 +72,6 @@ def evaluate_attack(
         **parameters
     )
 
-    if output_path is None:
-        output_path = Path("./tmp") / datetime.now().strftime("%Y%m%d_%H%M%S_%f")
-    if isinstance(output_path, str):
-        output_path = Path(output_path)
-
-    output_path = output_path.expanduser().resolve() / attack.__class__.__name__.lower().removesuffix("attack")
-
     logger: PyTorchCheckpointLogger = PyTorchCheckpointLogger(
         path=output_path,
         max_artifact={
@@ -71,32 +80,21 @@ def evaluate_attack(
         }
     )
 
-    atk_id: str = attack.__class__.__name__.lower().removesuffix("attack")
-
-    # --- FIX 1: peek the first batch without discarding it ---
-    # `next(iter(dataloader))` used to build a *second*, independent iterator;
-    # for IterableDataset-backed loaders this can drain the source (or, more
-    # subtly, desynchronize state) so the loop below iterates zero times.
     base_iter = iter(dataloader)
     try:
         first_batch, first_label = next(base_iter)
     except StopIteration as exc:
         raise ValueError("The dataloader produced no batches; cannot evaluate an attack.") from exc
     num_classes: int = model(first_batch.to(device)).shape[-1]
-    full_iter = itertools.chain([(first_batch, first_label)], base_iter)
 
-    try:
-        total_batches: int | None = len(dataloader)
-    except TypeError:
-        total_batches = None
-
-    batches = tqdm(
-        full_iter,
-        total=total_batches,
+    pbar = tqdm(
+        dataloader,
         desc=f"Attack {repr(attack)}",
-    ) if verbose else full_iter
+    ) if verbose else dataloader
 
-    for batch_index, (batch, label) in enumerate(batches, start=1):
+    job_result.status = "in progress"
+    for batch, label in pbar:
+        processed_count = batch.shape[0]
         batch = batch.to(device)
         label = label.to(device)
 
@@ -114,22 +112,22 @@ def evaluate_attack(
         ##############################################################
 
         with torch.no_grad():
-            out = model(batch)
-            out_adv = model(x_adv)
+            model_output = model(batch)
+            adversarial_output = model(x_adv)
 
-            y_pred_adv = out_adv.argmax(dim=-1)
-            y_pred = out.argmax(dim=-1)
+            y_pred_adv = adversarial_output.argmax(dim=-1)
+            y_pred = model_output.argmax(dim=-1)
 
         correct_mask = torch.eq(label, y_pred)
-        if atk_id == "reference":
+        if attack_id == "identitybaseline":
             y_pred = label
         elif torch.any(correct_mask):
             if not torch.all(correct_mask):
                 label = label[correct_mask]
                 x_adv = x_adv[correct_mask]
                 batch = batch[correct_mask]
-                out = out[correct_mask]
-                out_adv = out_adv[correct_mask]
+                model_output = model_output[correct_mask]
+                adversarial_output = adversarial_output[correct_mask]
                 y_pred = y_pred[correct_mask]
                 y_pred_adv = y_pred_adv[correct_mask]
 
@@ -142,20 +140,23 @@ def evaluate_attack(
             'y_pred_adv': y_pred_adv
         }
         statistics.update(**input_stat)
-        if progress_callback is not None:
-            progress_callback(batch_index, total_batches)
+        job_result.status = "in progress"
+        job_result.progress += processed_count
+        with open(res_path, "w") as f:
+            json.dump(job_result.model_dump(), f)
 
     logger.close()
     attack.logger.close()
 
     result = statistics.compute()
-    if atk_id != 'identitybaseline':
+    if attack_id != 'identitybaseline':
         metric_states: dict[str, dict[str, Any]] = statistics.get_raw_state()
         statistics.update_aggregate(metric_states)
+
     statistics.reset()
     atk_parameters: dict = attack.config.model_dump()
-    out = JobResult(
-        id=atk_id,
+    job_result = JobResult(
+        id=attack_id,
         result=result,
         parameters=[
             ParameterLog(
@@ -167,5 +168,11 @@ def evaluate_attack(
             for key, value in attack.config.__class__.model_fields.items()
             if key != "model" and isinstance(atk_parameters.get(key, None), (int, float, bool))
         ],
+        progress=job_result.progress,
+        total=job_result.total,
+        status="finished"
     )
-    return out
+
+    with open(output_path / "results.json", "w") as f:
+        json.dump(job_result.model_dump(), f)
+    return job_result

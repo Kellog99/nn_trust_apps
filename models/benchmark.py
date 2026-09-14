@@ -1,6 +1,6 @@
-from typing import Any, Optional, TypedDict
+from typing import Optional, TypedDict, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from models.info import ModelInfo, DatasetInfo
 from models.model import RegisteredObject
@@ -37,23 +37,37 @@ class BenchmarkOptionConfig(BaseModel):
     targeted: bool = False
 
 
-# This class is for handling the type of the benchmark's service input
 class BenchmarkExecutionConfig(BaseModel):
+    """
+    This class is for handling the type of the benchmark's service input
+    """
     attacks: list[RegisteredObject]
     metrics: list[RegisteredObject]
-    # The web client sends the selected model and dataset IDs.  The router
-    # resolves those IDs to their repository metadata before starting a job.
     model: ModelInfo
     dataset: DatasetInfo
     options: BenchmarkOptionConfig = Field(default_factory=BenchmarkOptionConfig)
+    benchmark_id: Optional[str] = None
 
 
 class JobResult(BaseModel):
     """
-    Since this has to handle the errors to, only the id is required.
+    Since this has to handle the errors too, only the id is required.
     """
-    model_config = ConfigDict(arbitrary_types_allowed=True)
     id: str
     parameters: Optional[list[ParameterLog]] = None
     result: Optional[dict] = None
-    error: Optional[BaseException | str] = None
+    total: Optional[int] = None
+    progress: Optional[int] = None
+    status: Literal["pending", "in progress", "finished", "error"] = "pending"
+    error: Optional[str] = None
+
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    @model_validator(mode="after")
+    def validate_status(self) -> "JobResult":
+        if self.status == "finished":
+            if self.result is None:
+                raise ValueError("If the job is finished then there must be a result.")
+            elif self.total != self.progress:
+                raise ValueError("The total number of elements must be the same as the one that have been seen. ")
+        return self
