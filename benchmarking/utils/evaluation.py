@@ -1,17 +1,15 @@
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 
 import itertools
 import torch
 from torch.utils.data import DataLoader
 from tqdm.auto import tqdm
 
-from benchmarking.utils.attack import _create_atk
 from models import JobResult
 from models.reports import ParameterLog
-from nn_trust import ModelAdapter, StatisticComposer
-from nn_trust.attack import EvasionAttack
+from nn_trust import ModelAdapter, AttackFactory as EAF, Task, EvasionAttack, StatisticComposer
 from nn_trust.target import AvoidOnehotTarget
 from nn_trust.utils import PyTorchCheckpointLogger
 
@@ -19,12 +17,14 @@ from nn_trust.utils import PyTorchCheckpointLogger
 def evaluate_attack(
         dataloader: DataLoader,
         model: ModelAdapter,
-        attack: EvasionAttack | dict,
         statistics: StatisticComposer,
-        device: torch.device,
+        attack_id: str,
+        parameters: Optional[dict[str, Any]] = None,
+        device: torch.device = torch.device("cpu"),
         verbose: bool = False,
         output_path: Optional[str | Path] = None,
         max_saved_elements: int = 10,
+        progress_callback: Optional[Callable[[int, Optional[int]], None]] = None,
 ) -> JobResult:
     """
     Evaluate the model's vulnerability on the attack that is passed.
@@ -34,7 +34,8 @@ def evaluate_attack(
         Args:
             dataloader: dataset to use
             model: target model
-            attack: Attack to do on the (model, dataset)
+            attack_id: Attack to do on the (model, dataset)
+            parameters: parameters of the attack
             statistics: The statistic composer that computes all the metrics that are required
             verbose
             device: device where the computation will be done
@@ -42,16 +43,18 @@ def evaluate_attack(
                 Pass an integer for the same limit on every variable, or a dict keyed by variable name.
                 The default preserves the current behavior of saving one element. Pass ``None`` to save all.
             output_path:
+            progress_callback: Optional callback invoked after every processed batch.
     """
 
     ### PREPARE EXECUTION ###
-    if isinstance(attack, dict):
-        attack = _create_atk(
-            attack=attack,
-            model=model,
-            out_path=output_path,
-            device=device
-        )
+    parameters: dict = parameters or {}
+    attack: EvasionAttack = EAF.create(
+        class_id=attack_id,
+        model=model,
+        device=device,
+        task=Task.Classification,
+        **parameters
+    )
 
     if output_path is None:
         output_path = Path("./tmp") / datetime.now().strftime("%Y%m%d_%H%M%S_%f")
@@ -82,15 +85,18 @@ def evaluate_attack(
     num_classes: int = model(first_batch.to(device)).shape[-1]
     full_iter = itertools.chain([(first_batch, first_label)], base_iter)
 
-    total_batches = len(dataloader) if hasattr(dataloader, "__len__") else None
-    if verbose:
-        progress_bar = enumerate(
-            tqdm(full_iter, total=total_batches, desc=f"Attack {repr(attack)} for model {model.name}")
-        )
-    else:
-        progress_bar = enumerate(full_iter)
+    try:
+        total_batches: int | None = len(dataloader)
+    except TypeError:
+        total_batches = None
 
-    for idx, (batch, label) in progress_bar:
+    batches = tqdm(
+        full_iter,
+        total=total_batches,
+        desc=f"Attack {repr(attack)}",
+    ) if verbose else full_iter
+
+    for batch_index, (batch, label) in enumerate(batches, start=1):
         batch = batch.to(device)
         label = label.to(device)
 
@@ -136,6 +142,8 @@ def evaluate_attack(
             'y_pred_adv': y_pred_adv
         }
         statistics.update(**input_stat)
+        if progress_callback is not None:
+            progress_callback(batch_index, total_batches)
 
     logger.close()
     attack.logger.close()

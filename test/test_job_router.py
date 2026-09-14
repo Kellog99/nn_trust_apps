@@ -1,5 +1,7 @@
 import json
+import importlib
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -7,12 +9,40 @@ from benchmarking import run_benchmark
 from models import BenchmarkExecutionConfig, ModelReportProps, BenchmarkOptionConfig
 from models import DatasetInfo, ModelInfo
 
+job_router = importlib.import_module("services.job_router")
+
 
 @pytest.fixture
 def body() -> BenchmarkExecutionConfig:
     with open("./test/utils/benchmark-request.json", "r") as f:
         data = json.load(f)
     return BenchmarkExecutionConfig.model_validate(data)
+
+
+def test_start_benchmark_job_returns_id_used_by_benchmark(
+        body: BenchmarkExecutionConfig,
+        monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    benchmark_id = "20260914T120000_000001"
+    monkeypatch.setattr(job_router, "create_benchmark_id", lambda: benchmark_id)
+    benchmark_call = {}
+    monkeypatch.setattr(
+        job_router,
+        "run_benchmark",
+        lambda **kwargs: benchmark_call.update(kwargs),
+    )
+
+    request = SimpleNamespace(
+        app=SimpleNamespace(
+            state=SimpleNamespace(
+                config=SimpleNamespace(excluded_attacks=[]),
+            ),
+        ),
+    )
+    result = job_router.start_benchmark_job(request, body)
+
+    assert result == benchmark_id
+    assert benchmark_call["benchmark_id"] == benchmark_id
 
 
 def test_start_benchmark_job(body: BenchmarkExecutionConfig, tmp_path: Path):

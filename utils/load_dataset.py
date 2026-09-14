@@ -4,7 +4,7 @@ from typing import Callable, Optional
 
 import numpy
 import torch
-from torch.utils.data import Dataset, Subset, DataLoader
+from torch.utils.data import Dataset, IterableDataset, Subset, DataLoader
 from torchvision import transforms as T
 
 from models.info import Transformation, DATASET_TYPES, DatasetInfo, ParquetInfo
@@ -89,6 +89,12 @@ def get_dataloader(
         kwargs.setdefault("label_column", parquet_info.label_column)
         kwargs.setdefault("image_key", parquet_info.image_key)
 
+    if dataset_type == "parquet":
+        # Arrow decodes only a consumer-sized chunk at once. The limit is
+        # applied inside the stream, without allocating a list of row indexes.
+        kwargs.setdefault("read_batch_size", max(1, batch))
+        kwargs.setdefault("limit", subset)
+
     dataset: Dataset = loader(
         root=root,
         transform=transform if transform is not None else get_transformation(),
@@ -96,11 +102,14 @@ def get_dataloader(
         **kwargs,
     )
 
-    if subset is None or subset < 0:
-        indices = list(range(len(dataset)))
+    if isinstance(dataset, IterableDataset):
+        subdataset = dataset
     else:
-        indices = list(range(min(subset, len(dataset))))
-    subdataset = Subset(dataset, indices)
+        if subset is None or subset < 0:
+            indices = range(len(dataset))
+        else:
+            indices = range(min(subset, len(dataset)))
+        subdataset = Subset(dataset, indices)
 
     def seed_worker(worker_id):
         worker_seed = torch.initial_seed() % 2 ** 32
@@ -113,7 +122,7 @@ def get_dataloader(
     dataloader = DataLoader(
         subdataset,
         batch_size=batch,
-        shuffle=True,
+        shuffle=False if isinstance(subdataset, IterableDataset) else True,
         num_workers=max(0, num_workers),
         worker_init_fn=seed_worker,
         generator=g,

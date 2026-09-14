@@ -119,8 +119,7 @@ async def jailbreaking(
         body: dict = Body(...),
         device: str = Query(
             default="cuda",
-            description="The device to run the model on.",
-            example="cpu"
+            description="The device to run the model on."
         )
 
 ) -> dict:

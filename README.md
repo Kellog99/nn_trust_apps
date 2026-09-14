@@ -1,263 +1,149 @@
 # NN Trust Applications
 
-A collection of applications built on top of **`nn_trust`** for adversarial machine learning, robustness evaluation, benchmarking, and report generation.
+Applications built on [`nn_trust`](submodules/nn_trust) for adversarial-robustness evaluation, benchmarking, and report
+generation. The project exposes both a CLI and a FastAPI backend.
 
-The repository provides both command-line utilities and backend services for evaluating machine learning models against adversarial attacks and producing reproducible benchmark reports.
+## Features
 
----
+These are all the engineering that has been done.
 
-# Features
+- Execution:
+    - Local
+    - Ray-basedl
+- Supported **models**:
+    - Computer-vision
+    - NLP model
+- Supported **datasets**:
+    - Image-folder
+    - flat-image
+    - Parquet
+- Attack/metric selection and per-attack progress tracking
+- JSON benchmark results and PDF report generation
+- Repository discovery and model/dataset upload endpoints
 
-- FastAPI backend for attack execution
-- Benchmark orchestration
-- Adversarial attack evaluation
-- PDF report generation
-- Repository management for models, datasets, and reports
-- Integration with Ray for distributed execution
+## Requirements and installation
 
----
-
-# Repository Layout
-
-```text
-.
-├── attack_server/      # FastAPI backend and job manager
-├── benchmarking/       # Benchmark runner and utilities
-├── report/             # PDF report generation
-├── submodules/
-│   ├── nn_trust/
-│   └── data_quality/
-└── ...
-```
-
-Main components:
-
-| Directory | Description |
-|-----------|-------------|
-| `attack_server/` | FastAPI backend, Ray integration and job management |
-| `benchmarking/` | Benchmark execution and evaluation utilities |
-| `report/` | Generates PDF reports from benchmark outputs |
-| `submodules/nn_trust` | Core adversarial attack library |
-
----
-
-# Requirements
-
-- Python **3.11**
+- Python 3.11
 - [`uv`](https://docs.astral.sh/uv/)
 - Git with submodule support
 
----
-
-# Installation
-
-## 1. Create the environment
-
 ```bash
 uv sync --python 3.11
-```
-
-## 2. Clone the submodules
-
-If the submodules are not already available:
-
-```bash
-git submodule add https://github.com/Kellog99/nn_trust.git submodules/nn_trust
-git submodule add https://github.com/Kellog99/data_quality.git submodules/data_quality
-```
-
-Initialize them:
-
-```bash
-git submodule init
-git submodule update --recursive
-```
-
-## 3. Install `nn_trust`
-
-```bash
+git submodule update --init --recursive
 uv pip install -e submodules/nn_trust/
 ```
 
----
+## Quick start
 
-# Quick Start
-
-## Launch the backend
+Start the API:
 
 ```bash
 python app.py --reload --host 0.0.0.0 --port 8000
 ```
 
----
+The interactive API documentation is available at `http://localhost:8000/docs`.
 
-## Run a benchmark
-
-```bash
-python benchmark.py \
-    --model_path path/to/model/info.json \
-    --dataset_path path/to/dataset/info.json
-```
-
----
-
-## Generate a report
+Run a benchmark from a YAML configuration file:
 
 ```bash
-python report_class.py \
-    --OUTPUTDIR path/to/output_folder
+python benchmark.py --config_path path/to/config.yaml
 ```
 
-The output directory must contain the benchmark results produced by the benchmark runner.
+Or use `POST /job/start_benchmark`. The API accepts `ModelInfo`, `DatasetInfo`, attack and metric selections, and
+benchmark options. `GET /job/getJobs` returns attack status, progress, and errors for a benchmark.
 
----
+## Dataset handling
 
-# Benchmark CLI
+Dataset loading is selected explicitly with `DatasetInfo.dataset_type`:
 
-Display the complete list of available options:
+| Type           | Expected layout                                                                                                             |
+|----------------|-----------------------------------------------------------------------------------------------------------------------------|
+| `image_folder` | `data/<class_name>/<image>` (or the configured `folder_data` split)                                                         |
+| `flat`         | Images directly in one directory; optional `labels.csv` (`file,label`) or `labels.json` mapping filenames to integer labels |
+| `parquet`      | One `.parquet` file or a directory of Parquet shards                                                                        |
+
+Parquet datasets are read as restartable, bounded-memory streams. Configure their columns in `DatasetInfo.parquet_info`:
+
+```json
+{
+  "dataset_type": "parquet",
+  "parquet_info": {
+    "image_column": "image",
+    "image_key": "bytes",
+    "label_column": "label"
+  }
+}
+```
+
+`get_dataloader()` accepts either `dataset_path` or `dataset_info.repository`, applies the model transformation,
+supports worker partitioning, and honors the benchmark `subset`. Unsupported formats such as COCO, YOLO, video, or
+medical volumes should be supplied as a compatible `torch.utils.data.Dataset` rather than inferred from a path.
+
+## Model handling
+
+`ModelInfo.model_type` selects the loader. Available values are:
+
+`plain`, `timm`, `torch_script`, `torch_dynamo`, `onnx`, `api`, `HuggingFace`, `Ollama`, `Gemini`, and `OpenRouter`.
+
+Common local layouts are:
+
+```text
+model_repository/<model-id>/
+├── info.json
+└── model.pth                 # plain PyTorch module
+```
+
+The other local formats expect `model.pt` (TorchScript), `model.pt2` (TorchDynamo export), `model.onnx` (ONNX), or
+`model_state_dict.pth` plus `model.py` (model definition and weights). `timm` loads a pretrained model by its timm ID;
+Hugging Face can load either a computer-vision checkpoint or a language model.
+
+Remote NLP models use their model ID and the corresponding credentials: `GEMINI_API_KEY` or `OPENROUTER_API_KEY` for
+those providers. Ollama defaults to `http://localhost:11434`; custom endpoints are provided through the model API field.
+
+All models are wrapped in the shared `nn_trust` adapter interface, moved to the selected device, and put in evaluation
+mode before benchmarking.
+
+## Metadata and repositories
+
+Each model and dataset must have an `info.json`. At minimum, provide `id`, `name`, `task`, and `input_dimensionality`;
+benchmark execution also requires a valid `repository` path. Dataset metadata additionally supports `batch_size`,
+`num_workers`, `dataset_type`, `folder_data`, and `parquet_info`. Model metadata supports `model_type`,
+`transformation`, and `api` where applicable.
+
+Resources are typically stored as:
+
+```text
+model_repository/<model-id>/info.json
+dataset_repository/<dataset-id>/info.json
+benchmark_repository/<benchmark-id>/<model-id>/<dataset-id>/report.json
+```
+
+The repository API can list resources by type and task. Models can be uploaded as ZIP packages containing exactly one
+supported model file (`.pt`, `.pth`, `.pkl`, or `.pickle`) and one JSON metadata file; dataset uploads accept ZIP
+archives.
+
+## Benchmark output
+
+Each run creates a unique benchmark ID and stores a `report.json` containing model information, requested metrics,
+attack results, and saved examples. The identity baseline is added automatically when it is not selected, providing the
+unperturbed performance reference.
+
+To generate a PDF from benchmark output:
 
 ```bash
-python benchmark.py --help
+python report.py \
+  --benchmark_path path/to/report.json \
+  --output_path path/to/reports
 ```
 
-### Main arguments
-
-| Argument | Description |
-|----------|-------------|
-| `--model_path` | Path to the model `info.json` |
-| `--dataset_path` | Path to the dataset `info.json` |
-| `--attacks` | List of attacks to execute |
-| `--metrics` | Metrics to compute |
-| `--output_path` | Directory where benchmark results are stored |
-| `--use_ray` | Enable distributed execution with Ray |
-
----
-
-# Repository Organization
-
-The framework relies on three repositories.
-
-## Model Repository
+## Repository layout
 
 ```text
-model_repository/
-├── model_1/
-│   ├── model.pth
-│   └── info.json
-└── model_2/
+attack_server/       # API/job services
+benchmarking/        # benchmark execution and evaluation
+models/              # Pydantic metadata and configuration models
+utils/dataset/       # dataset loaders
+utils/model/         # model loaders
+report/              # PDF report generation
+submodules/nn_trust/ # attack and adapter library
 ```
-
----
-
-## Dataset Repository
-
-The dataset repository follows the same organization.
-
-For image classification, `dataset_type: "auto"` detects the common
-`class_name/image` layout. Use `"image_folder"` to require that layout, or
-`"flat"` for a directory of images. Flat directories may include a
-`labels.csv` file with `file,label` columns (or a `labels.json` mapping) when
-classification labels are available. Other computer-vision formats, such as
-COCO, YOLO, video, or medical volumes, should be instantiated as a compatible
-`torch.utils.data.Dataset` and passed to `get_dataloader(dataset=...)` so that
-their annotation semantics are not guessed from a path.
-
-```text
-dataset_repository/
-├── dataset_1/
-│   ├── data/
-│   └── info.json
-└── dataset_2/
-```
-
----
-
-## Report Repository
-
-```text
-report_repository/
-└── run_id/
-    ├── dataset_1/
-    │   ├── model_1/
-    │   │   ├── report.json
-    │   │   └── examples/
-    │   └── model_2/
-    └── dataset_2/
-```
-
----
-
-# Metadata (`info.json`)
-
-Every model and dataset is described by an `info.json` metadata file.
-
-Typical information includes:
-
-- Identifier
-- Name
-- Task
-- Domain
-- Input dimensionality
-- Description
-- Repository information
-- Number of classes
-- Dataset- or model-specific fields
-
-These metadata files are mandatory and are used by the framework to correctly load resources.
-
----
-
-# Benchmark Output
-
-Each benchmark execution produces a JSON report containing:
-
-- Model information
-- Performance metrics
-- Robustness metrics
-- Attack statistics
-- Confusion matrices
-- Attack-specific measurements
-
-The generated JSON file is used as input for the report generator.
-
----
-
-# Development
-
-Relevant modules:
-
-```text
-attack_server/
-    app.py
-    routers/
-    lib/
-
-benchmarking/
-    main.py
-    benchmark_utils/
-
-report/
-```
-
-The actual adversarial attack implementations are located inside the `submodules/nn_trust` repository.
-
----
-
-# Working with Git Submodules
-
-To safely remove a submodule:
-
-```bash
-git submodule deinit -f path/to/submodule
-git rm -f path/to/submodule
-rm -rf .git/modules/path/to/submodule
-```
-
----
-
-# Notes
-
-- Dependencies are managed with **uv**.
-- Every model and dataset must provide an `info.json` file.
-- Ray is optional and can be enabled with the `--use_ray` flag.
-- The report generator expects the output of a completed benchmark execution.

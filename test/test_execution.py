@@ -1,88 +1,17 @@
 import json
 from datetime import datetime
 from pathlib import Path
-from types import SimpleNamespace
-from typing import Optional
-from unittest.mock import MagicMock
 
 import pytest
 import torch
 from torch.utils.data import DataLoader
 
 from benchmarking import BenchmarkExecutor
-from benchmarking.utils.attack import _attack_parameters
 from benchmarking.utils.evaluation import evaluate_attack
 from models.reports import ReportAttackProps, AttackMetricsProps
 from nn_trust import StatisticComposer, ModelAdapter
 from test.test_single_attack import available_devices
 from test.utils import get_dummy_cv_model, get_dummy_dataloader
-
-
-def _fake_job_result(attack_id: str, error: Optional[str] = None):
-    """
-    Stand-in for the `JobResult` returned by `ray.get(ref)`.
-    error=None => success path; error="..." => failure path.
-    """
-    return SimpleNamespace(
-        id=attack_id,
-        error=error,
-        result={} if error is None else None,
-        parameters=[] if error is None else None,
-    )
-
-
-def make_ray_mock(values_by_ref: Optional[dict] = None) -> MagicMock:
-    """
-    Stand-in for the `ray` module, parameterized by {ref: JobResult_or_Exception}
-    describing what ray.get(ref) should produce for each submitted task.
-
-    Supports BOTH `ray.remote` call conventions so the mock stays valid
-    regardless of how `_iter_ray` invokes it:
-      - direct:     ray.remote(fn)              -> remote_fn
-      - decorator:  ray.remote(**kwargs)(fn)     -> remote_fn
-    """
-    values_by_ref = values_by_ref if values_by_ref is not None else {}
-    ray_mock = MagicMock()
-    counter = {"n": 0}
-
-    def _make_remote_fn():
-        remote_fn = MagicMock()
-
-        def _remote(**_call_kwargs):
-            ref = f"ref-{counter['n']}"
-            counter["n"] += 1
-            return ref
-
-        remote_fn.remote.side_effect = _remote
-        return remote_fn
-
-    def _remote_dispatch(*args, **kwargs):
-        if args and callable(args[0]):
-            # direct form: ray.remote(fn)
-            return _make_remote_fn()
-
-        # decorator form: ray.remote(**kwargs) -> wrapper(fn)
-        def wrapper(fn):
-            return _make_remote_fn()
-
-        return wrapper
-
-    ray_mock.remote.side_effect = _remote_dispatch
-
-    def _wait(refs, num_returns=1):
-        return refs[:num_returns], refs[num_returns:]
-
-    ray_mock.wait.side_effect = _wait
-
-    def _get(ref):
-        outcome = values_by_ref[ref]
-        if isinstance(outcome, Exception):
-            raise outcome
-        return outcome
-
-    ray_mock.get.side_effect = _get
-    ray_mock.is_initialized.return_value = True
-    return ray_mock
 
 
 @pytest.fixture
@@ -110,55 +39,23 @@ def attacks() -> list[dict]:
 
 
 @pytest.fixture
-def statistics() -> list[dict]:
-    return [
-        {"id": "accuracy"},
-        {"id": "f1score"},
-        {"id": "misclassification"},
-        {"id": "precision"},
-    ]
+def statistics() -> dict[str, dict]:
+    return {
+        "accuracy": {},
+        "f1score": {},
+        "misclassification": {},
+        "precision": {},
+    }
 
 
 def test_statistic_composer_accepts_api_metric_metadata():
     """Display metadata returned by ``/info/metrics`` is not constructor input."""
-    composer = StatisticComposer(statistics=[
-        {
-            "id": "accuracy",
-            "name": "Accuracy",
-            "description": "It computes the accuracy.",
-            "parameters": [],
-            "task": "Classification",
-            "knowledge": None,
-            "objective": None,
-            "privacy_type": None,
-        }
-    ], device=torch.device("cpu"))
-
-    assert set(composer._performance_stats) == {"accuracy"}
-
-
-def test_attack_parameters_accept_api_metadata_and_defaults():
-    parameters = _attack_parameters({
-        "id": "contrastbaseline",
-        "name": "Contrast Baseline",
-        "task": "Classification",
-        "parameters": [
-            {"id": "epsilon", "default": 0.1},
-            {"id": "max_iters", "default": 3},
-        ],
-        "epsilon": 0.2,
-    })
-
-    assert parameters == {"epsilon": 0.2, "max_iters": 3}
-
-
-def test_empty_aggregator_has_no_metrics_to_compute():
-    composer = StatisticComposer(
-        statistics=[{"id": "robustness", "num_classes": 2}],
-        device=torch.device("cpu"),
+    composer = StatisticComposer(statistics={
+        "accuracy": {"device": torch.device("cpu")}
+    }
     )
 
-    assert composer.compute_aggregator() == {}
+    assert set(composer._performance_stats) == {"accuracy"}
 
 
 # ---------------------------------------------------------------------------
@@ -184,7 +81,7 @@ def test_evaluate_attack(
     result = evaluate_attack(
         dataloader=dataloader,
         model=model,
-        attack={"id": "identitybaseline"},
+        attack_id="identitybaseline",
         statistics=statistics,
         device=device,
         output_path=tmp_path,
@@ -217,25 +114,12 @@ def test_execution(
         device: torch.device,
         use_ray: bool,
         tmp_path: Path,
-        statistics: list[dict],
-        monkeypatch: Optional[pytest.MonkeyPatch],
+        statistics: dict[str, dict],
 ):
     """
     Given N attacks that all succeed, execute_jobs must return exactly N
     ReportAttackProps, keyed by attack id, each with usable metrics.
     """
-    if use_ray:
-        values_by_ref = {
-            f"ref-{i}": _fake_job_result(attack["id"])
-            for i, attack in enumerate(attacks)
-        }
-        if monkeypatch is None:
-            raise ValueError("It has to be defined.")
-        monkeypatch.setattr(
-            "benchmarking.utils.execution.ray",
-            make_ray_mock(values_by_ref),
-        )
-
     executor = BenchmarkExecutor(
         device=device,
         use_ray=use_ray,
@@ -270,8 +154,8 @@ def test_execution(
     for attack in attacks:
         id = attack["id"]
         metric = results[id].metrics.model_dump()
-        for stat in statistics:
-            assert metric[stat["id"]] is not None, f"Stat {stat['id']} is None"
+        for statistic_id in statistics:
+            assert metric[statistic_id] is not None, f"Stat {statistic_id} is None"
 
 
 if __name__ == "__main__":
@@ -285,12 +169,11 @@ if __name__ == "__main__":
         ],
         device=torch.device("cpu"),
         use_ray=False,
-        monkeypatch=None,
         tmp_path=Path(f"./tmp/{datetime.now().strftime('%Y%m%d%H%M%S')}"),
-        statistics=[
-            {"id": "accuracy"},
-            {"id": "f1score"},
-            {"id": "misclassification"},
-            {"id": "precision"},
-        ]
+        statistics={
+            "accuracy": {},
+            "f1score": {},
+            "misclassification": {},
+            "precision": {},
+        }
     )
