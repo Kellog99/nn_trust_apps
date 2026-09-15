@@ -55,7 +55,6 @@ def get_benchmarks(
         repo_path=repo_path,
         model_type="report_model"
     ))
-    print("num of reports ", len(list_reports))
 
     out: list[BenchmarkModelProps] = []
     for report in list_reports:
@@ -80,34 +79,7 @@ def get_benchmarks(
                 )
             )
     print("list of benchmarks ", out)
-
     return out
-
-
-@router.post("/upload/model", response_model=ModelReportProps)
-def upload_report(
-        report: dict = Body(...),
-        report_path: str = Query(
-            default=...,
-            description="Path to the repository's folder"
-        )
-) -> ModelReportProps:
-    """
-    This function handles the uploading of the report.
-    At this moment, it handles only the Models' report repository.
-    """
-    report: ModelReportProps = ModelReportProps.model_validate(report)
-
-    new_report_path = Path(report_path) / report.info.id
-    # create a folder for the new report
-    new_report_path.mkdir(parents=True, exist_ok=True)
-    # Create the file path (not just folder)
-    file_path = new_report_path / "report.json"  # or whatever filename you want
-    # Convert Pydantic model to dict before saving
-    with open(file_path, "w") as f:
-        json.dump(report.model_dump(), f, indent=2)  # or report.dict() for older Pydantic
-
-    return report
 
 
 @router.post("/generate_pdf")
