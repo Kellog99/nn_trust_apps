@@ -51,7 +51,7 @@ def evaluate_attack(
         output_path = Path(output_path)
     output_path: Path = output_path.expanduser().resolve() / attack_id
     output_path.mkdir(parents=True, exist_ok=True)
-    res_path: Path = output_path / "results.json"
+    res_path: Path = output_path / "job_results.json"
 
     job_result = JobResult(
         id=attack_id,
@@ -173,6 +173,6 @@ def evaluate_attack(
         status="finished"
     )
 
-    with open(output_path / "results.json", "w") as f:
+    with open(output_path / "job_results.json", "w") as f:
         json.dump(job_result.model_dump(), f)
     return job_result

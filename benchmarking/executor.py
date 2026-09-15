@@ -23,7 +23,6 @@ class BenchmarkExecutor:
             self,
             benchmark_id: Optional[str] = None,
             verbose: bool = False,
-            use_ray: bool = False,
             output_path: Optional[str | Path] = None,
             device: torch.device = torch.device("cpu"),
     ):
@@ -33,7 +32,6 @@ class BenchmarkExecutor:
 
         self.verbose = verbose
         self.device = device
-        self.use_ray = use_ray
         if output_path is None:
             output_path = f"./tmp/{self.benchmark_id}"
 
@@ -57,7 +55,7 @@ class BenchmarkExecutor:
             payload["status"] = "error"
             payload["error"] = error
 
-        with (attack_path / "results.json").open("w", encoding="utf-8") as file:
+        with (attack_path / "job_results.json").open("w", encoding="utf-8") as file:
             json.dump(payload, file, indent=2)
 
     def _iter_local(

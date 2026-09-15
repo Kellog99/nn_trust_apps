@@ -5,7 +5,7 @@ from fastapi import APIRouter, BackgroundTasks, Body, HTTPException, Query, Requ
 
 from benchmarking import create_benchmark_id, run_benchmark
 from models import BenchmarkExecutionConfig, DatasetInfo, ModelInfo, ServerConfig, RegisteredObject, \
-    BenchmarkOptionConfig, JobResult
+    BenchmarkOptionConfig, JobResult, ModelReportProps
 
 router = APIRouter(prefix="/job", tags=["jobs management", "jobs utils"])
 
@@ -25,16 +25,29 @@ async def start_benchmark_job(
     model: ModelInfo = body.model
     benchmark_id: str = create_benchmark_id()
 
-    # run_benchmark consumes serializable mappings, not the API metadata
-    # model returned by /info/attacks and /info/metrics.
     attacks: list[RegisteredObject] = [
         attack for attack in body.attacks
         if attack.id not in config.excluded_attacks
     ]
+
     metrics: list[RegisteredObject] = body.metrics
-    # The service owns the benchmark repository.  Using its configured path
-    # also means getJobs can recover statuses from disk after a restart.
-    options: BenchmarkOptionConfig = body.options
+    # Benchmark artifacts belong to the server repository used by get_jobs.
+    options: BenchmarkOptionConfig = body.options.model_copy(
+        update={"output_path": config.path_model_report_repo}
+    )
+
+    attack_ids = {attack.id for attack in attacks}
+    # run_benchmark always executes the identity baseline, even when it was
+    # not explicitly included in the request.
+    attack_ids.add("identitybaseline")
+    benchmark_folder = (
+            Path(options.output_path).expanduser().resolve()
+            / benchmark_id
+            / model.id
+            / dataset.id
+    )
+    for attack_id in attack_ids:
+        (benchmark_folder / attack_id).mkdir(parents=True, exist_ok=True)
 
     background_tasks.add_task(
         run_benchmark,
@@ -54,6 +67,8 @@ async def start_benchmark_job(
 def get_jobs(
         request: Request,
         benchmark_id: str | None = Query(None),
+        model_id: str | None = Query(None),
+        dataset_id: str | None = Query(None),
         attacks_id: list[str] | None = Query(None)
 ) -> list[JobResult]:
     """
@@ -64,47 +79,75 @@ def get_jobs(
 
     # Some clients JSON-encode this query parameter, producing %22id%22.
     # Accept that representation as well as the regular unquoted value.
-    normalized_benchmark_id = benchmark_id.strip().strip("\"'").strip()
-    if not normalized_benchmark_id:
+    benchmark_id = benchmark_id.strip().strip("\"'").strip()
+    if not benchmark_id:
         raise HTTPException(status_code=422, detail="benchmark_id cannot be empty")
 
     config: ServerConfig = request.app.state.config
-    repository = Path(config.path_model_report_repo).expanduser().resolve()
-    output_folder = (repository / normalized_benchmark_id).resolve()
-    if output_folder.parent != repository:
-        raise HTTPException(status_code=400, detail="Invalid benchmark_id")
+    output_folder: Path = Path(config.path_model_report_repo).expanduser().resolve()
 
-    # FastAPI uses repeated query parameters for lists.  The web client sends
-    # one comma-separated value, so support both forms:
+    if dataset_id is None:
+        raise HTTPException(status_code=422, detail="dataset_id is required")
+    if model_id is None:
+        raise HTTPException(status_code=422, detail="model_id is required")
+
+    output_folder: Path = output_folder / benchmark_id / model_id / dataset_id
+
+    # FastAPI builds a list from repeated query parameters, but some clients
+    # send all attack IDs in a single comma-separated value. Support both:
     #   ?attacks_id=a&attacks_id=b
     #   ?attacks_id=a,b
-    normalized_attacks = list(dict.fromkeys(
-        attack_id.strip()
+    attacks_id = [
+        attack_id.strip().strip("\"'").strip()
         for value in (attacks_id or [])
         for attack_id in value.split(",")
-        if attack_id.strip()
-    ))
-    if not normalized_attacks and output_folder.is_dir():
-        normalized_attacks = sorted(
-            path.name
-            for path in output_folder.iterdir()
-            if path.is_dir() and (path / "results.json").is_file()
-        )
+        if attack_id.strip().strip("\"'").strip()
+    ]
 
     jobs: list[JobResult] = []
 
-    for atk in normalized_attacks:
-        attack_folder = (output_folder / atk).resolve()
-        if attack_folder.parent != output_folder:
-            raise HTTPException(status_code=400, detail=f"Invalid attack id: {atk}")
-        json_file = attack_folder / "results.json"
-        job = JobResult(
-            id=atk,
-        )
+    for atk in attacks_id:
+        json_file: Path = output_folder / atk / "job_results.json"
+        print(json_file)
+        job = JobResult(id=atk)
         if json_file.exists():
             with open(json_file, encoding="utf-8") as file:
                 job = JobResult.model_validate(json.load(file))
-
         jobs.append(job)
-
     return jobs
+
+
+@router.get("/getReport")
+def getReport(
+        request: Request,
+        benchmark_id: str = Query(...),
+        model_id: str = Query(...),
+        dataset_id: str = Query(...),
+) -> ModelReportProps:
+    """
+    Load a benchmark report for a model and dataset.
+    """
+    config: ServerConfig = request.app.state.config
+    repository = Path(config.path_model_report_repo).expanduser().resolve()
+
+    ids = {
+        "benchmark_id": benchmark_id,
+        "model_id": model_id,
+        "dataset_id": dataset_id,
+    }
+    normalized_ids = {
+        name: value.strip().strip("\"'").strip()
+        for name, value in ids.items()
+    }
+    for name, value in normalized_ids.items():
+        if not value:
+            raise HTTPException(status_code=422, detail=f"{name} cannot be empty")
+
+    report_file = repository.joinpath(*normalized_ids.values(), "report.json").resolve()
+    if repository not in report_file.parents:
+        raise HTTPException(status_code=400, detail="Invalid report path")
+    if not report_file.is_file():
+        raise HTTPException(status_code=404, detail="Report not found")
+
+    with report_file.open(encoding="utf-8") as file:
+        return ModelReportProps.model_validate(json.load(file))

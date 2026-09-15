@@ -25,6 +25,7 @@ def body() -> BenchmarkExecutionConfig:
 def test_start_benchmark_job_returns_id_used_by_benchmark(
         body: BenchmarkExecutionConfig,
         monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
 ) -> None:
     generated_id = "20260914T120000_000001"
     monkeypatch.setattr(job_router, "create_benchmark_id", lambda: generated_id)
@@ -38,7 +39,10 @@ def test_start_benchmark_job_returns_id_used_by_benchmark(
     request = SimpleNamespace(
         app=SimpleNamespace(
             state=SimpleNamespace(
-                config=SimpleNamespace(excluded_attacks=[]),
+                config=SimpleNamespace(
+                    excluded_attacks=[],
+                    path_model_report_repo=str(tmp_path),
+                ),
             ),
         ),
     )
@@ -58,6 +62,7 @@ def test_start_benchmark_job_returns_id_used_by_benchmark(
 def test_start_benchmark_http_response_has_content_and_200_status(
         body: BenchmarkExecutionConfig,
         monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
 ) -> None:
     generated_id = "20260914T120000_000001"
     monkeypatch.setattr(job_router, "create_benchmark_id", lambda: generated_id)
@@ -65,7 +70,10 @@ def test_start_benchmark_http_response_has_content_and_200_status(
 
     app = FastAPI()
     app.include_router(job_router.router)
-    app.state.config = SimpleNamespace(excluded_attacks=[])
+    app.state.config = SimpleNamespace(
+        excluded_attacks=[],
+        path_model_report_repo=str(tmp_path),
+    )
 
     response = TestClient(app).post(
         "/job/start_benchmark",
@@ -79,6 +87,7 @@ def test_start_benchmark_http_response_has_content_and_200_status(
 def test_start_benchmark_generates_id_when_frontend_omits_it(
         body: BenchmarkExecutionConfig,
         monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
 ) -> None:
     benchmark_call = {}
     generated_id = "20260914T120000_000001"
@@ -91,7 +100,10 @@ def test_start_benchmark_generates_id_when_frontend_omits_it(
 
     app = FastAPI()
     app.include_router(job_router.router)
-    app.state.config = SimpleNamespace(excluded_attacks=[])
+    app.state.config = SimpleNamespace(
+        excluded_attacks=[],
+        path_model_report_repo=str(tmp_path),
+    )
     payload = body.model_dump(mode="json")
     del payload["benchmark_id"]
 
@@ -102,12 +114,42 @@ def test_start_benchmark_generates_id_when_frontend_omits_it(
     assert benchmark_call["benchmark_id"] == generated_id
 
 
+def test_start_benchmark_creates_attack_folders_before_scheduling(
+        body: BenchmarkExecutionConfig,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+) -> None:
+    generated_id = "20260914T120000_000001"
+    monkeypatch.setattr(job_router, "create_benchmark_id", lambda: generated_id)
+    monkeypatch.setattr(job_router, "run_benchmark", lambda **_: None)
+
+    excluded_attack = body.attacks[0].id
+    app = FastAPI()
+    app.include_router(job_router.router)
+    app.state.config = SimpleNamespace(
+        excluded_attacks=[excluded_attack],
+        path_model_report_repo=str(tmp_path),
+    )
+
+    response = TestClient(app).post(
+        "/job/start_benchmark",
+        json=body.model_dump(mode="json"),
+    )
+
+    assert response.status_code == 200
+    benchmark_folder = tmp_path / generated_id / body.model.id / body.dataset.id
+    expected_attack_ids = {
+        attack.id for attack in body.attacks if attack.id != excluded_attack
+    } | {"identitybaseline"}
+    assert {path.name for path in benchmark_folder.iterdir()} == expected_attack_ids
+
+
 def test_get_jobs_reads_all_results_for_a_benchmark(tmp_path: Path) -> None:
     benchmark_path = tmp_path / "benchmark-1"
     for attack_id in ("attack-a", "attack-b"):
         attack_path = benchmark_path / attack_id
         attack_path.mkdir(parents=True)
-        (attack_path / "results.json").write_text(json.dumps({
+        (attack_path / "job_results.json").write_text(json.dumps({
             "id": attack_id,
             "status": "in progress",
             "progress": 1,
@@ -132,11 +174,11 @@ def test_get_jobs_reads_all_results_for_a_benchmark(tmp_path: Path) -> None:
 
 
 def test_get_jobs_accepts_quoted_id_and_comma_separated_attacks(tmp_path: Path) -> None:
-    benchmark_path = tmp_path / "benchmark-1"
+    benchmark_path = tmp_path / "benchmark-1" / "model-1" / "dataset-1"
     for attack_id in ("attack-a", "attack-b"):
         attack_path = benchmark_path / attack_id
         attack_path.mkdir(parents=True)
-        (attack_path / "results.json").write_text(json.dumps({
+        (attack_path / "job_results.json").write_text(json.dumps({
             "id": attack_id,
             "status": "in progress",
             "progress": 1,
@@ -151,12 +193,65 @@ def test_get_jobs_accepts_quoted_id_and_comma_separated_attacks(tmp_path: Path) 
         "/job/getJobs",
         params={
             "benchmark_id": '"benchmark-1"',
+            "model_id": "model-1",
+            "dataset_id": "dataset-1",
             "attacks_id": "attack-a,attack-b",
         },
     )
 
     assert response.status_code == 200
     assert [job["id"] for job in response.json()] == ["attack-a", "attack-b"]
+
+
+def test_get_report_reads_report_from_benchmark_model_and_dataset(tmp_path: Path) -> None:
+    report = {
+        "info": {
+            "id": "model-1",
+            "name": "Model 1",
+            "task": "classification",
+            "input_dimensionality": [3, 32, 32],
+        },
+        "metrics": {"accuracy": 0.9},
+        "attacks": {},
+    }
+    report_path = tmp_path / "benchmark-1" / "model-1" / "dataset-1"
+    report_path.mkdir(parents=True)
+    (report_path / "report.json").write_text(json.dumps(report), encoding="utf-8")
+
+    app = FastAPI()
+    app.include_router(job_router.router)
+    app.state.config = SimpleNamespace(path_model_report_repo=str(tmp_path))
+
+    response = TestClient(app).get(
+        "/job/getReport",
+        params={
+            "benchmark_id": "benchmark-1",
+            "model_id": "model-1",
+            "dataset_id": "dataset-1",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["info"]["id"] == "model-1"
+    assert response.json()["metrics"]["accuracy"] == 0.9
+
+
+def test_get_report_returns_404_when_report_does_not_exist(tmp_path: Path) -> None:
+    app = FastAPI()
+    app.include_router(job_router.router)
+    app.state.config = SimpleNamespace(path_model_report_repo=str(tmp_path))
+
+    response = TestClient(app).get(
+        "/job/getReport",
+        params={
+            "benchmark_id": "benchmark-1",
+            "model_id": "model-1",
+            "dataset_id": "dataset-1",
+        },
+    )
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Report not found"}
 
 
 def test_start_benchmark_job(body: BenchmarkExecutionConfig, tmp_path: Path):

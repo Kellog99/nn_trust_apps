@@ -6,6 +6,7 @@ This router handles:
 """
 import json
 from pathlib import Path
+from typing import cast
 
 from fastapi import APIRouter, Query, Body, Depends
 from fastapi.responses import StreamingResponse
@@ -43,17 +44,18 @@ def get_benchmarks(
     """
     if isinstance(repo_path, str):
         repo_path: Path = Path(repo_path).expanduser()
-    list_reports: list[ModelReportProps] = get_info(
-        tasks=tasks,
-        repo_path=repo_path,
-        model_type="report_model"
-    )
-    print("num of reports ", len(list_reports))
 
     if isinstance(tasks, str):
         tasks = [tasks]
     if isinstance(datasets, str):
         datasets = [datasets]
+
+    list_reports = cast(list[ModelReportProps], get_info(
+        tasks=tasks,
+        repo_path=repo_path,
+        model_type="report_model"
+    ))
+    print("num of reports ", len(list_reports))
 
     out: list[BenchmarkModelProps] = []
     for report in list_reports:
@@ -71,7 +73,10 @@ def get_benchmarks(
                     param=report.info.parameters,
                     task=report.info.task,
                     benchmark_id=report.info.id,
-                    metrics=report.metrics.model_dump(exclude={"confusion_matrix"})
+                    metrics=report.metrics.model_dump(
+                        exclude={"confusion_matrix"},
+                        exclude_none=True,
+                    )
                 )
             )
     print("list of benchmarks ", out)

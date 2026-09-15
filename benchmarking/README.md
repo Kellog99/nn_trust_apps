@@ -131,3 +131,26 @@ The default configuration file, which can be edited directly in the request body
   }
 }
 ```
+
+### Output structure
+
+Each benchmark stores the report and its attack artifacts under the corresponding
+model and dataset directory:
+
+```text
+<output_path>/
+└── <benchmark_id>/
+    └── <model_id>/
+        └── <dataset_id>/
+            ├── report.json
+            ├── identitybaseline/
+            │   ├── job_results.json
+            │   └── log.pth
+            └── <attack_id>/
+                ├── job_results.json
+                └── log.pth
+```
+
+`report.json` contains the combined model and attack report. Each
+`job_results.json` contains the execution state and result for its individual
+attack; other generated attack artifacts are stored in the same attack directory.

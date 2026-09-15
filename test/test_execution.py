@@ -75,6 +75,7 @@ def test_evaluate_attack(
     tmp_path: Path = tmp_path / str(mse)
     tmp_path.mkdir(exist_ok=True, parents=True)
     checkpoint_path = tmp_path / "identitybaseline" / "log.pth"
+    job_results_path = tmp_path / "identitybaseline" / "job_results.json"
 
     model.to(device)
     statistics = StatisticComposer()
@@ -90,6 +91,7 @@ def test_evaluate_attack(
 
     assert result.id == "identitybaseline", "no identity"
 
+    assert job_results_path.exists(), f"the file does not exist in {job_results_path}"
     assert checkpoint_path.exists(), f"the file does not exists in {checkpoint_path}"
     data = torch.load(str(checkpoint_path), weights_only=False)
     assert "original_input" in data, "No original input in data"

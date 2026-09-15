@@ -77,7 +77,7 @@ def run_benchmark(
 ) -> list[ModelReportProps]:
     """
     This function takes as input a full benchmark configuration and executes the benchmark.
-    If no attacks are given, only the identity baseline is run; if no metrics are given, none are computed.
+    If no attacks are given, only the identity baseline is run.
     """
     #################################### 1. Validate Items ####################################
     ##### 1.1 Datasets & models existence
@@ -103,18 +103,13 @@ def run_benchmark(
 
     ##### 1.3 Metrics: normalize to RegisteredObject
     metric_specs = _normalize_specs(metrics)
+    if not metric_specs:
+        raise ValueError("At least one benchmark metric must be selected.")
 
     #################################### 2. Prepare Execution ####################################
     benchmark_id = benchmark_id or create_benchmark_id()
     device: torch.device = torch.device("cuda" if torch.cuda.is_available() and options.gpu else "cpu")
     base_output_path: str = options.output_path + f"/{benchmark_id}"
-
-    executor = BenchmarkExecutor(
-        verbose=options.verbose,
-        benchmark_id=benchmark_id,
-        use_ray=options.use_ray,
-        output_path=base_output_path,
-    )
 
     list_reports: list[ModelReportProps] = []
     for model_cnf in models:
@@ -181,7 +176,14 @@ def run_benchmark(
                 device=device,
             )
 
-            # 3.1 Start execution
+            ######### 3.1 Start execution #########
+            # The report path is benchmark_id / model_id / dataset_id
+            report_path: Path = Path(base_output_path).expanduser().resolve() / model_cnf.id / dataset_cnf.id
+            executor = BenchmarkExecutor(
+                verbose=options.verbose,
+                benchmark_id=benchmark_id,
+                output_path=report_path,
+            )
             results: dict[str, ReportAttackProps] = executor.execute_jobs(
                 model=model,
                 dataloader=dataloader,
@@ -209,10 +211,7 @@ def run_benchmark(
             list_reports.append(model_report)
 
             ######### saving the results #########
-            model_dataset_path: Path = Path(
-                base_output_path).expanduser().resolve() / f"{model_cnf.id}/{dataset_cnf.id}"
-            model_dataset_path.mkdir(parents=True, exist_ok=True)
-            with open(model_dataset_path / "report.json", "w") as f:
+            with open(report_path / "report.json", "w") as f:
                 json.dump(model_report.model_dump(), f)
 
             if log:
