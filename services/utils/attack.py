@@ -5,7 +5,7 @@ import time
 import torch
 from PIL import Image
 from torchmetrics.image import StructuralSimilarityIndexMeasure
-from torchvision.transforms import v2 as T, InterpolationMode
+from torchvision.transforms import v2 as T, InterpolationMode, CenterCrop
 
 from models import SingleAttackOutput
 from nn_trust import Task, CVModelAdapter, EvasionAttack
@@ -190,13 +190,21 @@ def single_attack_performance(
                 score_threshold=score_threshold,
             )
 
+            # get class names
+            class_names = model.model.names
+
             # Draw predictions on the original and adversarial images
-            x_with_pred = draw_predictions(x[0], post_nms_preds[0], display_top_k=attack.config.display_top_k)
-            x_adv_with_pred = draw_predictions(x_adv[0], post_nms_preds_adv[0], display_top_k=attack.config.display_top_k)
+            x_with_pred = draw_predictions(x[0], post_nms_preds[0], display_top_k=attack.config.display_top_k, class_names=class_names)
+            x_adv_with_pred = draw_predictions(x_adv[0], post_nms_preds_adv[0], display_top_k=attack.config.display_top_k, class_names=class_names)
+
+            # Get the original size
+            crop = CenterCrop((H, W))
+            x_with_pred_crop = crop(x_with_pred)
+            x_adv_with_pred_crop = crop(x_adv_with_pred)
 
             # Convert the images with predictions to base64 strings for output
-            y_pred = tensor_image_to_b64str(x_with_pred.float() / 255)
-            y_pred_adv = tensor_image_to_b64str(x_adv_with_pred.float() / 255)
+            y_pred = tensor_image_to_b64str(x_with_pred_crop.float() / 255)
+            y_pred_adv = tensor_image_to_b64str(x_adv_with_pred_crop.float() / 255)
 
         case _:
             raise ValueError(f"Unsupported task: {task}")
