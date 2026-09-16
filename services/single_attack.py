@@ -73,10 +73,11 @@ async def single_attack(
         model=model.to(device),
         class_id=atk.id,
         task=task,
+        device=device,
         **{
             param.id: param.default
             for param in atk.parameters
-
+            if param.id != "device"
         }
     )
     print(" Attack Created ".center(40, "#"))
