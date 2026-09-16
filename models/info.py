@@ -91,6 +91,16 @@ class DatasetInfo(Info):
         title="Label Dictionary",
         description="It represent the Label dictionary for extracting the name of the index that the model predicts."
     )
+    images_dir: Optional[str] = Field(
+        default=None,
+        title="images directory",
+        description="The directory where detection images are stored"
+    )
+    annotations_file: Optional[str] = Field(
+        default=None,
+        title="annotations file",
+        description="The file where detection annotations are stored"
+    )
 
 
 class Transformation(BaseModel):
@@ -101,6 +111,7 @@ class Transformation(BaseModel):
 
 
 MODEL_TYPES = Literal[
+    "model_weights",
     "Ollama",
     "HuggingFace",
     "Gemini",
@@ -110,7 +121,8 @@ MODEL_TYPES = Literal[
     "torch_script",
     "torch_dynamo",
     "onnx",
-    "api"
+    "api",
+    "ultralytics",
 ]
 
 
@@ -128,10 +140,10 @@ class ModelInfo(Info):
     )
     transformation: Transformation = Field(
         default=Transformation(
-            mean=[0.485, 0.456, 0.406],
-            std=[0.229, 0.224, 0.225],
+            mean=[0.0, 0.0, 0.0],
+            std=[1.0, 1.0, 1.0],
             crop=None,
-            size=254,
+            size=None,
         ),
         description="It represent the transformation to apply to the input.",
         title="Transformation",

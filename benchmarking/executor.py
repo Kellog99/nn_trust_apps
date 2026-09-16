@@ -9,7 +9,7 @@ from torch.utils.data import DataLoader
 from benchmarking.utils.execution import _iter_ray, _iter_local
 from models import JobResult
 from models.reports import ReportAttackProps, AttackMetricsProps, ParameterLog
-from nn_trust import StatisticComposer, ModelAdapter
+from nn_trust import StatisticComposer, ModelAdapter, Task
 
 
 class BenchmarkExecutor:

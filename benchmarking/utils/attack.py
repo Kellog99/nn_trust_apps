@@ -38,6 +38,6 @@ def _create_atk(
         class_id=atk_id,
         model=model,
         device=device,
-        task=Task.Classification,
+        task=model.task,
         **atk_config
     )

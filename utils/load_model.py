@@ -6,23 +6,22 @@ import torch
 from models.info import MODEL_TYPES, ModelInfo
 from nn_trust import CVModelAdapter, Task, Knowledge, NLPModelAdapter
 from utils._loader_nlp_models import _load_ollama, _load_huggingface_nlp
-from utils._loaders_cvmodels import (
-from models.info import MODEL_TYPES
-from nn_trust import CVModelAdapter, Task, Knowledge
 from nn_trust.attack.nlp.adapters import (
     HuggingFaceNLPAdapter,
     OllamaNLPAdapter,
     GeminiAIStudioAdapter,
     OpenAINLPAdapter,
 )
-from utils._loaders import (
+from utils._loaders_cvmodels import (
     _load_plain,
     _load_api,
     _load_onnx,
     _load_timm,
     _load_huggingface_cv,
+    _load_model_weights,
     _load_torch_dynamo,
-    _load_torch_script
+    _load_torch_script,
+    _load_ultralytics
 )
 
 
@@ -68,12 +67,14 @@ def load_huggingface_model(
 _LOADERS: dict[MODEL_TYPES, Callable[..., CVModelAdapter | NLPModelAdapter]] = {
     "Ollama": _load_ollama,
     "HuggingFace": load_huggingface_model,
+    "model_weights": _load_model_weights,
     "plain": _load_plain,
     "timm": _load_timm,
     "torch_script": _load_torch_script,
     "torch_dynamo": _load_torch_dynamo,
     "onnx": _load_onnx,
     "api": _load_api,
+    "ultralytics": _load_ultralytics
 }
 
 
@@ -109,17 +110,6 @@ def load_model(
         CVModelAdapter | NLPModelAdapter: A unified adapter wrapping the
         loaded model.
     """
-    # ── LLM loading (NLP adapters) ───────────────────────────────────────
-    # Ollama models are always remote LLMs and never go through the CV path.
-    if model_type == "Ollama":
-        if model_id is None:
-            raise ValueError("model_id is required for Ollama models.")
-        return OllamaNLPAdapter(
-            model_id=model_id,
-            base_url=api_url or "http://localhost:11434",
-            name=model_id,
-            **kwargs,
-        )
 
     if model_type == "Gemini":
         if model_id is None:
