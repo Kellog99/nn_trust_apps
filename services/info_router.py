@@ -50,11 +50,11 @@ def get_attacks_info(
     for atk in AF.get_list_classes(task={Task.Classification, Task.Language}):
         if atk in excluded_attacks:
             continue
-        info = AttackInfo.model_validate(AF.get_information(id=atk, exclude=set()))
+        info: AttackInfo = AttackInfo.model_validate(AF.get_information(id=atk, exclude=set()))
         out[atk] = RegisteredObject(
             id=info.id,
             name=info.name,
-            task=Task.Classification.name,
+            task=[task.name for task in info.task],
             knowledge=info.knowledge.name if info.knowledge else None,
             description=info.description,
             parameters=_collect_params(atk),

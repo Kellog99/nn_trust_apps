@@ -24,7 +24,7 @@ class RegisteredObject(BaseModel):
     name: str
     description: Optional[str] = None
     parameters: list[ParametersProps]
-    task: str
+    task: list[str] | str
     knowledge: Optional[str] = None
     objective: Optional[str] = None
     privacy_type: Optional[str] = None

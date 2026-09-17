@@ -1,5 +1,6 @@
 import random
 from pathlib import Path
+from random import shuffle
 from typing import Callable, Optional
 
 import numpy
@@ -111,21 +112,11 @@ def get_dataloader(
             indices = range(min(subset, len(dataset)))
         subdataset = Subset(dataset, indices)
 
-    def seed_worker(worker_id):
-        worker_seed = torch.initial_seed() % 2 ** 32
-        numpy.random.seed(worker_seed)
-        random.seed(worker_seed)
-
-    g = torch.Generator()
-    g.manual_seed(1234)
-
     dataloader = DataLoader(
         subdataset,
         batch_size=batch,
-        shuffle=False if isinstance(subdataset, IterableDataset) else True,
+        shuffle=False,
         num_workers=max(0, num_workers),
-        worker_init_fn=seed_worker,
-        generator=g,
         pin_memory=True,
     )
     return dataloader

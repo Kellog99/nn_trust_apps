@@ -1,9 +1,9 @@
 import json
+import time
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Callable, Optional
+from typing import Any, Optional
 
-import itertools
 import torch
 from torch.utils.data import DataLoader
 from tqdm.auto import tqdm
@@ -53,112 +53,121 @@ def evaluate_attack(
     output_path.mkdir(parents=True, exist_ok=True)
     res_path: Path = output_path / "job_results.json"
 
+    total = len(dataloader.dataset)
     job_result = JobResult(
         id=attack_id,
         status="pending",
         progress=0,
-        total=len(dataloader.dataset)
+        total=total
     )
-    with open(res_path, "w") as f:
-        json.dump(job_result.model_dump(), f)
+    job_result.save(res_path)
 
-    ### PREPARE EXECUTION ###
-    parameters: dict = parameters or {}
-    attack: EvasionAttack = EAF.create(
-        class_id=attack_id,
-        model=model,
-        device=device,
-        task=Task.Classification,
-        **parameters
-    )
+    parameters = parameters or {}
+    execution_start = time.perf_counter()
+    total_iterations = len(dataloader)
 
-    logger: PyTorchCheckpointLogger = PyTorchCheckpointLogger(
-        path=output_path,
-        max_artifact={
-            "original_input": max_saved_elements if max_saved_elements else 1,
-            "adversarial_input": max_saved_elements if max_saved_elements else 1
-        }
-    )
+    attack: Optional[EvasionAttack] = None
+    logger: Optional[PyTorchCheckpointLogger] = None
 
-    base_iter = iter(dataloader)
     try:
-        first_batch, first_label = next(base_iter)
-    except StopIteration as exc:
-        raise ValueError("The dataloader produced no batches; cannot evaluate an attack.") from exc
-    num_classes: int = model(first_batch.to(device)).shape[-1]
+        job_result = job_result.model_copy(update={"status": "in progress"})
+        job_result.save(res_path)
 
-    pbar = tqdm(
-        dataloader,
-        desc=f"Attack {repr(attack)}",
-    ) if verbose else dataloader
+        ### PREPARE EXECUTION ###
+        attack = EAF.create(
+            class_id=attack_id,
+            model=model,
+            device=device,
+            task=Task.Classification,
+            **parameters
+        )
 
-    job_result.status = "in progress"
-    for batch, label in pbar:
-        processed_count = batch.shape[0]
-        batch = batch.to(device)
-        label = label.to(device)
+        logger = PyTorchCheckpointLogger(
+            path=output_path,
+            max_artifact={
+                "original_input": max_saved_elements if max_saved_elements else 1,
+                "adversarial_input": max_saved_elements if max_saved_elements else 1
+            }
+        )
 
-        target = AvoidOnehotTarget(num_classes=num_classes)(label.tolist()).to(batch.device)
+        pbar = tqdm(dataloader, desc=f"Attack {repr(attack)}") if verbose else dataloader
 
-        ############## Generating the adversarial image ##############
-        x_adv = attack.generate(
-            x=batch,
-            y=target
-        ).detach()
+        num_classes: Optional[int] = None
 
-        for b in range(batch.shape[0]):
-            logger.log(tag="original_input", data=batch[b])
-            logger.log(tag="adversarial_input", data=x_adv[b])
-        ##############################################################
+        for completed_iterations, (batch, label) in enumerate(pbar, start=1):
+            iteration_start = time.perf_counter()
+            processed_count = batch.shape[0]
+            batch = batch.to(device)
+            label = label.to(device)
 
-        with torch.no_grad():
-            model_output = model(batch)
-            adversarial_output = model(x_adv)
+            with torch.no_grad():
+                model_output = model(batch)
+            if num_classes is None:
+                num_classes: int = model_output.shape[-1]
 
-            y_pred_adv = adversarial_output.argmax(dim=-1)
-            y_pred = model_output.argmax(dim=-1)
+            target = AvoidOnehotTarget(num_classes=num_classes)(label.tolist()).to(batch.device)
 
-        correct_mask = torch.eq(label, y_pred)
-        if attack_id == "identitybaseline":
-            y_pred = label
-        elif torch.any(correct_mask):
-            if not torch.all(correct_mask):
-                label = label[correct_mask]
-                x_adv = x_adv[correct_mask]
-                batch = batch[correct_mask]
-                model_output = model_output[correct_mask]
-                adversarial_output = adversarial_output[correct_mask]
-                y_pred = y_pred[correct_mask]
-                y_pred_adv = y_pred_adv[correct_mask]
+            ############## Generating the adversarial image ##############
+            x_adv = attack.generate(x=batch, y=target).detach()
 
-        input_stat = {
-            'x_adv': x_adv.detach(),
-            'x': batch.detach(),
-            'y': label,
-            'y_target': label,
-            'y_pred': y_pred,
-            'y_pred_adv': y_pred_adv
-        }
-        statistics.update(**input_stat)
-        job_result.status = "in progress"
-        job_result.progress += processed_count
-        with open(res_path, "w") as f:
-            json.dump(job_result.model_dump(), f)
+            for b in range(batch.shape[0]):
+                logger.log(tag="original_input", data=batch[b])
+                logger.log(tag="adversarial_input", data=x_adv[b])
+            ##############################################################
 
-    logger.close()
-    attack.logger.close()
+            with torch.no_grad():
+                adversarial_output = model(x_adv)
+                y_pred_adv = adversarial_output.argmax(dim=-1)
+                y_pred = model_output.argmax(dim=-1)
+
+            if attack_id == "identitybaseline":
+                y_pred = label
+        
+            statistics.update(
+                x_adv=x_adv.detach(),
+                x=batch.detach(),
+                y=label,
+                y_target=label,
+                y_pred=y_pred,
+                y_pred_adv=y_pred_adv,
+            )
+
+            iteration_time = time.perf_counter() - iteration_start
+            execution_time = time.perf_counter() - execution_start
+            job_result = job_result.model_copy(update={
+                "status": "in progress",
+                "progress": job_result.progress + processed_count,
+                "iteration_time": iteration_time,
+                "execution_time": execution_time,
+                "estimated_execution_time": execution_time / completed_iterations * total_iterations,
+            })
+            job_result.save(res_path)
+
+    except Exception as exc:
+        job_result = job_result.model_copy(
+            update={
+                "status": "error",
+                "error": str(exc)
+            }
+        )
+        job_result.save(res_path)
+        raise
+    finally:
+        if logger is not None:
+            logger.close()
+        if attack is not None:
+            attack.logger.close()
 
     result = statistics.compute()
     if attack_id != 'identitybaseline':
         metric_states: dict[str, dict[str, Any]] = statistics.get_raw_state()
         statistics.update_aggregate(metric_states)
-
     statistics.reset()
+
     atk_parameters: dict = attack.config.model_dump()
-    job_result = JobResult(
-        id=attack_id,
-        result=result,
-        parameters=[
+    job_result = job_result.model_copy(update={
+        "result": result,
+        "parameters": [
             ParameterLog(
                 id=key,
                 name=value.title,
@@ -168,11 +177,8 @@ def evaluate_attack(
             for key, value in attack.config.__class__.model_fields.items()
             if key != "model" and isinstance(atk_parameters.get(key, None), (int, float, bool))
         ],
-        progress=job_result.progress,
-        total=job_result.total,
-        status="finished"
-    )
-
-    with open(output_path / "job_results.json", "w") as f:
-        json.dump(job_result.model_dump(), f)
+        "execution_time": time.perf_counter() - execution_start,
+        "status": "finished",
+    })
+    job_result.save(res_path)
     return job_result

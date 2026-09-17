@@ -1,4 +1,3 @@
-import json
 from datetime import datetime
 from logging import Logger
 from pathlib import Path
@@ -38,25 +37,20 @@ class BenchmarkExecutor:
         self.output_path = Path(output_path).expanduser().resolve()
         self.output_path.mkdir(parents=True, exist_ok=True)
 
-    def _save_attack_result(
-            self,
-            attack_id: str,
-            result: ReportAttackProps | None = None,
-            error: str | None = None,
-    ) -> None:
-        """Persist the latest result for one attack in its artifact directory."""
+    def _save_fallback_error(self, attack_id: str, error: str) -> None:
+        """
+        Fallback persistence for a failed job, used only when `evaluate_attack`
+        itself did not have the chance to write a `job_results.json` (e.g. the
+        job raised before `JobResult` was even constructed).
+        """
         attack_path = self.output_path / attack_id
+        result_file = attack_path / "job_results.json"
+        if result_file.exists():
+            # evaluate_attack already persisted a (richer) error state, don't overwrite it.
+            return
+
         attack_path.mkdir(parents=True, exist_ok=True)
-
-        payload: dict[str, Any] = {"id": attack_id}
-        if result is not None:
-            payload.update(result.model_dump(mode="json"))
-        if error is not None:
-            payload["status"] = "error"
-            payload["error"] = error
-
-        with (attack_path / "job_results.json").open("w", encoding="utf-8") as file:
-            json.dump(payload, file, indent=2)
+        JobResult(id=attack_id, status="error", error=error).save(result_file)
 
     def _iter_local(
             self,
@@ -76,14 +70,13 @@ class BenchmarkExecutor:
             if log is not None:
                 log.warning("'attacks' is empty, no jobs will run")
             return
-        pbar = tqdm(attacks.items())
 
-        for id, params in pbar:
+        for attack_id, params in tqdm(attacks.items()):
             try:
                 yield evaluate_attack(
                     dataloader=dataloader,
                     model=model,
-                    attack_id=id,
+                    attack_id=attack_id,
                     parameters=params,
                     statistics=statistics,
                     device=device,
@@ -93,14 +86,8 @@ class BenchmarkExecutor:
                 )
             except Exception as exc:  # noqa: BLE001 - intentional: isolate per-attack failures
                 if log is not None:
-                    log.exception(f"Attack '{id}' failed")
-                yield JobResult(
-                    id=id,
-                    result=None,
-                    parameters=None,
-                    status="error",
-                    error=str(exc),
-                )
+                    log.exception(f"Attack '{attack_id}' failed")
+                yield JobResult(id=attack_id, status="error", error=str(exc))
 
     def execute_jobs(
             self,
@@ -144,27 +131,20 @@ class BenchmarkExecutor:
                 if params is None:
                     raise ValueError("The list of parameters is None.")
                 filtered_params = [param for param in params if param.id != "model"]
-                attack_result = ReportAttackProps(
+                results[jr.id] = ReportAttackProps(
                     name=jr.id,
                     parameters=filtered_params,
                     metrics=AttackMetricsProps.model_validate(jr.result),
                 )
-                results[jr.id] = attack_result
             else:
                 failed.append(jr)
                 error = jr.error or "Attack returned no result"
-                self._save_attack_result(
-                    jr.id,
-                    error=error,
-                )
+                self._save_fallback_error(jr.id, error)
                 if log is not None:
                     log.error(f"Job failed: {jr.id}: {error}")
 
         if failed:
-            details = "; ".join(
-                f"{job.id}: {job.error or job.status}"
-                for job in failed
-            )
+            details = "; ".join(f"{job.id}: {job.error or job.status}" for job in failed)
             raise RuntimeError(f"Benchmark job(s) failed: {details}")
 
         return results
