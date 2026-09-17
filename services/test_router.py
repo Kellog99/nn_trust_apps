@@ -114,7 +114,7 @@ async def jailbreaking(
     goal = body.input
     attacker_info = body.attacker
     judge_info = body.judge
-    max_new_tokens = body.max_new_tokens or 4096
+    max_new_tokens = body.max_new_tokens
     n_ctx = body.n_ctx
 
     # ── 1. Load models ──────────────────────────────────────────────────────

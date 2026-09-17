@@ -18,8 +18,8 @@ class JailbreakAttackProps(BaseModel):
     model: ModelInfo
     attacker: Optional[ModelInfo] = None
     judge: Optional[ModelInfo] = None
-    max_new_tokens: Optional[int] = 2048
-    n_ctx: Optional[int] = None
+    max_new_tokens: Optional[int] = 4096
+    n_ctx: Optional[int] = 8192
 
     model_config = ConfigDict(
         arbitrary_types_allowed=True,
