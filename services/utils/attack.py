@@ -16,7 +16,6 @@ from models.info import Transformation
 from utils.dataset_utils import transformation_classification
 from nn_trust.attack.utils.detection import nms, LetterboxCocoTransform
 
-
 def single_attack_performance(
         model: CVModelAdapter,
         attack: EvasionAttack,
@@ -72,6 +71,23 @@ def single_attack_performance(
             def transformations(image):
                 image, _ = letterbox(image, [])
                 return image
+
+            params = letterbox.get_params(
+                image_width=W,
+                image_height=H,
+            )
+
+            def inv_transform(image: torch.Tensor) -> torch.Tensor:
+                cropped = image[
+                    :,
+                    params["top"]:params["top"] + params["resized_height"],
+                    params["left"]:params["left"] + params["resized_width"],
+                ]
+
+                return T.Resize(
+                    size=(H, W),
+                    interpolation=InterpolationMode.BILINEAR,
+                )(cropped)
 
         case _:
             raise ValueError(f"Unsupported task: {task}")
@@ -198,13 +214,12 @@ def single_attack_performance(
             x_adv_with_pred = draw_predictions(x_adv[0], post_nms_preds_adv[0], display_top_k=attack.config.display_top_k, class_names=class_names)
 
             # Get the original size
-            crop = CenterCrop((H, W))
-            x_with_pred_crop = crop(x_with_pred)
-            x_adv_with_pred_crop = crop(x_adv_with_pred)
+            x_with_pred_original = inv_transform(x_with_pred)
+            x_adv_with_pred_original = inv_transform(x_adv_with_pred)
 
             # Convert the images with predictions to base64 strings for output
-            y_pred = tensor_image_to_b64str(x_with_pred_crop.float() / 255)
-            y_pred_adv = tensor_image_to_b64str(x_adv_with_pred_crop.float() / 255)
+            y_pred = tensor_image_to_b64str(x_with_pred_original.float() / 255)
+            y_pred_adv = tensor_image_to_b64str(x_adv_with_pred_original.float() / 255)
 
         case _:
             raise ValueError(f"Unsupported task: {task}")
