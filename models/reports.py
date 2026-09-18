@@ -66,6 +66,7 @@ class DatasetReportProps(ReportProps):
 
 ############## Model ##############
 class ModelReportProps(ReportProps):
+    id: Optional[str] = None
     info: ModelInfo
     metrics: ReportMetricsProps
     attacks: dict[str, ReportAttackProps]
