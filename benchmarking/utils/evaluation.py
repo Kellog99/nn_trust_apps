@@ -8,6 +8,7 @@ from torch.utils.data import DataLoader
 from tqdm.auto import tqdm
 
 from benchmarking.utils.attack import _create_atk
+from benchmarking.utils.advyolo_evaluation import evaluate_frozen_advyolo
 from models import JobResult
 from models.reports import ParameterLog
 from nn_trust import ModelAdapter, StatisticComposer, Task
@@ -15,7 +16,6 @@ from nn_trust.attack import EvasionAttack
 from nn_trust.utils import PyTorchCheckpointLogger
 
 from nn_trust.attack.utils.detection import nms
-
 
 def evaluate_attack(
         dataloader: DataLoader,
@@ -107,31 +107,16 @@ def evaluate_attack(
                 with torch.no_grad():
                     out = model(batch)
 
-                x_adv = attack.generate(x=batch, y=out).detach()
-
                 boxes, scores = out
-                num_classes = scores.shape[-1]
 
-                iou_threshold = attack.config.iou_threshold_evaluation
-                score_threshold = attack.config.score_threshold_evaluation
-                targeted = attack.config.targeted
-                label_target = attack.config.label_target
-
-
-                with torch.no_grad():
-                    out_adv = model(x_adv)
-
-                # apply nms on predictions from original images
-                # We give a high iou_threshold and low score_threshold so that we give as many scores as possible to coreectly compute map
-                boxes, scores = out
                 post_nms_preds = nms(
                     {
                     "boxes": boxes,
                     "scores": scores.max(dim=-1).values,
                     "cls_scores": scores,
                     },
-                iou_threshold=iou_threshold, # compare one reference predicted bounding box with the other predicted bounding boxes. If the IoU between the two boxes is over the threshold, discards the box with the lower score. Ones all the remaining boxes are compared, we select the next reference box. As such, increasing the threshold increases the nubmer of final predicted bounding boxes by the model, because less boxes are discarded
-                score_threshold=score_threshold, # filter out all the predicted bounding boxes whose score is below the threshold. As such, increaidng the threshold increases the number of final predicted bounding boxes, because less boxes are discarded
+                iou_threshold=attack.config.iou_threshold_evaluation, # compare one reference predicted bounding box with the other predicted bounding boxes. If the IoU between the two boxes is over the threshold, discards the box with the lower score. Ones all the remaining boxes are compared, we select the next reference box. As such, increasing the threshold increases the nubmer of final predicted bounding boxes by the model, because less boxes are discarded
+                score_threshold=attack.config.score_threshold_evaluation, # filter out all the predicted bounding boxes whose score is below the threshold. As such, increaidng the threshold increases the number of final predicted bounding boxes, because less boxes are discarded
                 )
 
                 # convert post_nms_preds to targets for metrics
@@ -144,9 +129,17 @@ def evaluate_attack(
                 }
                 for pred in post_nms_preds    
                 ]
+
+                x_adv = attack.generate(x=batch, y=out).detach()
+
+                with torch.no_grad():
+                    out_adv = model(x_adv)
                 
                 # convert post_nms_preds to the desired targets for metrics
+                targeted = attack.config.targeted
                 if targeted == True:
+                    num_classes = scores.shape[-1]
+                    label_target = attack.config.label_target
                     target_class = (label_target + 1) % num_classes
 
                     y_target = [
@@ -172,8 +165,8 @@ def evaluate_attack(
                         "scores": adv_scores.max(dim=-1).values,
                         "cls_scores": adv_scores,
                     },
-                    iou_threshold=iou_threshold,
-                    score_threshold=score_threshold,
+                    iou_threshold=attack.config.iou_threshold_evaluation,
+                    score_threshold=attack.config.score_threshold_evaluation,
                 )
 
             case Task.Classification:
@@ -205,7 +198,8 @@ def evaluate_attack(
             case _:
                 raise NotImplementedError(f"{task} not supported yet.")
 
-        for b in range(batch.shape[0]):
+        if atk_id != "advyoloevasion":
+            for b in range(batch.shape[0]):
                 logger.log(tag="original_input", data=batch[b])
                 logger.log(tag="adversarial_input", data=x_adv[b])
                 logger.log(tag="original_prediction", data=y_pred[b])
@@ -224,14 +218,27 @@ def evaluate_attack(
         }
         statistics.update(**input_stat)
 
-    logger.close()
-    attack.logger.close()
-
-    result = statistics.compute()
     if atk_id != 'identitybaseline':
         metric_states: dict[str, dict[str, Any]] = statistics.get_raw_state()
         statistics.update_aggregate(metric_states)
+
+    result = statistics.compute()
     statistics.reset()
+
+    if atk_id == "advyoloevasion":
+        result = evaluate_frozen_advyolo(
+        dataloader=dataloader,
+        model=model,
+        attack=attack,
+        statistics=statistics,
+        logger=logger,
+        device=device,
+        output_path=output_path,
+    )
+            
+    logger.close()
+    attack.logger.close()
+
     atk_parameters: dict = attack.config.model_dump()
 
     # define detection-only parameters to show in the report
