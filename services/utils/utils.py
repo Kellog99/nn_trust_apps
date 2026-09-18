@@ -91,7 +91,10 @@ def get_parameter_prop(
 
     if ann is str:
         default = str(_get_value(param_info.default, ""))
-        return ParametersProps(id=id, name=name, default=default, description=param_info.description)
+        return ParametersProps(
+            id=id, name=name, default=default,
+            description=param_info.description, kind="string",
+        )
 
     is_int = ann is int
     lo, hi = _parse_bounds(param_info.metadata)
