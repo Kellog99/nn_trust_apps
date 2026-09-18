@@ -27,6 +27,7 @@ from utils._loaders import (
     _load_torch_script
 )
 from nn_trust.attack.nlp.judges import (
+    JailJudgeGuard,
     LlamaGuardJudge,
     LlamaGuardJudgeWithCategories,
     Qwen3GuardJudge,
@@ -295,7 +296,9 @@ def load_model(
             k: v for k, v in kwargs.items()
             if k in {"safe_token", "unsafe_token", "name", "apply_chat_template", "temperature"}
         }
-        if judge_type == "llama_guard":
+        if judge_type == "jailjudge":
+            return JailJudgeGuard(adapter=model, **judge_kwargs)
+        elif judge_type == "llama_guard":
             return LlamaGuardJudge(adapter=model, **judge_kwargs)
         elif judge_type == "llama_guard_categories":
             return LlamaGuardJudgeWithCategories(adapter=model, **judge_kwargs)

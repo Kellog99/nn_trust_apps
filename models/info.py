@@ -134,7 +134,7 @@ class ModelInfo(Info):
     judge_type: Optional[str] = Field(
         default=None,
         title="Judge Type",
-        description="Type of judge to wrap this model in (e.g. 'llama_guard', 'granite_guardian', 'llm_judge')."
+        description="Type of judge to wrap this model in (e.g. 'llama_guard', 'granite_guardian', 'jailjudge', 'llm_judge')."
     )
     transformation: Transformation = Field(
         default=Transformation(
