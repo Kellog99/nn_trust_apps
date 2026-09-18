@@ -54,6 +54,16 @@ class Bubble(BaseModel):
     score: Optional[float] = None
 
 
+class JailbreakHistoryEntry(BaseModel):
+    """Lightweight metadata for a saved jailbreak attack run, used to populate the history board."""
+    id: str
+    goal: str
+    success: bool
+    best_score: Optional[float] = None
+    n_attempts: int
+    saved_at: str
+
+
 class JailbreakAttackOutput(BaseModel):
     model_config = ConfigDict(protected_namespaces=(), arbitrary_types_allowed=True)
     goal: str

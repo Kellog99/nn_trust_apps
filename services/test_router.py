@@ -1,3 +1,4 @@
+import logging
 import time
 import torch
 from fastapi import APIRouter, Body, Query, HTTPException
@@ -5,14 +6,23 @@ from pydantic import ValidationError, BaseModel
 
 from typing import Optional
 
-from models import SingleAttackOutput, SingleAttackProps, JailbreakAttackProps, JailbreakAttackOutput, Bubble, ModelInfo, RegisteredObject
+from models import SingleAttackOutput, SingleAttackProps, JailbreakAttackProps, JailbreakAttackOutput, JailbreakHistoryEntry, Bubble, ModelInfo, RegisteredObject
 from nn_trust import Task
-from nn_trust.attack import EvasionAttack, AttackFactory as AF
+from nn_trust.attack import (
+    EvasionAttack,
+    AttackFactory as AF,
+    save_conversation_state,
+    load_conversation_state,
+    list_conversation_states,
+)
+from nn_trust.attack.nlp import ConversationState, NLPAttack
 from services.utils.attack import single_attack_performance
 from services.utils.utils import b64str_to_pil
 from utils import load_model
 
 from pprint import pprint
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/test", tags=["jobs management", "jobs utils"])
 
@@ -129,6 +139,7 @@ async def jailbreaking(
             api = info.api
             model_id = info.id
             api_key = getattr(info, "api_key", None) or getattr(info, "key", None)
+            device_override = getattr(info, "device", None)
         else:
             model_type = info.get("model_type", "HuggingFace")
             repository = info.get("repository")
@@ -136,8 +147,12 @@ async def jailbreaking(
             api = info.get("api")
             model_id = info.get("id")
             api_key = info.get("api_key") or info.get("key")
+            device_override = info.get("device")
 
         task = Task.from_str(task_val) if isinstance(task_val, str) else task_val
+        # A model can override the request-level device (e.g. force the judge
+        # onto CPU while attacker/target stay on GPU when VRAM is tight).
+        model_device = torch.device(device_override) if device_override else device
 
         load_kwargs = dict(
             model_type=model_type,
@@ -150,12 +165,17 @@ async def jailbreaking(
         )
         # Llamacpp (GGUF) adapters use n_ctx for the context window; only
         # pass it when supplied so HuggingFace adapters don't choke on it.
-        if n_ctx and model_type == "Llamacpp":
-            load_kwargs["n_ctx"] = n_ctx
+        if model_type == "Llamacpp":
+            if n_ctx:
+                load_kwargs["n_ctx"] = n_ctx
+            # llama.cpp offloads every layer to GPU by default regardless of
+            # the request device; honour a CPU override explicitly.
+            if model_device.type == "cpu":
+                load_kwargs["n_gpu_layers"] = 0
 
         m = load_model(**load_kwargs)
         if hasattr(m, "model") and hasattr(m.model, "parameters"):
-            m = m.to(device)
+            m = m.to(model_device)
             m.eval()
         return m
 
@@ -189,7 +209,7 @@ async def jailbreaking(
         model=target_model,
         attacker=attacker_model,
         judge=judge_model,
-        verbose=True, 
+        verbose=True,
         device=device,
         **kwargs
     )
@@ -197,9 +217,24 @@ async def jailbreaking(
     # 3. Execution
     state = attack.generate(goal=goal)
 
-    # 4. Extract conversations polymorphically using the attack instance
-    conversations = attack.extract_conversations(state)
+    # 4. Persist the run so it can be replayed later from the "past attacks" board.
+    # Saving must never break a successful attack response.
+    try:
+        save_conversation_state(state, attack_id=attack_id)
+    except Exception:
+        logger.exception("Failed to save conversation state for attack '%s'", attack_id)
 
+    return _conversation_state_to_output(attack.extract_conversations(state), state)
+
+
+def _conversation_state_to_output(
+        conversations: list[list[dict]],
+        state: ConversationState,
+) -> JailbreakAttackOutput:
+    """
+    Turn a (conversations, state) pair -- coming either from a freshly executed
+    attack or from a replayed saved state -- into the payload the frontend expects.
+    """
     # Derive best_prompt, best_response, and best_score from valid conversation paths
     best_prompt = ""
     best_response = state.best_response or ""
@@ -235,3 +270,68 @@ async def jailbreaking(
         adversarial_prompt=best_prompt,
         model_response=state.best_response or "",
     )
+
+
+# --- Jailbreak attack history (saved states board) --- #
+@router.get("/jailbreaking/history")
+async def jailbreaking_history(
+        attack_id: str = Query(..., description="Registered attack id whose saved runs to list."),
+) -> list[JailbreakHistoryEntry]:
+    """
+    List the saved runs available for `attack_id`, most recent first, so the
+    frontend can offer them as a "past attacks" board.
+    """
+    try:
+        entries = list_conversation_states(attack_id)
+    except Exception:
+        logger.exception("Failed to list saved states for attack '%s'", attack_id)
+        raise HTTPException(status_code=500, detail="Failed to list saved attack states.")
+
+    return [JailbreakHistoryEntry(**entry) for entry in entries]
+
+
+class _StatelessNLPAttack(NLPAttack):
+    """
+    Minimal concrete `NLPAttack` used only to call the (state-only)
+    `extract_conversations` method on a saved state without a live model.
+    """
+
+    def step(self, i, state, **kwargs):
+        raise NotImplementedError
+
+
+def _attack_class_for_replay(attack_id: str) -> type:
+    """Resolve the registered attack class for `attack_id`, falling back to
+    the base extraction logic if it isn't a known NLP attack."""
+    try:
+        cls = AF.get_info(attack_id).class_type
+        if issubclass(cls, NLPAttack):
+            return cls
+    except Exception:
+        pass
+    return _StatelessNLPAttack
+
+
+@router.get("/jailbreaking/history/{attack_id}/{save_id}")
+async def jailbreaking_history_replay(
+        attack_id: str,
+        save_id: str,
+) -> JailbreakAttackOutput:
+    """
+    Load a previously saved run for `attack_id` and return it in the same
+    shape as `/jailbreaking`, so the frontend can display it as if the attack
+    had just been executed.
+    """
+    try:
+        state = load_conversation_state(attack_id=attack_id, save_id=save_id)
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+    # `extract_conversations` only relies on `state`, never on the attack's own
+    # configuration (model/attacker/judge) -- so we can call it on an
+    # uninitialized instance of the registered attack class instead of
+    # reloading live models just to replay a saved conversation.
+    attack_cls = _attack_class_for_replay(attack_id)
+    conversations = attack_cls.extract_conversations(object.__new__(attack_cls), state)
+
+    return _conversation_state_to_output(conversations, state)

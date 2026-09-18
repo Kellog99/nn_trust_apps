@@ -131,6 +131,13 @@ class ModelInfo(Info):
         title="Is Judge",
         description="Whether this model acts as a judge."
     )
+    device: Optional[Literal["cpu", "cuda"]] = Field(
+        default=None,
+        title="Device",
+        description="Per-model device override (e.g. force a judge onto CPU when the "
+                     "GPU is full while other models stay on GPU). Falls back to the "
+                     "request-level device when unset."
+    )
     judge_type: Optional[str] = Field(
         default=None,
         title="Judge Type",
