@@ -1,45 +1,34 @@
-from datetime import datetime
+from pathlib import Path
 
-from reportlab.lib.pagesizes import A4
+from reportlab.lib.utils import ImageReader
 
-from report.corporate_colors import CorporateColors
+from report.corporate_colors import CorporateColors as C
+
+DEFAULT_HEADER_LOGO = Path(__file__).resolve().parents[1] / 'images' / 'Logo_Leonardo.png'
 
 
 class HeaderFooter:
-    """Page header and footer handler"""
+    """Paint every page using the document's actual size."""
+    HEADER_HEIGHT = 68
 
     def __init__(self, logo_path=None):
-        self.logo_path = logo_path
+        self.logo = ImageReader(str(logo_path or DEFAULT_HEADER_LOGO))
 
     def __call__(self, canvas_obj, doc):
         canvas_obj.saveState()
-
-        # Header
-        if self.logo_path:
-            try:
-                canvas_obj.drawImage(
-                    self.logo_path,
-                    40, A4[1] - 80,
-                    width=100, height=100,
-                    preserveAspectRatio=True,
-                    mask='auto'
-                )
-            except:
-                pass  # Skip if logo not found
-
-        # Red header line
-        canvas_obj.setStrokeColor(CorporateColors.RED)
-        canvas_obj.setLineWidth(2)
-        canvas_obj.line(40, A4[1] - 60, A4[0] - 40, A4[1] - 60)
-
-        # Footer
-        canvas_obj.setStrokeColor(CorporateColors.LIGHT_GRAY)
-        canvas_obj.setLineWidth(1)
-        canvas_obj.line(40, 40, A4[0] - 40, 40)
-
+        width, height = doc.pagesize
+        canvas_obj.setFillColor(C.BACKGROUND)
+        canvas_obj.rect(0, 0, width, height, fill=1, stroke=0)
+        canvas_obj.setStrokeColor(C.BORDER)
+        canvas_obj.setLineWidth(.5)
+        canvas_obj.line(doc.leftMargin, 32, width - doc.rightMargin, 32)
+        canvas_obj.setFillColor(C.MUTED)
         canvas_obj.setFont('Helvetica', 8)
-        canvas_obj.setFillColor(CorporateColors.GRAY)
-        canvas_obj.drawString(40, 25, f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M')}")
-        canvas_obj.drawRightString(A4[0] - 40, 25, f"Page {doc.page}")
-
+        canvas_obj.drawString(doc.leftMargin, 19, 'Security Report')
+        canvas_obj.drawRightString(width - doc.rightMargin, 19, f'Page {doc.page}')
+        logo_width, logo_height = self.logo.getSize()
+        scale = min(140 / logo_width, 28 / logo_height, doc.width / logo_width)
+        logo_width, logo_height = logo_width * scale, logo_height * scale
+        canvas_obj.drawImage(self.logo, doc.leftMargin, height - 20 - logo_height,
+                             width=logo_width, height=logo_height, mask='auto')
         canvas_obj.restoreState()

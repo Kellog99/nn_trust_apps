@@ -72,10 +72,17 @@ def get_benchmarks(
                     param=report.info.parameters,
                     task=report.info.task,
                     benchmark_id=report.info.id,
-                    metrics=report.metrics.model_dump(
-                        exclude={"confusion_matrix"},
-                        exclude_none=True,
-                    )
+                    # Rankings require scalar numbers. Registered metrics may
+                    # also return vectors, matrices or structured payloads;
+                    # preserve those in the full report only.
+                    metrics={
+                        key: value
+                        for key, value in report.metrics.model_dump(
+                            exclude_none=True,
+                        ).items()
+                        if isinstance(value, (int, float))
+                        and not isinstance(value, bool)
+                    }
                 )
             )
     print("list of benchmarks ", out)
