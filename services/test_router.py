@@ -162,6 +162,19 @@ async def jailbreaking(
             model_id=model_id,
             api_key=api_key,
             max_new_tokens=max_tokens,
+            # ModelInfo carries its own judge metadata; forward it so API / Ollama
+            # judges (which have no info.json on disk to read) still get wrapped
+            # into the right judge instead of silently degrading to a raw adapter.
+            is_judge=(
+                bool(getattr(info, "is_judge", False))
+                if isinstance(info, BaseModel)
+                else bool(info.get("is_judge", False))
+            ),
+            judge_type=(
+                getattr(info, "judge_type", None)
+                if isinstance(info, BaseModel)
+                else info.get("judge_type")
+            ),
         )
         # Llamacpp (GGUF) adapters use n_ctx for the context window; only
         # pass it when supplied so HuggingFace adapters don't choke on it.
