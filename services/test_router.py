@@ -14,6 +14,7 @@ from nn_trust.attack import (
     save_conversation_state,
     load_conversation_state,
     list_conversation_states,
+    delete_conversation_state,
 )
 from nn_trust.attack.nlp import ConversationState, NLPAttack
 from services.utils.attack import single_attack_performance
@@ -335,3 +336,22 @@ async def jailbreaking_history_replay(
     conversations = attack_cls.extract_conversations(object.__new__(attack_cls), state)
 
     return _conversation_state_to_output(conversations, state)
+
+
+@router.delete("/jailbreaking/history/{attack_id}/{save_id}")
+async def jailbreaking_history_delete(
+        attack_id: str,
+        save_id: str,
+) -> dict:
+    """
+    Delete one saved run of `attack_id` from the "past attacks" board.
+    """
+    try:
+        delete_conversation_state(attack_id=attack_id, save_id=save_id)
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception:
+        logger.exception("Failed to delete saved state '%s/%s'", attack_id, save_id)
+        raise HTTPException(status_code=500, detail="Failed to delete the saved attack state.")
+
+    return {"deleted": save_id}
