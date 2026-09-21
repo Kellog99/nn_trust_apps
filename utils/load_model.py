@@ -17,8 +17,11 @@ from utils.model._loaders_cvmodels import (
     _load_onnx,
     _load_timm,
     _load_huggingface_cv,
+    _load_model_weights,
     _load_torch_dynamo,
     _load_torch_script,
+    _load_torch_script,
+    _load_ultralytics
 )
 
 
@@ -66,12 +69,14 @@ _LOADERS: dict[MODEL_TYPES, Callable[..., CVModelAdapter | NLPModelAdapter]] = {
     "Gemini": _load_gemini,
     "OpenRouter": _load_openrouter,
     "HuggingFace": load_huggingface_model,
+    "model_weights": _load_model_weights,
     "plain": _load_plain,
     "timm": _load_timm,
     "torch_script": _load_torch_script,
     "torch_dynamo": _load_torch_dynamo,
     "onnx": _load_onnx,
     "api": _load_api,
+    "ultralytics": _load_ultralytics
 }
 
 

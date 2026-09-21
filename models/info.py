@@ -150,6 +150,16 @@ class DatasetInfo(Info):
                 "parquet_info is required when dataset_type is 'parquet'."
             )
         return self
+    images_dir: Optional[str] = Field(
+        default=None,
+        title="images directory",
+        description="The directory where detection images are stored"
+    )
+    annotations_file: Optional[str] = Field(
+        default=None,
+        title="annotations file",
+        description="The file where detection annotations are stored"
+    )
 
 
 class Transformation(BaseModel):
@@ -160,6 +170,7 @@ class Transformation(BaseModel):
 
 
 MODEL_TYPES = Literal[
+    "model_weights",
     "Ollama",
     "Gemini",
     "OpenRouter",
@@ -169,7 +180,8 @@ MODEL_TYPES = Literal[
     "torch_script",
     "torch_dynamo",
     "onnx",
-    "api"
+    "api",
+    "ultralytics",
 ]
 
 
@@ -197,7 +209,7 @@ class ModelInfo(Info):
             mean=[0.485, 0.456, 0.406],
             std=[0.229, 0.224, 0.225],
             crop=None,
-            size=254,
+            size=None,
         ),
         description="It represent the transformation to apply to the input.",
         title="Transformation",

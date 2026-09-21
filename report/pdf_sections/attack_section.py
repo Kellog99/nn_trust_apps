@@ -86,7 +86,7 @@ class AttackSection(PDFSection):
 
         # Metrics table
         table_data = [["Metric", "Result"]]
-        for metric, metric_value in data.model_dump().items():
+        for metric, metric_value in data.model_dump(exclude_none=True).items():
             if self.excluded_metrics and metric not in self.excluded_metrics:
                 label = metric.replace('_', ' ').title()
                 value = self._format_value(metric_value)

@@ -7,6 +7,7 @@ from reportlab.platypus import Paragraph, Spacer, Table, TableStyle
 
 from models.reports import AttackMetricsProps, ReportAttackProps
 from report.pdf_sections.pdf_section import PDFSection
+from nn_trust import Task
 
 
 class AttackRisk(PDFSection):
@@ -20,7 +21,7 @@ class AttackRisk(PDFSection):
             title_style: Optional[ParagraphStyle] = None,
             subtitle_style: Optional[ParagraphStyle] = None,
             description_style: Optional[ParagraphStyle] = None,
-            metrics: list[str] | None = ["accuracy", "precision", "f1score", "misclassification", "robustness"]
+            metrics: list[str] | None = None
     ):
         super().__init__(
             corpus_width=corpus_width,
@@ -75,7 +76,8 @@ class AttackRisk(PDFSection):
     def build(
             self,
             data: dict[str, ReportAttackProps | dict],
-            descriptions: Optional[str] = None
+            descriptions: Optional[str] = None,
+            task: Task | None = None
     ):
         elements = []
         elements.append(
@@ -92,6 +94,29 @@ class AttackRisk(PDFSection):
                 )
             )
             elements.append(Spacer(1, 20))
+
+        if isinstance(task, str):
+            task = Task.from_str(task)
+
+        match task:
+            case Task.Classification:
+                    self.metrics = [
+                        "accuracy",
+                        "precision",
+                        "f1score",
+                        "misclassification",
+                        "robustness",
+                    ]
+            case Task.Detection:
+                    self.metrics = [
+                        "map",
+                        "ap",
+                        "iou",
+                        "iou_target",
+                        "misdetection",
+                    ]
+            case _:
+                raise ValueError(f"Unsupported task: {task}")
 
         # Prepare summary data
         headers = ['Attack'] + self.metrics
