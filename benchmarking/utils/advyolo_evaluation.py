@@ -129,9 +129,6 @@ def evaluate_frozen_advyolo(
     metric_states: dict[str, dict[str, Any]] = statistics.get_raw_state()
     statistics.update_aggregate(metric_states)
 
-    result = statistics.compute()
-    statistics.reset()
-
-    return result
+    return statistics
 
     
