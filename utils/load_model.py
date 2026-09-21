@@ -36,6 +36,7 @@ from nn_trust.attack.nlp.judges import (
     WildGuardLogitJudge,
     GraniteGuardianJudge,
     GraniteGuardianLogitJudge,
+    RewardAnythingJudge,
 )
 from nn_trust.attack.nlp.judge import LLMJudge
 
@@ -314,6 +315,8 @@ def load_model(
             return GraniteGuardianJudge(adapter=model, **judge_kwargs)
         elif judge_type == "granite_guardian_logit":
             return GraniteGuardianLogitJudge(adapter=model, **judge_kwargs)
+        elif judge_type == "reward_anything":
+            return RewardAnythingJudge(adapter=model, **judge_kwargs)
         else:
             return LLMJudge(adapter=model, **judge_kwargs)
 
