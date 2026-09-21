@@ -79,8 +79,10 @@ def get_info(
             raw = json.load(f)
 
         raw["repository"] = str(root)
-        if model_type in ("model", "dataset") and not raw.get("id"):
-            raw["id"] = root.name
+        raw["id"] = root.name
+        if model_type == "report_model":
+            raw["id"] = str(Path(*root.parts[-3:]))
+            print(raw["id"])
         try:
             item = model_cls.model_validate(raw)
 

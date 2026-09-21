@@ -1,3 +1,5 @@
+import json
+from pathlib import Path
 from typing import Optional, TypedDict, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -58,6 +60,9 @@ class JobResult(BaseModel):
     result: Optional[dict] = None
     total: Optional[int] = None
     progress: Optional[int] = None
+    iteration_time: Optional[float] = None
+    execution_time: Optional[float] = None
+    estimated_execution_time: Optional[float] = None
     status: Literal["pending", "in progress", "finished", "error"] = "pending"
     error: Optional[str] = None
 
@@ -68,6 +73,25 @@ class JobResult(BaseModel):
         if self.status == "finished":
             if self.result is None:
                 raise ValueError("If the job is finished then there must be a result.")
-            elif self.total != self.progress:
-                raise ValueError("The total number of elements must be the same as the one that have been seen. ")
+            if self.total != self.progress:
+                raise ValueError("The total number of elements must be the same as the one that have been seen.")
+        if self.status == "error" and self.error is None:
+            raise ValueError("If the job is in error state then `error` must be set.")
+        return self
+
+    def save(self, path: Path | str) -> "JobResult":
+        """
+        Persist this result as JSON at the given path and return self.
+        """
+        path = Path(path)
+
+        if path.is_dir():
+            raise IsADirectoryError(f"Expected a file path, got a directory: {path}")
+        if not path.parent.exists():
+            path.mkdir(parents=True, exist_ok=True)
+        if path.suffix.lower() != ".json":
+            raise ValueError(f"Expected a .json file, got: {path}")
+
+        with open(path, "w") as f:
+            json.dump(self.model_dump(), f)
         return self

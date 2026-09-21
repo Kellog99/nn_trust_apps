@@ -210,10 +210,11 @@ def run_benchmark(
             )
             list_reports.append(model_report)
 
+            print(report_path / "report.json")
             ######### saving the results #########
             with open(report_path / "report.json", "w") as f:
                 json.dump(model_report.model_dump(), f)
-
+            print("report saved")
             if log:
                 log.info(
                     "Prepared job(s): %d model(s) x %d dataset(s) x %d attack(s).",

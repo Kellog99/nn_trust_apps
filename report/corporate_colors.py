@@ -3,6 +3,13 @@ from reportlab.lib import colors
 
 class CorporateColors:
     """Corporate color palette"""
+    BACKGROUND = colors.HexColor('#FFFFFF')
+    SURFACE = colors.HexColor('#FFFFFF')
+    BORDER = colors.HexColor('#D5DFE8')
+    TEXT = colors.HexColor('#172638')
+    SECONDARY = colors.HexColor('#40546A')
+    MUTED = colors.HexColor('#52677D')
+    CYAN = colors.HexColor('#087E98')
     PDF_TITLE = colors.HexColor('#000000')
     SECTION_TITLE = colors.HexColor('#CC0000')
     SUBSECTION_TITLE = colors.HexColor('#000000')

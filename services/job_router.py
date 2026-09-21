@@ -108,7 +108,6 @@ def get_jobs(
 
     for atk in attacks_id:
         json_file: Path = output_folder / atk / "job_results.json"
-        print(json_file)
         job = JobResult(id=atk)
         if json_file.exists():
             with open(json_file, encoding="utf-8") as file:
