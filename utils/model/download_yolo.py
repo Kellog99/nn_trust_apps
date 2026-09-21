@@ -5,7 +5,7 @@ from ultralytics import YOLO
 
 MODEL_NAME = "yolov8n.pt"
 
-model_dir = Path("benchmark_assets/models/yolov8")
+model_dir = Path("~/Desktop/StableAI/model_repository/yolov8").expanduser().resolve()
 model_dir.mkdir(parents=True, exist_ok=True)
 
 yolo = YOLO(MODEL_NAME)
@@ -19,14 +19,14 @@ else:
     raise FileNotFoundError(f"Could not find downloaded checkpoint for {MODEL_NAME}")
 
 info = {
-    "type": "ultralytics",
+    "model_type": "ultralytics",
     "name": "yolov8",
     "id": "yolov8",
     "num_classes": 80,
     "task": "detection",
     "domain": "computer_vision",
     "input_dimensionality": [3, 640, 640],
-    "repository": "benchmark_assets/models/yolov8",
+    "repository": str(model_dir),
     "transformation": {
         "mean": [0.0, 0.0, 0.0],
         "std": [1.0, 1.0, 1.0],

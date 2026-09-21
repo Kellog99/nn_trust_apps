@@ -1,13 +1,48 @@
 import json
+import logging
 from pathlib import Path
 
 from fastapi import APIRouter, BackgroundTasks, Body, HTTPException, Query, Request
 
 from benchmarking import create_benchmark_id, run_benchmark
-from models import BenchmarkExecutionConfig, DatasetInfo, ModelInfo, ServerConfig, RegisteredObject, \
-    BenchmarkOptionConfig, JobResult, ModelReportProps
+from models import BenchmarkExecutionConfig, JobResult, ModelReportProps, ServerConfig
 
 router = APIRouter(prefix="/job", tags=["jobs management", "jobs utils"])
+
+
+def _run_benchmark_background(
+        benchmark: BenchmarkExecutionConfig,
+        benchmark_id: str,
+        benchmark_folder: Path,
+) -> None:
+    """
+    Run a benchmark without leaking background-task failures into ASGI.
+    """
+    try:
+        run_benchmark(
+            models=[benchmark.model],
+            datasets=[benchmark.dataset],
+            attacks=benchmark.attacks,
+            metrics=benchmark.metrics,
+            options=benchmark.options,
+            benchmark_id=benchmark_id,
+        )
+    except Exception as exc:
+        # In case the background application fails due to various reason,
+        # the output is saved as an error
+        error = f"{type(exc).__name__}: {exc}"
+
+        for attack_id in {attack.id for attack in benchmark.attacks} | {"identitybaseline"}:
+            result_file = benchmark_folder / attack_id / "job_results.json"
+            try:
+                job = JobResult(id=attack_id)
+                if result_file.exists():
+                    job = JobResult.model_validate_json(result_file.read_text(encoding="utf-8"))
+                if job.status not in {"finished", "error"}:
+                    job.status, job.error = "error", error
+                    job.save(result_file)
+            except (OSError, ValueError):
+                print("Could not persist failed job '%s'", attack_id)
 
 
 @router.post("/start_benchmark")
@@ -21,41 +56,31 @@ async def start_benchmark_job(
     """
 
     config: ServerConfig = request.app.state.config
-    dataset: DatasetInfo = body.dataset
-    model: ModelInfo = body.model
     benchmark_id: str = create_benchmark_id()
-
-    attacks: list[RegisteredObject] = [
-        attack for attack in body.attacks
-        if attack.id not in config.excluded_attacks
-    ]
-
-    metrics: list[RegisteredObject] = body.metrics
-    # Benchmark artifacts belong to the server repository used by get_jobs.
-    options: BenchmarkOptionConfig = body.options.model_copy(
-        update={"output_path": config.path_model_report_repo}
-    )
-
-    attack_ids = {attack.id for attack in attacks}
-    # run_benchmark always executes the identity baseline, even when it was
-    # not explicitly included in the request.
-    attack_ids.add("identitybaseline")
-    benchmark_folder = (
-            Path(options.output_path).expanduser().resolve()
+    benchmark = body.model_copy(update={
+        "attacks": [
+            attack
+            for attack in body.attacks
+            if attack.id not in config.excluded_attacks
+        ],
+        "options": body.options.model_copy(
+            update={"output_path": config.path_model_report_repo}
+        ),
+    })
+    benchmark_folder: Path = (
+            Path(benchmark.options.output_path).expanduser().resolve()
             / benchmark_id
-            / model.id
-            / dataset.id
+            / benchmark.model.id
+            / benchmark.dataset.id
     )
-    for attack_id in attack_ids:
+    # The identity baseline runs even when omitted from the request.
+    for attack_id in {attack.id for attack in benchmark.attacks} | {"identitybaseline"}:
         (benchmark_folder / attack_id).mkdir(parents=True, exist_ok=True)
 
     background_tasks.add_task(
-        run_benchmark,
-        models=[model],
-        datasets=[dataset],
-        attacks=attacks,
-        metrics=metrics,
-        options=options,
+        _run_benchmark_background,
+        benchmark=benchmark,
+        benchmark_folder=benchmark_folder,
         benchmark_id=benchmark_id,
     )
 

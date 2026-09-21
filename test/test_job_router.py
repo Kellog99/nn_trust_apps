@@ -84,6 +84,56 @@ def test_start_benchmark_http_response_has_content_and_200_status(
     assert response.json() == generated_id
 
 
+@pytest.mark.parametrize("status", [None, "pending", "in progress", "finished", "error"])
+def test_start_benchmark_records_background_setup_failures(
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+        status: str | None,
+) -> None:
+    generated_id = "20260914T120000_000001"
+
+    def fail_benchmark(**_) -> None:
+        raise RuntimeError("images in the batch have different sizes")
+
+    monkeypatch.setattr(job_router, "run_benchmark", fail_benchmark)
+    benchmark_folder = tmp_path / generated_id / "model-1" / "dataset-1"
+    attack_ids = {"attack-1", "identitybaseline"}
+    for attack_id in attack_ids:
+        (benchmark_folder / attack_id).mkdir(parents=True)
+
+    benchmark = BenchmarkExecutionConfig.model_validate({
+        "model": {"id": "model-1", "name": "Model", "task": "classification",
+                  "input_dimensionality": [3, 32, 32]},
+        "dataset": {"id": "dataset-1", "name": "Dataset", "task": "classification",
+                    "input_dimensionality": [3, 32, 32]},
+        "attacks": [{"id": "attack-1", "name": "Attack", "task": "classification",
+                     "parameters": []}],
+        "metrics": [],
+    })
+    result_file = benchmark_folder / "attack-1" / "job_results.json"
+    existing = {"id": "attack-1", "status": status, "result": {}, "error": "original error"}
+    if status is not None:
+        result_file.write_text(json.dumps(existing))
+
+    job_router._run_benchmark_background(
+        benchmark=benchmark,
+        benchmark_folder=benchmark_folder,
+        benchmark_id=generated_id,
+    )
+
+    for attack_id in attack_ids:
+        result = json.loads(
+            (benchmark_folder / attack_id / "job_results.json").read_text()
+        )
+        if attack_id == "attack-1" and status in {"finished", "error"}:
+            assert result == existing
+            continue
+        assert result["status"] == "error"
+        assert result["error"] == (
+            "RuntimeError: images in the batch have different sizes"
+        )
+
+
 def test_start_benchmark_generates_id_when_frontend_omits_it(
         body: BenchmarkExecutionConfig,
         monkeypatch: pytest.MonkeyPatch,

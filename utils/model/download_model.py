@@ -8,7 +8,7 @@ from tqdm import tqdm
 
 if __name__ == "__main__":
     path: Path = Path("~/Desktop/StableAI/model_repository").expanduser()
-    for id in tqdm(timm.list_models()[:100]):
+    for id in tqdm(timm.list_models()[:30]):
         config: PretrainedCfg = timm.get_pretrained_cfg(id)
         if config is None:
             continue

@@ -178,7 +178,11 @@ def run_benchmark(
 
             ######### 3.1 Start execution #########
             # The report path is benchmark_id / model_id / dataset_id
-            report_path: Path = Path(base_output_path).expanduser().resolve() / model_cnf.id / dataset_cnf.id
+            report_path: Path = (
+                    Path(base_output_path).expanduser().resolve()
+                    / model_cnf.id
+                    / dataset_cnf.id
+            )
             executor = BenchmarkExecutor(
                 verbose=options.verbose,
                 benchmark_id=benchmark_id,
