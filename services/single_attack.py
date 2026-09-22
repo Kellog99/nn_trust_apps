@@ -94,7 +94,16 @@ async def single_attack(
         model=model.to(device),
         class_id=atk.id,
         task=task,
+<<<<<<< HEAD
         **attack_parameters
+=======
+        device=device,
+        **{
+            param.id: param.default
+            for param in atk.parameters
+            if param.id != "device"
+        }
+>>>>>>> dev/benchmarking
     )
     print(" Attack Created ".center(40, "#"))
     ############################################

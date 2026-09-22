@@ -159,7 +159,7 @@ def filter_predictions(pred, display_top_k):
     }
 
 
-def draw_predictions(image, pred, display_top_k):
+def draw_predictions(image, pred, display_top_k, class_names=None):
     '''
     Draw predictions on the image
     '''
@@ -184,15 +184,17 @@ def draw_predictions(image, pred, display_top_k):
 
     labels_tensor = pred["labels"]
 
+    labels = [
+        str(class_names[int(label)]) if class_names is not None else str(int(label))
+        for label in labels_tensor
+    ]
+
     # if scores are available, format the labels with their corresponding scores
     if "scores" in pred:
-        scores = pred["scores"]
         labels = [
-            f"{int(label)}:{float(score):.2f}"
-            for label, score in zip(labels_tensor, scores)
+            f"{name}: {float(score):.2f}"
+            for name, score in zip(labels, pred["scores"])
         ]
-    else:
-        labels = [str(int(label)) for label in labels_tensor]
 
     return draw_bounding_boxes(
         image_uint8,
