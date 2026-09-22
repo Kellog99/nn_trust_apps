@@ -158,7 +158,7 @@ def get_dataloader(
 
     dataloader_kwargs = {
         "batch_size": batch,
-        "shuffle": task != Task.Detection,
+        "shuffle": True,
         "num_workers": num_workers,
         "worker_init_fn": seed_worker,
         "generator": g,
