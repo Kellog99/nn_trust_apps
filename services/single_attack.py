@@ -54,7 +54,7 @@ async def single_attack(
     try:
         # Extracting the values from the body
         model_info: ModelInfo = body.model
-        attack: RegisteredObject = body.attack
+        atk: RegisteredObject = body.attack
     except ValidationError as e:
         print("=== VALIDATION ERROR ===")
         print(e.json())
@@ -85,25 +85,16 @@ async def single_attack(
     print(" Model loaded ".center(40, "#"))
 
     ################## ATTACK ##################
-    atk: RegisteredObject = body.attack
     attack_parameters = _normalize_attack_parameters(
         atk.id,
-        {param.id: param.default for param in attack.parameters},
+        {param.id: param.default for param in atk.parameters if param.id != "device"},
     )
     attack: EvasionAttack = AF.create(
         model=model.to(device),
         class_id=atk.id,
         task=task,
-<<<<<<< HEAD
-        **attack_parameters
-=======
         device=device,
-        **{
-            param.id: param.default
-            for param in atk.parameters
-            if param.id != "device"
-        }
->>>>>>> dev/benchmarking
+        **attack_parameters
     )
     print(" Attack Created ".center(40, "#"))
     ############################################

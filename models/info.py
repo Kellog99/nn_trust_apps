@@ -69,6 +69,7 @@ class Info(BaseModel):
 
 
 DATASET_TYPES = Literal[
+    "coco",
     "image_folder",
     "flat",
     "parquet",

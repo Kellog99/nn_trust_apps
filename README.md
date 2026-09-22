@@ -2,6 +2,16 @@
 
 Backend and command-line tools for running adversarial-robustness benchmarks with the bundled [`nn_trust`](submodules/nn_trust) library. A run evaluates one or more models against a dataset, saves per-attack results, and can generate a PDF report.
 
+## Table of contents
+
+- [Setup](#setup)
+- [Run a benchmark](#run-a-benchmark)
+- [Security report PDF](#security-report-pdf)
+- [API](#api)
+- [Testing](#testing)
+  - [Test files](#test-files)
+  - [Test helpers](#test-helpers)
+
 ## Setup
 
 Requires Python 3.11, [uv](https://docs.astral.sh/uv/), and Git.
@@ -126,3 +136,41 @@ uv run python app.py --host 127.0.0.1 --port 8000
 Open `http://127.0.0.1:8000/docs` for the interactive API. The main benchmark endpoints are `POST /job/start_benchmark`, `GET /job/getJobs`, and `GET /job/getReport`. Server paths and other settings can be supplied as CLI options or in a JSON file passed with `--configuration_file`.
 
 For a complete API request example and CIFAR-10 helper commands, see [benchmarking/README.md](benchmarking/README.md).
+
+## Testing
+
+Application tests are in [`test/`](test). Some require local datasets or download model weights and sample images. The bundled library has its own tests in [`submodules/nn_trust/tests/`](submodules/nn_trust/tests).
+
+Run the dataset loading and transformation tests with:
+
+```bash
+uv run pytest test/test_dataset_loader.py -q
+```
+
+These tests create small temporary datasets and require no downloads or local dataset repository. The COCO test is skipped when `pycocotools` is unavailable. Each test includes a short description of the behavior it checks.
+
+### Test files
+
+| File | Description |
+| --- | --- |
+| [test_dataset_loader.py](test/test_dataset_loader.py) | Image-folder, flat, Parquet, and COCO loading; format validation, subsets, preprocessing, inverse transforms, and crop padding. |
+| [test_evaluation.py](test/test_evaluation.py) | Classification, detection, and AdvYOLO evaluation, including progress and error handling. |
+| [test_execution.py](test/test_execution.py) | Attack execution, saved artifacts, and benchmark metrics, with and without Ray. |
+| [test_file_progress_tracker.py](test/test_file_progress_tracker.py) | File-based progress storage and recovery after restart. |
+| [test_job_router.py](test/test_job_router.py) | Benchmark API creation, scheduling, status, reports, and errors. |
+| [test_job_tracking.py](test/test_job_tracking.py) | Baseline attack status and intermediate batch progress. |
+| [test_logger.py](test/test_logger.py) | Checkpoint artifact logging and per-tag limits. |
+| [test_parameter_utils.py](test/test_parameter_utils.py) | Preservation of zero defaults in parameter metadata. |
+| [test_parquet_streaming.py](test/test_parquet_streaming.py) | Restartable, bounded Parquet streaming and worker partitioning. |
+| [test_report_pdf.py](test/test_report_pdf.py) | PDF formatting, pagination, charts, benchmarks, and saved examples. |
+| [test_report_router.py](test/test_report_router.py) | Scalar metric filtering in benchmark API responses. |
+| [test_single_attack.py](test/test_single_attack.py) | Single-image attacks and sanitization of image output. |
+
+### Test helpers
+
+| File | Description |
+| --- | --- |
+| [utils/devices.py](test/utils/devices.py) | Lists available CPU and CUDA test devices. |
+| [utils/utils.py](test/utils/utils.py) | Provides cached sample images, a model, and a dataloader. |
+| [utils/__init__.py](test/utils/__init__.py) | Exports shared test helpers. |
+| [__init__.py](test/__init__.py) | Marks the test directory as a Python package. |

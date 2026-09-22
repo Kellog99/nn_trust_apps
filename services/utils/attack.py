@@ -13,8 +13,9 @@ from nn_trust.models.ultralytics_models import UltralyticsCVModel
 from nn_trust.utils.logger import PyTorchCheckpointLogger
 from services.utils.utils import tensor_image_to_b64str, draw_predictions
 from models.info import Transformation
-from utils.dataset_utils import transformation_classification
+from utils.dataset_utils import get_transform_classification, get_inverse_transform
 from nn_trust.attack.utils.detection import nms, LetterboxCocoTransform
+
 
 def single_attack_performance(
         model: CVModelAdapter,
@@ -42,30 +43,23 @@ def single_attack_performance(
     ############ image transformation ############
     match task:
         case Task.Classification:
-            transformations = transformation_classification(
+            transformations = get_transform_classification(
                 transformation=transformation
             )
 
-            mean = transformation.mean
-            std = transformation.std
-
-            inv_transform = T.Compose([
-                T.Normalize(
-                    mean=[-m / s for m, s in zip(mean, std)],
-                    std=[1 / s for s in std],
-                ),
-                T.Resize(
-                    size=(H, W),
-                ),
-            ])
+            inv_transform = get_inverse_transform(
+                transformation=transformation,
+                H=H,
+                W=W
+            )
 
         case Task.Detection:
             if not isinstance(model, UltralyticsCVModel):
                 raise ValueError("The model must be an instance of UltralyticsCVModel for detection tasks.")
-            
+
             letterbox = LetterboxCocoTransform(
                 cat_id_to_label={},
-                new_shape= tuple(input_dimensionality),
+                new_shape=tuple(input_dimensionality),
             )
 
             def transformations(image):
@@ -108,10 +102,10 @@ def single_attack_performance(
         states=["conf_adversarial", "conf_original"],
         path=out_path
     )
-    
+
     match task:
         case Task.Classification:
-            if not torch.isfinite(out).all():    
+            if not torch.isfinite(out).all():
                 raise RuntimeError(
                     "The model produced non-finite logits for the original image. "
                     "Check the model weights and preprocessing configuration."
@@ -210,8 +204,10 @@ def single_attack_performance(
             class_names = model.model.names
 
             # Draw predictions on the original and adversarial images
-            x_with_pred = draw_predictions(x[0], post_nms_preds[0], display_top_k=attack.config.display_top_k, class_names=class_names)
-            x_adv_with_pred = draw_predictions(x_adv[0], post_nms_preds_adv[0], display_top_k=attack.config.display_top_k, class_names=class_names)
+            x_with_pred = draw_predictions(x[0], post_nms_preds[0], display_top_k=attack.config.display_top_k,
+                                           class_names=class_names)
+            x_adv_with_pred = draw_predictions(x_adv[0], post_nms_preds_adv[0],
+                                               display_top_k=attack.config.display_top_k, class_names=class_names)
 
             # Get the original size
             x_with_pred_original = inv_transform(x_with_pred)
@@ -223,7 +219,7 @@ def single_attack_performance(
 
         case _:
             raise ValueError(f"Unsupported task: {task}")
-            
+
     ssim_metric = StructuralSimilarityIndexMeasure().to(device)
     ssim_measure: float = ssim_metric(x.to(device), x_adv.to(device)).item()
 
@@ -232,7 +228,7 @@ def single_attack_performance(
 
     conf_original: list[float] = [conf[0] for conf in conf_original]
     conf_adversarial: list[float] = [conf[0] for conf in conf_adversarial]
-    
+
     ################## Invert transform ################
     pert: torch.Tensor = x_adv.cpu() - x.cpu()
 

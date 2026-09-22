@@ -1,54 +1,140 @@
+import io
 import json
 from pathlib import Path
 
+import pyarrow as pa
+import pyarrow.parquet as pq
 import pytest
-import torchvision.transforms as T
-from torch import Tensor
-from torch.utils.data import Dataset, DataLoader
+import torch
+from PIL import Image
+from torch.utils.data import IterableDataset
+from torchvision import transforms as T
 
-from models.info import DATASET_TYPES, DatasetInfo
-from utils.load_dataset import get_dataloader
-
-DATASET_ROOT = Path("~/Desktop/StableAI/dataset_repository").expanduser()
-
-# Exercise every loader type against a real layout in the local repository.
-ROOT_DIR: dict[DATASET_TYPES, Path | str] = {
-    "image_folder": DATASET_ROOT / "imagenette2",
-    "parquet": DATASET_ROOT / "imagenet-1k",
-}
+from models.info import ParquetInfo, Transformation
+from nn_trust import Task
+from utils.dataset.datasets.coco import CocoDetectionDataset
+from utils.dataset_utils import get_dataloader, get_inverse_transform, get_transform_classification
 
 
-@pytest.mark.parametrize("dataset_type", ROOT_DIR.keys())
-def test_dataset_loader(dataset_type: DATASET_TYPES):
-    path: Path | str = ROOT_DIR[dataset_type]
-    if isinstance(path, str):
-        path: Path = Path(path).expanduser().resolve()
-
-    assert path.exists(), f"Dataset path does not exist: {path}"
-    assert path.is_dir() or path.suffix.lower() == ".parquet"
-
-    with open(path / "info.json", "r") as f:
-        dataset_info = json.load(f)
-
-    dataset_cnf: DatasetInfo = DatasetInfo.model_validate(dataset_info)
-
-    dataloader: DataLoader = get_dataloader(
-        # Some repository-owned info files intentionally leave ``repository``
-        # empty so that the dataset directory remains relocatable.
-        dataset_type=dataset_type,
-        dataset_path=dataset_cnf.repository or path,
-        dataset_info=dataset_cnf,
-        batch=dataset_cnf.batch_size,
-        transform=T.Compose([T.ToTensor(), ]),
-        num_workers=dataset_cnf.num_workers,
-        name=dataset_cnf.name,
-        folder_data=dataset_cnf.folder_data,
-        parquet_info=dataset_cnf.parquet_info,
+@pytest.mark.parametrize("dataset_type", ["image_folder", "flat"])
+def test_classification_formats_use_split_and_subset(tmp_path, dataset_type):
+    """Load the requested image format and split, applying the subset and name."""
+    root = tmp_path / "validation_images"
+    image_root = root / "class_a" if dataset_type == "image_folder" else root
+    image_root.mkdir(parents=True)
+    for index in range(3):
+        Image.new("RGB", (4, 4)).save(image_root / f"{index}.png")
+    loader = get_dataloader(
+        str(tmp_path), 2, None, dataset_type=dataset_type,
+        folder_data="validation_images", subset=2, num_workers=0,
+        task=Task.Classification, name="example",
     )
-    dataset: Dataset = dataloader.dataset
-    assert len(dataset) > 0
-    sample, label = dataset[0]
-    print(label)
-    assert isinstance(sample, Tensor)
-    assert sample.ndim == 3
-    assert isinstance(label, int)
+    images, labels = next(iter(loader))
+    assert images.shape == (2, 3, 4, 4)
+    assert len(labels) == len(loader.dataset) == 2
+    assert loader.dataset.dataset.name == "example"
+
+
+def test_parquet_metadata_and_streaming_subset(tmp_path):
+    """Decode configured Parquet columns and limit the streamed samples."""
+    buffer = io.BytesIO()
+    Image.new("RGB", (4, 4)).save(buffer, format="PNG")
+    pq.write_table(pa.table({
+        "pixels": [{"encoded": buffer.getvalue()}] * 3,
+        "target": [1, 2, 3],
+    }), tmp_path / "data.parquet")
+    loader = get_dataloader(
+        str(tmp_path), 2, None, dataset_type="parquet", subset=2, num_workers=0,
+        parquet_info=ParquetInfo(image_column="pixels", image_key="encoded", label_column="target"),
+    )
+    assert isinstance(loader.dataset, IterableDataset)
+    assert [label.item() for _, labels in loader for label in labels] == [1, 2]
+
+
+def test_coco_custom_paths_and_ragged_batches(tmp_path: Path):
+    """Load custom COCO paths, map categories, and batch unequal target counts."""
+    images = tmp_path / "pictures"
+    images.mkdir()
+    for index in (1, 2):
+        Image.new("RGB", (16, 16)).save(images / f"{index}.png")
+    annotations = {
+        "images": [
+            {
+                "id": index,
+                "file_name": f"{index}.png",
+                "height": 16,
+                "width": 16
+            }
+            for index in (1, 2)
+        ],
+        "categories": [
+            {
+                "id": 7,
+                "name":
+                    "object"
+            }
+        ],
+        "annotations": [
+            {
+                "id": 1,
+                "image_id": 1,
+                "category_id": 7,
+                "bbox": [1, 1, 4, 4],
+                "area": 16,
+                "iscrowd": 0
+            }
+        ],
+    }
+    (tmp_path / "labels.json").write_text(json.dumps(annotations))
+    loader = get_dataloader(
+        str(tmp_path),
+        batch=2,
+        model_transformation=None,
+        dataset_type="coco",
+        task=Task.Detection,
+        model_type="ultralytics",
+        images_dir="pictures",
+        annotations_file="labels.json",
+        name="custom detection data",
+        new_shape=(32, 32),
+        num_workers=0,
+    )
+    assert isinstance(loader.dataset.dataset, CocoDetectionDataset)
+    assert loader.dataset.dataset.cat_id_to_label == {7: 0}
+    images, targets = next(iter(loader))
+    assert len(images) == len(targets) == 2
+    assert sorted(len(target["boxes"]) for target in targets) == [0, 1]
+    assert all(image.shape[-2:] == (32, 32) for image in images)
+
+
+def test_unknown_dataset_type_is_rejected(tmp_path):
+    """Reject formats that have no registered dataset loader."""
+    with pytest.raises(ValueError, match="Unsupported dataset type"):
+        get_dataloader(str(tmp_path), 1, None, dataset_type="unknown")
+
+
+def test_configuration_and_generated_pipeline():
+    """Restore a constant image using either its configuration or its pipeline."""
+    config = Transformation(mean=[0.5] * 3, std=[0.25] * 3, size=6, crop=4)
+    image = torch.full((3, 8, 10), 0.75)
+    pipeline = get_transform_classification(config)
+    normalized = pipeline(T.ToPILImage()(image))
+    expected = torch.full_like(image, 191 / 255)
+    for source in (config, pipeline):
+        torch.testing.assert_close(get_inverse_transform(source, 8, 10)(normalized), expected)
+
+
+def test_classification_without_configuration():
+    """Convert to a tensor without normalization when no configuration is given."""
+    image = T.ToPILImage()(torch.ones(3, 4, 6))
+    torch.testing.assert_close(get_transform_classification(None)(image), torch.ones(3, 4, 6))
+
+
+def test_classification_crop_padding_is_normalized_black():
+    """Normalize black crop padding with the same statistics as the image."""
+    config = Transformation(mean=[0.5], std=[0.25], crop=4)
+    image = T.ToPILImage()(torch.ones(1, 2, 2))
+    result = get_transform_classification(config)(image)
+    expected = torch.full((1, 4, 4), -2.0)
+    expected[:, 1:3, 1:3] = 2.0
+    torch.testing.assert_close(result, expected)
