@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING
 
 from reportlab.platypus import BaseDocTemplate, Frame, PageTemplate
 from report.pdf_sections.dashboard import Dashboard
-from report.pdf_sections.header import DEFAULT_HEADER_LOGO, HeaderFooter
+from report.pdf_sections.header import HeaderFooter
 from report.report_style import AdversarialReportStyle
 
 if TYPE_CHECKING:
@@ -44,8 +44,7 @@ class AdversarialReportGenerator:
                 raise ValueError('Report must contain info, metrics and attacks objects.')
         path = Path(output_path or 'model_report.pdf').expanduser().resolve()
         path.parent.mkdir(parents=True, exist_ok=True)
-        header_logo_path = Path(header_logo_path or DEFAULT_HEADER_LOGO).expanduser()
-        if not header_logo_path.is_file():
+        if header_logo_path is not None and not Path(header_logo_path).expanduser().is_file():
             raise ValueError('The logo must be an existing file.')
         style = self.style
         doc = BaseDocTemplate(str(path), pagesize=style.pagesize,

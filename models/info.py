@@ -151,6 +151,7 @@ class DatasetInfo(Info):
                 "parquet_info is required when dataset_type is 'parquet'."
             )
         return self
+
     images_dir: Optional[str] = Field(
         default=None,
         title="images directory",
@@ -210,7 +211,7 @@ class ModelInfo(Info):
             mean=[0.485, 0.456, 0.406],
             std=[0.229, 0.224, 0.225],
             crop=None,
-            size=None,
+            size=224,
         ),
         description="It represent the transformation to apply to the input.",
         title="Transformation",
@@ -228,6 +229,13 @@ class ModelInfo(Info):
     )
 
     ######################################################################################
+
+    @model_validator(mode="after")
+    def set_transformation_size_from_input_dimensionality(self):
+        """Keep image resizing aligned with the model's declared input shape."""
+        if self.input_dimensionality:
+            self.transformation.size = self.input_dimensionality[-1]
+        return self
 
     @model_validator(mode="after")
     def validate_library_model(self):

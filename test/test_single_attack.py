@@ -6,6 +6,7 @@ import torchvision
 from PIL.Image import Image
 
 from models import SingleAttackOutput
+from models.info import Transformation
 from nn_trust import CVModelAdapter, AttackConfig, EvasionAttack, AttackObjective, Task
 from nn_trust.attack.attack_factory import AttackFactory as AF
 from services.utils.attack import single_attack_performance
@@ -57,6 +58,8 @@ def test_attack(
         model=model.to(device),
         attack=atk,
         pil_image=pil_image,
+        task=Task.Classification,
+        transformation=Transformation(mean=[0, 0, 0], std=[1, 1, 1], size=224),
         device=device
     )
     for k in out.confidence.keys():

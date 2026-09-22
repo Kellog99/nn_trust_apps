@@ -11,7 +11,6 @@ from benchmarking.utils.advyolo_evaluation import evaluate_frozen_advyolo, detec
 from models import JobResult
 from models.reports import ParameterLog
 from nn_trust import AttackFactory, ModelAdapter, StatisticComposer, Task, EvasionAttack
-from nn_trust.target import AvoidOnehotTarget
 from nn_trust.utils import PyTorchCheckpointLogger, to_device
 
 
@@ -46,6 +45,8 @@ def evaluate_attack(
     )
     job_result.save(res_path)
 
+    attack = None
+    logger = None
     try:
         job_result.status = "in progress"
         job_result.save(res_path)
@@ -86,13 +87,15 @@ def evaluate_attack(
             for completed_iterations, (batch, label) in pbar:
                 iteration_start = time.perf_counter()
 
-                batch = torch.stack(batch).to(device)
+                if not isinstance(batch, torch.Tensor):
+                    batch = torch.stack(batch)
+                batch = batch.to(device)
                 label = to_device(label, device)
 
                 with torch.no_grad():
                     out = model(batch)
                 target = (
-                    AvoidOnehotTarget(num_classes=out.shape[-1])(label.tolist()).to(device)
+                    torch.nn.functional.one_hot(label.long(), num_classes=out.shape[-1]).to(out)
                     if task == Task.Classification else out
                 )
                 x_adv = attack.generate(x=batch, y=target).detach()
@@ -180,3 +183,10 @@ def evaluate_attack(
         job_result.error = str(exc)
         job_result.save(res_path)
         raise
+    finally:
+        try:
+            if logger is not None:
+                logger.close()
+        finally:
+            if attack is not None:
+                attack.logger.close()

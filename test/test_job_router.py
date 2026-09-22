@@ -5,6 +5,8 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+import torch
+from PIL import Image
 from fastapi import BackgroundTasks, FastAPI
 from fastapi.testclient import TestClient
 
@@ -16,10 +18,29 @@ job_router = importlib.import_module("services.job_router")
 
 
 @pytest.fixture
-def body() -> BenchmarkExecutionConfig:
-    with open("./test/utils/benchmark-request.json", "r") as f:
-        data = json.load(f)
-    return BenchmarkExecutionConfig.model_validate(data)
+def body(tmp_path: Path) -> BenchmarkExecutionConfig:
+    """Use small local repositories so the integration test is self-contained."""
+    model_path = tmp_path / "model"
+    model_path.mkdir()
+    torch.save(torch.nn.Sequential(torch.nn.Flatten(), torch.nn.Linear(3 * 8 * 8, 2)),
+               model_path / "model.pth")
+    dataset_path = tmp_path / "dataset"
+    for label, color in enumerate(("red", "blue")):
+        folder = dataset_path / str(label)
+        folder.mkdir(parents=True)
+        Image.new("RGB", (8, 8), color).save(folder / "image.png")
+    return BenchmarkExecutionConfig.model_validate({
+        "model": {"id": "test-model", "name": "Test model", "task": "classification",
+                  "input_dimensionality": [3, 8, 8], "num_classes": 2,
+                  "repository": str(model_path), "model_type": "plain",
+                  "transformation": {"mean": [0, 0, 0], "std": [1, 1, 1], "size": 8}},
+        "dataset": {"id": "test-dataset", "name": "Test dataset", "task": "classification",
+                    "input_dimensionality": [3, 8, 8], "num_classes": 2,
+                    "repository": str(dataset_path), "batch_size": 2, "num_workers": 0},
+        "attacks": [{"id": "contrastbaseline", "name": "Contrast", "task": "classification", "parameters": []}],
+        "metrics": [{"id": "accuracy", "name": "Accuracy", "task": "classification", "parameters": []}],
+        "options": {"gpu": False, "verbose": False, "output_path": str(tmp_path / "reports")},
+    })
 
 
 def test_start_benchmark_job_returns_id_used_by_benchmark(
@@ -321,10 +342,7 @@ def test_start_benchmark_job(body: BenchmarkExecutionConfig, tmp_path: Path):
             }
         )
 
-    # The request fixture describes the complete ImageNet catalogue, but this
-    # is a router integration test, not a full-dataset benchmark.  Keep its
-    # representative set large enough for neighbourhood-based metrics while
-    # bounding the test's data and per-metric perturbation workload.
+    # Exercise repository loading and reporting with a bounded local dataset.
     dataset = dataset.model_copy(update={"batch_size": 1, "num_workers": 0})
     options: BenchmarkOptionConfig = body.options.model_copy(
         update={

@@ -8,7 +8,7 @@ from pydantic import BaseModel
 from torch.utils.data import DataLoader, TensorDataset
 
 from benchmarking.utils import evaluation
-from nn_trust import ModelAdapter, StatisticComposer, Task
+from nn_trust import AttackFactory, ModelAdapter, StatisticComposer, Task
 
 
 class AttackConfig(BaseModel):
@@ -16,6 +16,24 @@ class AttackConfig(BaseModel):
     label_target: int = 0
     iou_threshold_evaluation: float = 0.5
     score_threshold_evaluation: float = 0.1
+
+
+def test_classification_attack_steps_avoid_ground_truth_labels(monkeypatch, tmp_path):
+    """The real attack prepares targets once, including misclassified inputs."""
+    model = ModelAdapter(torch.nn.Flatten())
+    inputs = torch.tensor([[[[0.9, 0.1]]], [[[0.8, 0.2]]]])
+    labels = torch.tensor([0, 1])
+    loader = DataLoader(TensorDataset(inputs, labels), batch_size=2)
+    attack = AttackFactory.create(class_id="identitybaseline", model=model,
+                                  device=torch.device("cpu"), max_iters=1)
+    attack.step = Mock(wraps=attack.step)
+    monkeypatch.setattr(evaluation.AttackFactory, "create", lambda **_: attack)
+
+    evaluation.evaluate_attack(loader, model, StatisticComposer(statistics={"accuracy": {}}),
+                               "identitybaseline", output_path=tmp_path)
+
+    torch.testing.assert_close(attack.step.call_args.kwargs["y"],
+                               torch.tensor([[-1., 0.], [0., -1.]]))
 
 
 @pytest.fixture
@@ -53,7 +71,7 @@ def test_classification_metrics_artifacts_and_progress(setup, tmp_path, attack_i
     assert attack.generate.call_count == 2
     torch.testing.assert_close(
         attack.generate.call_args_list[0].kwargs["y"],
-        torch.tensor([[-1., 0.], [0., -1.]]),
+        torch.tensor([[1., 0.], [0., 1.]]),
     )
     attack.logger.close.assert_called_once()
     artifacts = torch.load(tmp_path / attack_id / "log.pth", weights_only=False)
@@ -90,7 +108,7 @@ def test_detection_targets_and_single_inference_pair(setup, monkeypatch, tmp_pat
     prediction = {"boxes": torch.zeros(1, 4), "labels": torch.tensor([0]),
                   "scores": torch.tensor([0.9]), "cls_scores": output[1][0]}
     postprocess = Mock(return_value=[prediction])
-    monkeypatch.setattr(evaluation, "nms", postprocess)
+    monkeypatch.setattr(evaluation, "detection_predictions", postprocess)
     inputs = torch.zeros(1, 3, 2, 2)
     labels = [{"boxes": torch.zeros(1, 4), "labels": torch.tensor([0])}]
     loader = DataLoader(list(zip(inputs, labels)), collate_fn=lambda items: tuple(zip(*items)))

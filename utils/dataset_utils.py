@@ -1,31 +1,16 @@
-import os
-import random
-from pathlib import Path
-from typing import Callable, Optional
+from typing import Optional
 
 import numpy
 import torch
-from torch.utils.data import Dataset, IterableDataset, Subset, DataLoader
+from torch.utils.data import DataLoader
 from torchvision.transforms import transforms
 from torchvision.transforms import v2
 
 from models.info import DATASET_TYPES, ParquetInfo, Transformation
 from nn_trust import Task
-from utils.dataset._load_classification_dataset import _load_image_folder, _load_flat, _load_parquet
-from utils.dataset._load_od_dataset import _load_coco
-from utils.dataset.datasets.coco import CocoDetectionDataset
-from utils.dataset.datasets.folder import ImageDatasetFolder
 
 
-_LOADERS: dict[DATASET_TYPES, Callable[..., Dataset]] = {
-    "coco": _load_coco,
-    "image_folder": _load_image_folder,
-    "flat": _load_flat,
-    "parquet": _load_parquet,
-}
-
-
-def get_transform_classification(transformation: Transformation | None) -> transforms.Compose:
+def get_transform_dataset(transformation: Optional[Transformation] = None) -> transforms.Compose:
     """Convert a PIL image or NumPy array to a classification tensor.
 
     With a configuration, optionally resize to a square of ``size`` pixels,
@@ -116,8 +101,6 @@ def get_dataloader(
         model_transformation: Transformation | None,
         subset: Optional[int] = None,
         num_workers: int = 4,
-        name: Optional[str] = None,
-        model_type: Optional[str] = None,
         task: Optional[Task] = None,
         images_dir: Optional[str] = None,
         annotations_file: Optional[str] = None,
@@ -126,72 +109,22 @@ def get_dataloader(
         parquet_info: Optional[ParquetInfo] = None,
         **kwargs,
 ) -> DataLoader:
-    """
-    Load the format selected by DatasetInfo.dataset_type and return its DataLoader.
-    """
-    dataset_path = Path(dataset_path).expanduser()
+    """Compatibility wrapper for :func:`utils.load_dataset.get_dataloader`."""
+    from utils.load_dataset import get_dataloader as load_dataloader
 
-    if not os.path.exists(dataset_path):
-        raise ValueError(f"The dataset --------{dataset_path} does not exists.")
+    if kwargs.get("transform") is None:
+        kwargs["transform"] = get_transform_dataset(model_transformation)
 
-    try:
-        loader = _LOADERS[dataset_type]
-    except KeyError:
-        raise ValueError(
-            f"Unsupported dataset type: {dataset_type}. Supported types: {sorted(_LOADERS)}."
-        ) from None
-
-    if task is not None:
-        expected_task = Task.Detection if dataset_type == "coco" else Task.Classification
-        if task != expected_task:
-            raise ValueError(f"Dataset type {dataset_type!r} does not support task {task}.")
-
-    if dataset_type == "parquet":
-        if parquet_info is not None:
-            kwargs.setdefault("image_column", parquet_info.image_column)
-            kwargs.setdefault("label_column", parquet_info.label_column)
-            kwargs.setdefault("image_key", parquet_info.image_key)
-        kwargs.setdefault("read_batch_size", max(1, batch))
-        kwargs.setdefault("limit", subset)
-
-    dataset = loader(
-        root=dataset_path,
-        transform=get_transform_classification(model_transformation),
-        split=folder_data,
-        model_type=model_type,
+    return load_dataloader(
+        dataset_path=dataset_path,
+        batch=batch,
+        subset=subset,
+        num_workers=num_workers,
+        task=task,
         images_dir=images_dir,
         annotations_file=annotations_file,
+        dataset_type=dataset_type,
+        folder_data=folder_data,
+        parquet_info=parquet_info,
         **kwargs,
     )
-
-    dataset.name = name if name is not None else dataset_path.name
-
-    if isinstance(dataset, IterableDataset):
-        subdataset = dataset
-    else:
-        indices = range(len(dataset) if subset is None or subset < 0 else min(subset, len(dataset)))
-        subdataset = Subset(dataset, indices)
-
-    def seed_worker(worker_id):
-        worker_seed = torch.initial_seed() % 2 ** 32
-        numpy.random.seed(worker_seed)
-        random.seed(worker_seed)
-
-    g = torch.Generator()
-    g.manual_seed(1234)
-
-    dataloader_kwargs = {
-        "batch_size": batch,
-        "shuffle": not isinstance(dataset, IterableDataset),
-        "num_workers": num_workers,
-        "worker_init_fn": seed_worker,
-        "generator": g,
-        "pin_memory": True,
-    }
-
-    if dataset_type == "coco":
-        dataloader_kwargs["collate_fn"] = lambda batch: tuple(zip(*batch))
-
-    dataloader = DataLoader(subdataset, **dataloader_kwargs)
-
-    return dataloader

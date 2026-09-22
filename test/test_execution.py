@@ -25,11 +25,6 @@ def dataloader() -> DataLoader:
 
 
 @pytest.fixture
-def tmp_path() -> Path:
-    return Path("./tmp")
-
-
-@pytest.fixture
 def attacks() -> list[dict]:
     return [
         {"id": "identitybaseline"},
@@ -108,13 +103,11 @@ def test_evaluate_attack(
 # ---------------------------------------------------------------------------
 
 @pytest.mark.parametrize("device", available_devices())
-@pytest.mark.parametrize("use_ray", [False, True])
 def test_execution(
         model: ModelAdapter,
         dataloader: DataLoader,
         attacks: list[dict],
         device: torch.device,
-        use_ray: bool,
         tmp_path: Path,
         statistics: dict[str, dict],
 ):
@@ -124,7 +117,6 @@ def test_execution(
     """
     executor = BenchmarkExecutor(
         device=device,
-        use_ray=use_ray,
         verbose=False,
         output_path=tmp_path
     )
@@ -170,7 +162,6 @@ if __name__ == "__main__":
             {"id": "gaussianbaseline"},
         ],
         device=torch.device("cpu"),
-        use_ray=False,
         tmp_path=Path(f"./tmp/{datetime.now().strftime('%Y%m%d%H%M%S')}"),
         statistics={
             "accuracy": {},

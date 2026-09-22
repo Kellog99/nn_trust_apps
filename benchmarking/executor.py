@@ -15,7 +15,7 @@ from nn_trust import StatisticComposer, ModelAdapter, Task
 
 class BenchmarkExecutor:
     """
-    Executes a list of benchmark jobs either locally (serial) or distributed via Ray.
+    Executes a list of benchmark jobs locally, in order.
     """
 
     def __init__(

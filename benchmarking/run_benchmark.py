@@ -1,19 +1,20 @@
-import json
 import inspect
+import json
 from datetime import datetime
 from logging import Logger
 from pathlib import Path
-from typing import List, Optional, Any
+from typing import List, Optional, Any, cast
 
 import torch
 from torch.utils.data import DataLoader
 
 from benchmarking.executor import BenchmarkExecutor
 from models import BenchmarkOptionConfig, ModelInfo, DatasetInfo, ModelReportProps, RegisteredObject
+from models.info import DATASET_TYPES
 from models.reports import ReportMetricsProps, ReportAttackProps
 from nn_trust import AttackFactory as AF, StatisticComposer, StatisticsFactory as SF, ModelAdapter, Task
 from utils import load_model, get_dataloader
-from utils.load_dataset import get_transformation
+from utils.dataset_utils import get_transform_dataset
 
 
 def create_benchmark_id() -> str:
@@ -122,21 +123,21 @@ def run_benchmark(
             task=task,
             device=device,
         )
-        transform = get_transformation(transformation=model_cnf.transformation)
+        transform = get_transform_dataset(transformation=model_cnf.transformation)
 
         for dataset_cnf in datasets:
             if dataset_cnf.repository is None:
                 raise ValueError("No dataset to load.")
-
+            print(model_cnf.transformation)
+            print(transform)
             dataloader: DataLoader = get_dataloader(
-                dataset_type=dataset_cnf.dataset_type,
+                dataset_type=cast(DATASET_TYPES, dataset_cnf.dataset_type),
                 dataset_path=dataset_cnf.repository,
                 dataset_info=dataset_cnf,
                 batch=dataset_cnf.batch_size,
                 subset=options.subset,
                 transform=transform,
                 num_workers=dataset_cnf.num_workers,
-                name=dataset_cnf.name,
                 folder_data=dataset_cnf.folder_data,
                 **(
                     {

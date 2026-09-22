@@ -1,16 +1,20 @@
 # NN Trust Applications
 
-Backend and command-line tools for running adversarial-robustness benchmarks with the bundled [`nn_trust`](submodules/nn_trust) library. A run evaluates one or more models against a dataset, saves per-attack results, and can generate a PDF report.
+Backend and command-line tools for running adversarial-robustness benchmarks with the bundled [
+`nn_trust`](submodules/nn_trust) library. A run evaluates one or more models against a dataset, saves per-attack
+results, and can generate a PDF report.
 
 ## Table of contents
 
 - [Setup](#setup)
 - [Run a benchmark](#run-a-benchmark)
+- [Supported datasets](#supported-datasets)
+- [Supported models](#supported-models)
 - [Security report PDF](#security-report-pdf)
 - [API](#api)
 - [Testing](#testing)
-  - [Test files](#test-files)
-  - [Test helpers](#test-helpers)
+    - [Test files](#test-files)
+    - [Test helpers](#test-helpers)
 
 ## Setup
 
@@ -59,6 +63,36 @@ Create a PDF from a completed report:
 ```bash
 uv run python report.py --benchmark_path path/to/report.json --output_path ./reports
 ```
+
+## Supported datasets
+
+These are the supported datasets type:
+
+| Type           | Description                                                                               |
+|----------------|-------------------------------------------------------------------------------------------|
+| `image_folder` | Classification images organized in one folder per class.                                  |
+| `flat`         | Images in a single folder, with optional labels in `labels.csv` or `labels.json`.         |
+| `parquet`      | Classification images and labels stored in Parquet files, with configurable column names. |
+| `coco`         | Object-detection images with annotations in COCO JSON format.                             |
+
+## Supported models
+
+These are the supported model type:
+
+| Type            | Description                                                                            |
+|-----------------|----------------------------------------------------------------------------------------|
+| `plain`         | A complete PyTorch model saved as `model.pth`.                                         |
+| `model_weights` | PyTorch weights in `model_state_dict.pth`, with a `Model` class defined in `model.py`. |
+| `timm`          | Pretrained image models from the timm library, selected by model ID.                   |
+| `torch_script`  | A TorchScript model saved as `model.pt`.                                               |
+| `torch_dynamo`  | A model exported with `torch.export`, saved as `model.pt2`.                            |
+| `onnx`          | An ONNX model saved as `model.onnx`.                                                   |
+| `api`           | A computer-vision model accessed through an API URL.                                   |
+| `ultralytics`   | Ultralytics detection models loaded from `model.pt` or a model ID.                     |
+| `HuggingFace`   | Hugging Face image-classification or causal language models, selected by task.         |
+| `Ollama`        | Language models served by an Ollama instance.                                          |
+| `Gemini`        | Gemini language models accessed through an API, requiring an API key.                  |
+| `OpenRouter`    | Language models accessed through OpenRouter, requiring an API key.                     |
 
 ## Security report PDF
 
@@ -133,13 +167,39 @@ Start the FastAPI server:
 uv run python app.py --host 127.0.0.1 --port 8000
 ```
 
-Open `http://127.0.0.1:8000/docs` for the interactive API. The main benchmark endpoints are `POST /job/start_benchmark`, `GET /job/getJobs`, and `GET /job/getReport`. Server paths and other settings can be supplied as CLI options or in a JSON file passed with `--configuration_file`.
+Open `http://127.0.0.1:8000/docs` for the interactive API. The main benchmark endpoints are `POST /job/start_benchmark`,
+`GET /job/getJobs`, and `GET /job/getReport`. Server paths and other settings can be supplied as CLI options or in a
+JSON file passed with `--configuration_file`.
 
 For a complete API request example and CIFAR-10 helper commands, see [benchmarking/README.md](benchmarking/README.md).
 
 ## Testing
 
-Application tests are in [`test/`](test). Some require local datasets or download model weights and sample images. The bundled library has its own tests in [`submodules/nn_trust/tests/`](submodules/nn_trust/tests).
+Application tests are in [`test/`](test). Run the full suite from the project root:
+
+```bash
+uv run python -m pytest test -ra
+```
+
+Device-parametrized tests run on CPU and also CUDA when available. Execution and single-attack tests use pretrained
+ResNet-18 weights and cached dog images, downloading them when missing. Dataset and router tests create small temporary
+datasets; router tests also create a temporary model and do not need an external benchmark request JSON file.
+The bundled library has its own tests in [`submodules/nn_trust/tests/`](submodules/nn_trust/tests), which are not included
+in the command above.
+
+To save full failure tracebacks and preserve pytest's exit status in Bash:
+
+```bash
+set -o pipefail
+uv run python -m pytest test -ra --tb=long 2>&1 | tee test_results.txt
+```
+
+The verified run on September 22, 2026 completed with **87 passed, 0 failures, and 2 deprecation warnings** in 23.32 seconds,
+including CPU and CUDA cases. The warnings concern Pydantic class-based configuration and Starlette TestClient's use of
+httpx. See the [error and fix summary](test_error_summary.txt), [original tracebacks](test_errors_initial.txt),
+[intermediate verification logs](test_errors_recheck.txt), and [final results](test_results_final.txt).
+The suite uses the current serial executor interface; obsolete Ray variants were removed and a regression test for
+ground-truth attack targets was added.
 
 Run the dataset loading and transformation tests with:
 
@@ -147,30 +207,31 @@ Run the dataset loading and transformation tests with:
 uv run pytest test/test_dataset_loader.py -q
 ```
 
-These tests create small temporary datasets and require no downloads or local dataset repository. The COCO test is skipped when `pycocotools` is unavailable. Each test includes a short description of the behavior it checks.
+These tests create small temporary datasets and require no downloads or local dataset repository. The COCO test is
+skipped when `pycocotools` is unavailable. Each test includes a short description of the behavior it checks.
 
 ### Test files
 
-| File | Description |
-| --- | --- |
-| [test_dataset_loader.py](test/test_dataset_loader.py) | Image-folder, flat, Parquet, and COCO loading; format validation, subsets, preprocessing, inverse transforms, and crop padding. |
-| [test_evaluation.py](test/test_evaluation.py) | Classification, detection, and AdvYOLO evaluation, including progress and error handling. |
-| [test_execution.py](test/test_execution.py) | Attack execution, saved artifacts, and benchmark metrics, with and without Ray. |
-| [test_file_progress_tracker.py](test/test_file_progress_tracker.py) | File-based progress storage and recovery after restart. |
-| [test_job_router.py](test/test_job_router.py) | Benchmark API creation, scheduling, status, reports, and errors. |
-| [test_job_tracking.py](test/test_job_tracking.py) | Baseline attack status and intermediate batch progress. |
-| [test_logger.py](test/test_logger.py) | Checkpoint artifact logging and per-tag limits. |
-| [test_parameter_utils.py](test/test_parameter_utils.py) | Preservation of zero defaults in parameter metadata. |
-| [test_parquet_streaming.py](test/test_parquet_streaming.py) | Restartable, bounded Parquet streaming and worker partitioning. |
-| [test_report_pdf.py](test/test_report_pdf.py) | PDF formatting, pagination, charts, benchmarks, and saved examples. |
-| [test_report_router.py](test/test_report_router.py) | Scalar metric filtering in benchmark API responses. |
-| [test_single_attack.py](test/test_single_attack.py) | Single-image attacks and sanitization of image output. |
+| File                                                                | Description                                                                                                                     |
+|---------------------------------------------------------------------|---------------------------------------------------------------------------------------------------------------------------------|
+| [test_dataset_loader.py](test/test_dataset_loader.py)               | Image-folder, flat, Parquet, and COCO loading; format validation, subsets, preprocessing, inverse transforms, and crop padding. |
+| [test_evaluation.py](test/test_evaluation.py)                       | Classification, detection, and AdvYOLO evaluation; ground-truth targets, artifacts, progress, errors, and logger cleanup.         |
+| [test_execution.py](test/test_execution.py)                         | Local attack execution, saved artifacts, and benchmark metrics on available devices.                                            |
+| [test_job_router.py](test/test_job_router.py)                       | Benchmark API creation, scheduling, job listing, reports, and errors, using temporary model and dataset repositories.             |
+| [test_job_tracking.py](test/test_job_tracking.py)                   | Baseline attack status and intermediate batch progress.                                                                         |
+| [test_logger.py](test/test_logger.py)                               | Checkpoint artifact logging and per-tag limits.                                                                                 |
+| [test_model_info.py](test/test_model_info.py)                       | Preprocessing size inferred from input dimensions, including precedence over an explicit transformation size.                   |
+| [test_parameter_utils.py](test/test_parameter_utils.py)             | Preservation of zero defaults in parameter metadata.                                                                            |
+| [test_parquet_streaming.py](test/test_parquet_streaming.py)         | Restartable, bounded Parquet streaming and worker partitioning.                                                                 |
+| [test_report_pdf.py](test/test_report_pdf.py)                       | PDF formatting, pagination, charts, benchmarks, and saved examples.                                                             |
+| [test_report_router.py](test/test_report_router.py)                 | Scalar metric filtering in benchmark API responses.                                                                             |
+| [test_single_attack.py](test/test_single_attack.py)                 | Single-image classification attacks, confidence for each iteration, and sanitization of image output.                           |
 
 ### Test helpers
 
-| File | Description |
-| --- | --- |
-| [utils/devices.py](test/utils/devices.py) | Lists available CPU and CUDA test devices. |
-| [utils/utils.py](test/utils/utils.py) | Provides cached sample images, a model, and a dataloader. |
-| [utils/__init__.py](test/utils/__init__.py) | Exports shared test helpers. |
-| [__init__.py](test/__init__.py) | Marks the test directory as a Python package. |
+| File                                        | Description                                               |
+|---------------------------------------------|-----------------------------------------------------------|
+| [utils/devices.py](test/utils/devices.py)   | Lists available CPU and CUDA test devices.                |
+| [utils/utils.py](test/utils/utils.py)       | Provides cached sample images, a model, and a dataloader. |
+| [utils/__init__.py](test/utils/__init__.py) | Exports shared test helpers.                              |
+| [__init__.py](test/__init__.py)             | Marks the test directory as a Python package.             |

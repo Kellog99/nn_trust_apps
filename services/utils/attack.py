@@ -13,7 +13,7 @@ from nn_trust.models.ultralytics_models import UltralyticsCVModel
 from nn_trust.utils.logger import PyTorchCheckpointLogger
 from services.utils.utils import tensor_image_to_b64str, draw_predictions
 from models.info import Transformation
-from utils.dataset_utils import get_transform_classification, get_inverse_transform
+from utils.dataset_utils import get_transform_dataset, get_inverse_transform
 from nn_trust.attack.utils.detection import nms, LetterboxCocoTransform
 
 
@@ -43,7 +43,7 @@ def single_attack_performance(
     ############ image transformation ############
     match task:
         case Task.Classification:
-            transformations = get_transform_classification(
+            transformations = get_transform_dataset(
                 transformation=transformation
             )
 
@@ -225,6 +225,7 @@ def single_attack_performance(
 
     conf_original: list[list[float]] = logger.get_log(tag="conf_original")
     conf_adversarial: list[list[float]] = logger.get_log(tag="conf_adversarial")
+    logger.close()
 
     conf_original: list[float] = [conf[0] for conf in conf_original]
     conf_adversarial: list[float] = [conf[0] for conf in conf_adversarial]
@@ -234,7 +235,8 @@ def single_attack_performance(
 
     if task == Task.Classification:
 
-        std_tensor = torch.tensor(std, dtype=pert.dtype).view(1, 3, 1, 1)
+        std = transformation.std if transformation is not None else [1.0] * pert.shape[1]
+        std_tensor = torch.tensor(std, dtype=pert.dtype).view(1, -1, 1, 1)
         pert = T.Resize(size=(H, W))(pert * std_tensor)
         x_adv_output = inv_transform(x_adv.cpu())
 

@@ -1,6 +1,6 @@
 import json
-import logging
 from pathlib import Path
+from typing import Annotated
 
 from fastapi import APIRouter, BackgroundTasks, Body, HTTPException, Query, Request
 
@@ -91,10 +91,10 @@ async def start_benchmark_job(
 @router.get("/getJobs")
 def get_jobs(
         request: Request,
-        benchmark_id: str | None = Query(None),
-        model_id: str | None = Query(None),
-        dataset_id: str | None = Query(None),
-        attacks_id: list[str] | None = Query(None)
+        benchmark_id: Annotated[str | None, Query()] = None,
+        model_id: Annotated[str | None, Query()] = None,
+        dataset_id: Annotated[str | None, Query()] = None,
+        attacks_id: Annotated[list[str] | None, Query()] = None
 ) -> list[JobResult]:
     """
     Get the status of all benchmark attacks, optionally for one benchmark.
@@ -111,12 +111,15 @@ def get_jobs(
     config: ServerConfig = request.app.state.config
     output_folder: Path = Path(config.path_model_report_repo).expanduser().resolve()
 
-    if dataset_id is None:
-        raise HTTPException(status_code=422, detail="dataset_id is required")
-    if model_id is None:
-        raise HTTPException(status_code=422, detail="model_id is required")
-
-    output_folder: Path = output_folder / benchmark_id / model_id / dataset_id
+    if (model_id is None) != (dataset_id is None):
+        raise HTTPException(status_code=422, detail="model_id and dataset_id must be provided together")
+    repository = output_folder
+    output_folder = output_folder / benchmark_id
+    if model_id is not None:
+        output_folder = output_folder / model_id / dataset_id
+    output_folder = output_folder.resolve()
+    if repository not in output_folder.parents:
+        raise HTTPException(status_code=400, detail="Invalid benchmark path")
 
     # FastAPI builds a list from repeated query parameters, but some clients
     # send all attack IDs in a single comma-separated value. Support both:
@@ -130,6 +133,12 @@ def get_jobs(
     ]
 
     jobs: list[JobResult] = []
+
+    if not attacks_id:
+        return [
+            JobResult.model_validate_json(path.read_text(encoding="utf-8"))
+            for path in sorted(output_folder.rglob("job_results.json"))
+        ]
 
     for atk in attacks_id:
         json_file: Path = output_folder / atk / "job_results.json"

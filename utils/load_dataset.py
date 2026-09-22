@@ -1,6 +1,5 @@
 import random
 from pathlib import Path
-from random import shuffle
 from typing import Callable, Optional
 
 import numpy
@@ -8,7 +7,10 @@ import torch
 from torch.utils.data import Dataset, IterableDataset, Subset, DataLoader
 from torchvision import transforms as T
 
-from models.info import Transformation, DATASET_TYPES, DatasetInfo, ParquetInfo
+from models.info import DATASET_TYPES, DatasetInfo, ParquetInfo
+from nn_trust import Task
+from utils.dataset_utils import get_transform_dataset
+from utils.dataset._load_od_dataset import _load_coco
 from utils.dataset._load_classification_dataset import (
     _load_image_folder,
     _load_flat,
@@ -16,26 +18,21 @@ from utils.dataset._load_classification_dataset import (
 )
 
 _LOADERS: dict[DATASET_TYPES, Callable[..., Dataset]] = {
+    "coco": _load_coco,
     "image_folder": _load_image_folder,
     "flat": _load_flat,
     "parquet": _load_parquet,
 }
 
 
-def get_transformation(transformation: Optional[Transformation] = None) -> T.Compose:
-    out: list[Callable[..., object]] = [T.ToTensor()]
-    if transformation is not None:
-        out.append(
-            T.Normalize(
-                mean=getattr(transformation, "mean", (0.5, 0.5, 0.5)),
-                std=getattr(transformation, "std", (0.5, 0.5, 0.5)),
-            )
-        )
-        if transformation.size is not None:
-            out.append(T.Resize((transformation.size, transformation.size)))
-        if transformation.crop is not None:
-            out.append(T.CenterCrop(transformation.crop))
-    return T.Compose(out)
+def _seed_worker(worker_id: int) -> None:
+    worker_seed = torch.initial_seed() % 2 ** 32
+    numpy.random.seed(worker_seed)
+    random.seed(worker_seed)
+
+
+def _collate_detection(batch):
+    return tuple(zip(*batch))
 
 
 def get_dataloader(
@@ -48,10 +45,13 @@ def get_dataloader(
         dataset_type: DATASET_TYPES = "image_folder",
         folder_data: Optional[str] = None,
         parquet_info: Optional[ParquetInfo] = None,
+        task: Optional[Task] = None,
+        images_dir: Optional[str] = None,
+        annotations_file: Optional[str] = None,
         **kwargs,
 ) -> DataLoader:
     """
-    Return the DataLoader to use and the inverse transformation to use for displaying the images
+    Return an ordered DataLoader for the explicitly selected dataset format.
 
     ``dataset_info`` is retained for compatibility with callers that pass the
     parsed dataset metadata. Loader selection and format-specific options are
@@ -76,9 +76,14 @@ def get_dataloader(
         raise ValueError(
             f"Unsupported dataset type: {dataset_type}. "
             f"Supported types: {sorted(_LOADERS.keys())}. "
-            "For COCO, YOLO, video, medical volumes, or another custom "
+            "For YOLO, video, medical volumes, or another custom "
             "format, pass a torch.utils.data.Dataset instance."
         ) from None
+    if task is not None:
+        expected_task = Task.Detection if dataset_type == "coco" else Task.Classification
+        if task != expected_task:
+            raise ValueError(f"Dataset type {dataset_type!r} does not support task {task}.")
+
     # Format-specific settings are optional for direct ``get_dataloader``
     # callers.  Do not pass them to every loader: apart from making a missing
     # ``parquet_info`` crash, doing so also duplicated explicit keyword
@@ -96,9 +101,12 @@ def get_dataloader(
         kwargs.setdefault("read_batch_size", max(1, batch))
         kwargs.setdefault("limit", subset)
 
+    if dataset_type == "coco":
+        kwargs.update(images_dir=images_dir, annotations_file=annotations_file)
+
     dataset: Dataset = loader(
         root=root,
-        transform=transform if transform is not None else get_transformation(),
+        transform=transform if transform is not None else get_transform_dataset(),
         split=folder_data,
         **kwargs,
     )
@@ -118,5 +126,8 @@ def get_dataloader(
         shuffle=False,
         num_workers=max(0, num_workers),
         pin_memory=True,
+        worker_init_fn=_seed_worker,
+        generator=torch.Generator().manual_seed(1234),
+        collate_fn=_collate_detection if dataset_type == "coco" else None,
     )
     return dataloader
