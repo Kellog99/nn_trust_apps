@@ -61,6 +61,7 @@ def get_attacks_info(
             objective=_str_enum(getattr(info, "objective", None)),
             privacy_type=_str_enum(getattr(info, "privacy_type", None)),
         )
+
     return out
 
 
@@ -75,7 +76,7 @@ def get_statistics_info(
 
         out: dict[str, RegisteredObject] = {}
 
-        for stat in SF.get_list_classes(task={Task.Classification}):
+        for stat in SF.get_list_classes():
             if stat in excluded_statistics:
                 continue
             metric_info: InfoStatistic = InfoStatistic.model_validate(SF.get_information(id=stat, exclude=set()))

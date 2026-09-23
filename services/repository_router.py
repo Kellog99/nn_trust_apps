@@ -74,7 +74,6 @@ def get_info(
     file_name: str = "report.json" if model_type == "report_model" else "info.json"
     for full_path in repo_path.glob(f"**/{file_name}"):
         root = full_path.parent
-        print(full_path)
         with full_path.open("r", encoding="utf-8") as f:
             raw = json.load(f)
 
