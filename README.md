@@ -68,12 +68,13 @@ uv run python report.py --benchmark_path path/to/report.json --output_path ./rep
 
 These are the supported datasets type:
 
-| Type           | Description                                                                               |
-|----------------|-------------------------------------------------------------------------------------------|
-| `image_folder` | Classification images organized in one folder per class.                                  |
-| `flat`         | Images in a single folder, with optional labels in `labels.csv` or `labels.json`.         |
-| `parquet`      | Classification images and labels stored in Parquet files, with configurable column names. |
-| `coco`         | Object-detection images with annotations in COCO JSON format.                             |
+| Type           | Description                                                                               | Status |
+|----------------|-------------------------------------------------------------------------------------------|---------
+| `image_folder` | Classification images organized in one folder per class.                                  | Supported |
+| `flat`         | Images in a single folder, with optional labels in `labels.csv` or `labels.json`.         | Supported |
+| `parquet`      | Classification images and labels stored in Parquet files, with configurable column names. | Supported |
+| `coco`         | Object-detection images with annotations in COCO JSON format.                             | Supported |
+| `prompt_jsonl` | Text/prompt datasets for LLM attacks, stored as JSON/JSONL with a prompt field and optional target/category fields.                                  | Planned |
 
 ## Supported models
 
