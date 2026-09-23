@@ -30,10 +30,6 @@ def _normalize_attack_parameters(attack_id: str | None, parameters: dict) -> dic
 @router.post("/single_attack")
 async def single_attack(
         body: SingleAttackProps = Body(...),
-        device: str = Query(
-            default="cpu",
-            description="The device to run the model on."
-        )
 ) -> SingleAttackOutput:
     """
     This function handle the POST request for executing a single image attack given:
@@ -42,14 +38,12 @@ async def single_attack(
         3. a model: ModelInfo
     Args:
         body: Body of the request
-        device: device where the computations are done.
 
     Returns:
         SingleAttackOutput: a collection of all the results concerning a single attack.
     """
-
-    device: torch.device = torch.device(device if device in ["cpu", "cuda", "mps"] else "cpu")
-
+    device = body.resolve_device()
+    print(f"device = {device}")
     ################## MODEL ##################
     try:
         # Extracting the values from the body

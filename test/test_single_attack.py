@@ -5,13 +5,38 @@ import torch
 import torchvision
 from PIL.Image import Image
 
-from models import SingleAttackOutput
+from models import SingleAttackOutput, SingleAttackProps
 from models.info import Transformation
 from nn_trust import CVModelAdapter, AttackConfig, EvasionAttack, AttackObjective, Task
 from nn_trust.attack.attack_factory import AttackFactory as AF
 from services.utils.attack import single_attack_performance
 from services.utils.utils import tensor_image_to_b64str
 from test.utils import get_dummy_cv_model, available_devices, get_dog_image
+
+
+@pytest.mark.parametrize(
+    ("requested_device", "cuda_available", "mps_available", "expected_device"),
+    [
+        ("cpu", True, True, "cpu"),
+        ("gpu", True, True, "cuda"),
+        ("gpu", False, True, "mps"),
+        ("gpu", False, False, "cpu"),
+        ("cuda", False, False, "cpu"),
+        ("mps", False, False, "cpu"),
+    ],
+)
+def test_single_attack_device_resolution(
+        monkeypatch: pytest.MonkeyPatch,
+        requested_device: str,
+        cuda_available: bool,
+        mps_available: bool,
+        expected_device: str,
+):
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: cuda_available)
+    monkeypatch.setattr(torch.backends.mps, "is_available", lambda: mps_available)
+    body = SingleAttackProps.model_construct(device=requested_device)
+
+    assert body.resolve_device() == torch.device(expected_device)
 
 
 @pytest.mark.parametrize(
