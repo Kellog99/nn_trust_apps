@@ -7,6 +7,7 @@ results, and can generate a PDF report.
 ## Table of contents
 
 - [Setup](#setup)
+    - [CUDA support for `llama-cpp-python`](#cuda-support-for-llama-cpp-python)
 - [Run a benchmark](#run-a-benchmark)
 - [Supported datasets](#supported-datasets)
 - [Supported models](#supported-models)
@@ -24,6 +25,50 @@ Requires Python 3.11, [uv](https://docs.astral.sh/uv/), and Git.
 git submodule update --init --recursive
 uv sync --python 3.11
 ```
+
+### CUDA support for `llama-cpp-python`
+
+The example below uses Ubuntu 24.04, NVIDIA driver 580, CUDA 13.0, and an Ada GPU (compute capability 8.9).
+Adjust the toolkit version and GPU architecture for your hardware. The CUDA Toolkit (`nvcc`) is required in addition
+to the driver.
+
+Install the toolkit if needed:
+
+```bash
+wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2404/x86_64/cuda-keyring_1.1-1_all.deb
+sudo dpkg -i cuda-keyring_1.1-1_all.deb
+sudo apt update
+sudo apt install cuda-toolkit-13-0
+```
+
+From the project root, configure CUDA and install the package into the project environment:
+
+```bash
+export CUDA_HOME=/usr/local/cuda-13.0
+export PATH=$CUDA_HOME/bin:$PATH
+export CUDAToolkit_ROOT=$CUDA_HOME
+export LD_LIBRARY_PATH=$CUDA_HOME/lib64:$LD_LIBRARY_PATH
+
+CMAKE_ARGS="-DGGML_CUDA=on -DCMAKE_CUDA_ARCHITECTURES=89" \
+  uv pip install llama-cpp-python --force-reinstall --upgrade --no-cache-dir
+```
+
+Add the exports to `~/.bashrc` to persist them. With the project virtual environment activated, verify GPU support:
+
+```bash
+python -c "import llama_cpp; print(llama_cpp.llama_supports_gpu_offload())"   # expected: True
+```
+
+Enable GPU offloading when loading a model:
+
+```python
+from llama_cpp import Llama
+
+llm = Llama(model_path="model.gguf", n_gpu_layers=-1, verbose=True)
+```
+
+Use a smaller positive `n_gpu_layers` value if the model exceeds available VRAM. For missing `nvcc` or `libcudart`
+errors, check the toolkit path and environment variables above.
 
 ## Run a benchmark
 
@@ -92,8 +137,12 @@ These are the supported model type:
 | `ultralytics`   | Ultralytics detection models loaded from `model.pt` or a model ID.                     |
 | `HuggingFace`   | Hugging Face image-classification or causal language models, selected by task.         |
 | `Ollama`        | Language models served by an Ollama instance.                                          |
+| `Llamacpp`      | Local GGUF files, including files nested in Hugging Face cache directories.            |
 | `Gemini`        | Gemini language models accessed through an API, requiring an API key.                  |
 | `OpenRouter`    | Language models accessed through OpenRouter, requiring an API key.                     |
+
+For `Llamacpp`, pass a GGUF file or a directory as `model_path`. Directories are searched recursively;
+if multiple distinct GGUF files are found, provide the exact file path to select the model.
 
 ## Security report PDF
 

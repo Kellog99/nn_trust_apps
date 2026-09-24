@@ -17,6 +17,7 @@ data/
 output/
 tmp/
 :memory:.ses
+cuda-keyring_1.1-1_all.deb
 
 # Submodules / build artifacts
 .idea

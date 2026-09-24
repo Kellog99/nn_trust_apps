@@ -1,23 +1,16 @@
-import logging
+from pprint import pprint
+from typing import cast
 
 import torch
-from fastapi import APIRouter, Body, Query, HTTPException
+from fastapi import APIRouter, Body, HTTPException
 from pydantic import ValidationError
 
-from models import SingleAttackOutput, SingleAttackProps, ModelInfo, RegisteredObject, JailbreakHistoryEntry
+from models import SingleAttackOutput, SingleAttackProps, ModelInfo, RegisteredObject, JailbreakAttackProps, \
+    JailbreakAttackOutput
 from nn_trust import Task, EvasionAttack, AttackFactory as AF, NLPModelAdapter, CVModelAdapter
-from nn_trust.attack import (
-    save_conversation_state,
-    load_conversation_state,
-    list_conversation_states,
-    delete_conversation_state,
-)
-from nn_trust.attack.nlp import ConversationState, NLPAttack
 from services.utils.attack import single_attack_performance
 from services.utils.utils import b64str_to_pil
 from utils import load_model
-
-logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/test", tags=["jobs management", "jobs utils"])
 
@@ -60,6 +53,9 @@ async def single_attack(
         # Extracting the values from the body
         model_info: ModelInfo = body.model
         atk: RegisteredObject = body.attack
+        base64_img: str | None = body.input
+        if base64_img is None:
+            raise ValueError("The input image in the evasion attack cannot be None.")
     except ValidationError as e:
         print("=== VALIDATION ERROR ===")
         print(e.json())
@@ -120,52 +116,35 @@ async def single_attack(
 
 @router.post("/jailbreaking")
 async def jailbreaking(
-        body: dict = Body(...),
-        device: str = Query(
-            default="cuda",
-            description="The device to run the model on."
-        )
-
-) -> dict:
+        body: JailbreakAttackProps = Body(...),
+) -> JailbreakAttackOutput:
     """
     Handle the POST request for executing a jailbreak attack.
     """
-    device = torch.device(device if device in ["cpu", "cuda", "mps"] else "cpu")
-
-    model_info = body.get("model")
-    attack_info = body.get("attack")
-    goal = body.get("input")
-    attacker_info = body.get("attacker")
-    judge_info = body.get("judge")
-    max_new_tokens = body.get("max_new_tokens", 2048)
-
-    missing = [
-        name for name, value in (
-            ("model", model_info),
-            ("attack", attack_info),
-            ("input", goal),
-        )
-        if value is None
-    ]
+    device: torch.device = body.resolve_device()
+    missing: list[str] = [n for n in ("model", "attack", "input") if getattr(body, n) is None]
     if missing:
         raise HTTPException(
             status_code=422,
             detail=f"Missing required field(s): {', '.join(missing)}",
         )
 
-    # ── 1. Load model ──────────────────────────────────────────────────────
-    def _load_nlp_model(
-            info: dict,
+    attack_info: RegisteredObject = body.attack
+    goal: str = body.input
+    max_new_tokens = body.max_new_tokens if body.max_new_tokens is not None else 4096
+
+    def _load_model(
+            info: ModelInfo,
             max_tokens: int = 256
     ) -> NLPModelAdapter:
-        """Load an NLP model adapter from its info dict."""
+
         m = load_model(
-            model_type=info.get("model_type", "HuggingFace"),
-            model_path=info.get("repository"),
-            task=Task.from_str(info.get("task", "language")),
-            model_api=info.get("api"),
-            model_id=info.get("id"),
-            api_key=info.get("api_key") or info.get("key"),
+            model_id=info.id,
+            model_type=info.model_type,
+            model_path=info.repository,
+            task=info.task if isinstance(info.task, Task) else Task.from_str(info.task),
+            model_api=info.api,
+            api_key=info.api_key,
             max_new_tokens=max_tokens,
         )
         if hasattr(m, "model") and hasattr(m.model, "parameters"):
@@ -173,62 +152,49 @@ async def jailbreaking(
             m.eval()
         return m
 
-    def _load_if_provided(
-            info: dict | None,
-            fallback_model,
-            fallback_info: dict,
-            max_tokens: int = 256
-    ) -> NLPModelAdapter:
-        if info is None or info.get("id") == fallback_info.get("id"):
-            return fallback_model
-        return _load_nlp_model(info, max_tokens=max_tokens)
-
     # Target model (always uses the route model from the store)
-    target_model = _load_nlp_model(model_info, max_tokens=max_new_tokens)
+    target_model = _load_model(
+        info=body.model,
+        max_tokens=max_new_tokens
+    )
 
     # Attacker and judge — fall back to target when not provided or same ID
-    attacker_model = _load_if_provided(attacker_info, target_model, model_info, max_tokens=max_new_tokens)
-    judge_model = _load_if_provided(judge_info, target_model, model_info, max_tokens=16)
+    attacker_model = _load_model(
+        info=cast(ModelInfo, body.attacker),
+        max_tokens=max_new_tokens
+    )
+
+    judge_model = _load_model(
+        info=cast(ModelInfo, body.judge),
+        max_tokens=16
+    )
 
     # ── 2. Instantiate the attack ───────────────────────────────────────────
     kwargs = _normalize_attack_parameters(
-        attack_info.get("id"),
-        {param.get("id"): param.get("default") for param in attack_info.get("parameters", [])},
+        attack_info.id,
+        {
+            param.id: param.default
+            for param in attack_info.parameters
+        },
     )
+    kwargs["verbose"] = True
+
+    pprint(kwargs)
     attack = AF.create(
-        class_id=attack_info.get("id"),
+        class_id=attack_info.id,
         model=target_model,
         attacker=attacker_model,
         judge=judge_model,
-        verbose=True,
         device=device,
         **kwargs
     )
-
+    print(" Attack Created ".center(40, "#"))
     # 3. Execution
+    print(" Generating the prompt ".center(40, "#"))
     state = attack.generate(goal=goal)
+    print(" Prompt generated ".center(40, "#"))
 
-    # 4. Persist the run so it can be replayed later from the "past attacks" board.
-    # Saving must never break a successful attack response.
-    try:
-        save_conversation_state(state, attack_id=attack_info.get("id"))
-    except Exception:
-        logger.exception("Failed to save conversation state for attack '%s'", attack_info.get("id"))
-
-    # The attack knows how its own runs are shaped (e.g. TreeCrescendo returns
-    # one root-to-leaf path per leaf), so let it extract the conversations.
-    return _conversation_state_to_output(attack.extract_conversations(state), state)
-
-
-def _conversation_state_to_output(
-        conversations: list[list[dict]],
-        state: ConversationState,
-) -> dict:
-    """
-    Turn a (conversations, state) pair -- coming either from a freshly executed
-    attack or from a replayed saved state -- into the payload the frontend expects.
-    """
-    # Build response from ConversationState (now a dataclass, not Pydantic)
+    # 4. Build response from ConversationState (now a dataclass, not Pydantic)
     # The ConversationState has: goal, success, best_response, best_score,
     # attempts (list[AttackAttempt]), metadata, stateful flag, etc.
 
@@ -238,101 +204,36 @@ def _conversation_state_to_output(
     if scored_attempts:
         best_prompt = max(scored_attempts, key=lambda attempt: attempt.score).prompt
 
-    history = [turn for conversation in conversations for turn in conversation]
+    if state.stateful:
+        # Stateful attacks keep one continuous conversation in target_context.
+        conversations = [[
+            {
+                "role": "attacker" if message.role == "user" else "target",
+                "content": message.content,
+                "score": None,
+            }
+            for message in state.target_context
+            if message.role != "system"
+        ]]
+        history = conversations[0]
+    else:
+        # Stateless attacks record independent prompt/response attempts.
+        conversations = [
+            [
+                {"role": "attacker", "content": attempt.prompt, "score": attempt.score},
+                {"role": "target", "content": attempt.response, "score": attempt.score},
+            ]
+            for attempt in state.attempts
+        ]
+        history = [turn for conversation in conversations for turn in conversation]
 
-    ret: dict = {
-        "goal": state.goal,
-        "success": state.success,
-        "best_prompt": best_prompt,
-        "best_response": state.best_response or "",
-        "best_score": state.best_score if state.best_score != float("-inf") else 0.0,
-        "history": history,
-        "conversations": conversations,
-        "metadata": state.metadata,
-    }
-
-    return ret
-
-
-# --- Jailbreak attack history (saved states board) --- #
-class _StatelessNLPAttack(NLPAttack):
-    """
-    Minimal concrete `NLPAttack` used only to call the (state-only)
-    `extract_conversations` method on a saved state without a live model.
-    """
-
-    def step(self, i, state, **kwargs):
-        raise NotImplementedError
-
-
-def _attack_class_for_replay(attack_id: str) -> type:
-    """Resolve the registered attack class for `attack_id`, falling back to
-    the base extraction logic if it isn't a known NLP attack."""
-    try:
-        cls = AF.get_info(attack_id).class_type
-        if issubclass(cls, NLPAttack):
-            return cls
-    except Exception:
-        pass
-    return _StatelessNLPAttack
-
-
-@router.get("/jailbreaking/history")
-async def jailbreaking_history(
-        attack_id: str = Query(..., description="Registered attack id whose saved runs to list."),
-) -> list[JailbreakHistoryEntry]:
-    """
-    List the saved runs available for `attack_id`, most recent first, so the
-    frontend can offer them as a "past attacks" board.
-    """
-    try:
-        entries = list_conversation_states(attack_id)
-    except Exception:
-        logger.exception("Failed to list saved states for attack '%s'", attack_id)
-        raise HTTPException(status_code=500, detail="Failed to list saved attack states.")
-
-    return [JailbreakHistoryEntry(**entry) for entry in entries]
-
-
-@router.get("/jailbreaking/history/{attack_id}/{save_id}")
-async def jailbreaking_history_replay(
-        attack_id: str,
-        save_id: str,
-) -> dict:
-    """
-    Load a previously saved run for `attack_id` and return it in the same
-    shape as `/jailbreaking`, so the frontend can display it as if the attack
-    had just been executed.
-    """
-    try:
-        state = load_conversation_state(attack_id=attack_id, save_id=save_id)
-    except FileNotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e))
-
-    # `extract_conversations` only relies on `state`, never on the attack's own
-    # configuration (model/attacker/judge) -- so we can call it on an
-    # uninitialized instance of the registered attack class instead of
-    # reloading live models just to replay a saved conversation.
-    attack_cls = _attack_class_for_replay(attack_id)
-    conversations = attack_cls.extract_conversations(object.__new__(attack_cls), state)
-
-    return _conversation_state_to_output(conversations, state)
-
-
-@router.delete("/jailbreaking/history/{attack_id}/{save_id}")
-async def jailbreaking_history_delete(
-        attack_id: str,
-        save_id: str,
-) -> dict:
-    """
-    Delete one saved run of `attack_id` from the "past attacks" board.
-    """
-    try:
-        delete_conversation_state(attack_id=attack_id, save_id=save_id)
-    except FileNotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e))
-    except Exception:
-        logger.exception("Failed to delete saved state '%s/%s'", attack_id, save_id)
-        raise HTTPException(status_code=500, detail="Failed to delete the saved attack state.")
-
-    return {"deleted": save_id}
+    return JailbreakAttackOutput(
+        goal=state.goal,
+        success=state.success,
+        best_prompt=best_prompt,
+        best_response=state.best_response or "",
+        best_score=state.best_score if state.best_score != float("-inf") else 0.0,
+        history=history,
+        conversations=conversations,
+        metadata=state.metadata,
+    )
