@@ -31,7 +31,7 @@ from .target_training import LoadedPrivacyTargetModel, train_privacy_target_mode
 
 
 def ensure_privacy_registries() -> None:
-    """Import privacy datasets, models, and attacks so factories are populated."""
+    """Import privacy datasets, model, and attacks so factories are populated."""
     register_privacy_resources()
 
 

@@ -16,12 +16,11 @@ __pycache__
 data/
 output/
 tmp/
-
-# Test configs / scratch
-test_*.yaml
-test_*.py
+:memory:.ses
 
 # Submodules / build artifacts
+.idea
+
 */submodules/
 */benchmark_out/
 */assets/

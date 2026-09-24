@@ -5,10 +5,9 @@ import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from models.main_model import ServerConfig, parsed_argument
-from attack_server.routers import api_router
-from attack_server.routers.info_router import router
 from benchmarking.privacy.loading import ensure_privacy_registries
+from models import ServerConfig, parsed_argument
+from services import api_router
 
 ########### Environmental variables ###########
 args = parsed_argument(ServerConfig)
@@ -38,9 +37,10 @@ def create_app() -> FastAPI:
     app = FastAPI(
         title='TITANN backend',
         description='This is the TITANN backend.',
-        servers=[{'url': 'https://titann.swagger.io/api/v3'}],
+        # run with: PYTHONPATH=.:submodules/nn_trust:/home/antonio-liguori/.cache/torch/hub/chenyaofo_pytorch-cifar-models_master uv run python app.py --host 127.0.0.1 --port 8000
+        servers=[{"url": "http://127.0.0.1:8000"}],
+
     )
-    app.include_router(router)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["*"],
@@ -66,5 +66,6 @@ if __name__ == "__main__":
         host=config.host,
         port=config.port,
         workers=config.workers,
-        factory=True
+        factory=True,
+        reload=config.reload
     )

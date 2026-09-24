@@ -1,0 +1,73 @@
+Test failures and fixes
+======================
+
+Scope: every test in test/ using the PyCharm-configured .venv interpreter.
+The complete baseline run included CPU and CUDA: 52 passed, 31 failed,
+5 setup errors, 2 deprecation warnings.
+Final full run: 87 passed, 0 failed, 0 errors, 2 warnings in 23.32 seconds.
+Both CPU and CUDA cases ran. Git diff whitespace checks also passed.
+
+Logs
+----
+test_errors_initial.txt: original full tracebacks. The first sandboxed run
+was interrupted after an HTTP test stalled; the subsequent complete run
+outside the sandbox is appended in the same file.
+test_errors_recheck.txt: verification runs, including the temporary missing
+task fields in the replacement fixture and their successful correction.
+test_results_final.txt: final full-suite output.
+
+Causes and fixes
+---------------
+1. Evaluation stacked batches that were already tensors (10 failed cases).
+   Stack only list/tuple batches; move existing tensors directly to the device.
+
+2. Evaluation error-handling tests were blocked by that batch error (2 cases).
+   Restore cleanup of both checkpoint and attack loggers in finally blocks,
+   including when generation or metric computation fails.
+
+3. Detection tests patched evaluation.nms after it had moved (2 cases).
+   Patch the detection_predictions helper actually called by evaluation.
+
+4. Executor tests passed a removed use_ray constructor argument (4 cases).
+   Update them to the current serial executor interface. Remove the obsolete
+   Ray parametrization, reducing these four CPU/CUDA cases to two. Keep all
+   execution and metrics assertions. Use pytest's isolated temporary paths.
+
+5. Job listing failed when called directly without model/dataset IDs (1 case).
+   Use ordinary None defaults with FastAPI Annotated query metadata. Support
+   listing all saved results for a benchmark or a model/dataset scope when
+   attack IDs are omitted; require model/dataset IDs together when supplied.
+
+6. PDF generation required a default logo absent from this checkout (8 cases).
+   Allow reports without the optional default logo. Explicitly supplied
+   missing logo paths still raise an error.
+
+7. Single-attack tests omitted the required task argument (4 cases).
+   Supply classification task and explicit image preprocessing. Fix the
+   undefined std variable in perturbation rendering, using configured
+   normalization or unit scaling when no transformation is supplied.
+   In nn_trust/_attack.py, record confidence at each iteration when an
+   external logger is supplied. Close the service logger after reading it.
+
+8. Router tests loaded an absent, ignored benchmark-request.json (5 errors).
+   Replace that dependency with a small temporary model and image dataset,
+   while retaining real repository loading, attack execution and reporting.
+
+Additional correctness check
+----------------------------
+Evaluation supplied negative one-hot targets to Attack.generate, which now
+prepares targets itself using argmax. This could select the wrong class.
+Supply positive one-hot ground-truth labels and let the attack encode them
+once. A new regression test checks the targets received by a real attack's
+step, including an input the model misclassifies.
+
+Test count: baseline 88 - 2 obsolete Ray variants + 1 regression = 87.
+
+Warnings
+--------
+The baseline reports two non-failing deprecations: Pydantic class-based
+configuration in tree_crescendo.py and Starlette TestClient's use of httpx.
+These are recorded in the logs; no dependency changes or warning filters
+were introduced.
+
+Existing workspace changes were preserved. No commits were created.
