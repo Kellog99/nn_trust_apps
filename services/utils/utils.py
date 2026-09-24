@@ -44,6 +44,9 @@ def get_parameter_prop(
     """Characterizes an attack's parameter as a ParametersProps object."""
     name = _param_name(id, param_info)
     ann = param_info.annotation
+    args = get_args(ann)
+    if len(args) == 2 and type(None) in args:
+        ann = next(arg for arg in args if arg is not type(None))
 
     if get_origin(ann) is Literal:
         options = [str(o) for o in get_args(ann)]
@@ -54,14 +57,16 @@ def get_parameter_prop(
         )
 
     if ann is str:
-        default = str(_get_value(param_info.default, ""))
+        default = _get_value(param_info.default, "")
+        default = None if default is None else str(default)
         return ParametersProps(
             id=id, name=name, default=default,
             description=param_info.description, kind="string",
         )
 
     if ann is bool:
-        default = bool(_get_value(param_info.default, False))
+        default = _get_value(param_info.default, False)
+        default = None if default is None else bool(default)
         return ParametersProps(
             id=id, name=name, default=default,
             description=param_info.description, kind="boolean",
@@ -72,18 +77,24 @@ def get_parameter_prop(
     lo = max(lo, 0.0)
     hi = min(hi, float(max_value))
 
-    raw_default = _get_value(param_info.default, None)
+    raw_default = param_info.default
     # Zero is a valid and meaningful default for several optimizer
     # parameters (for example FOM's momentum and dampening).  Do not use
     # truthiness here, otherwise an explicit default of 0 is replaced by the
     # midpoint of the allowed range.
-    default = (lo + (hi - lo) / 2) if raw_default is None else raw_default
-    default = _clamp(default, lo, hi)
+    if raw_default is PydanticUndefined:
+        default = (lo + hi) / 2
+    elif raw_default is None:
+        default = None
+    else:
+        default = _clamp(raw_default, lo, hi)
 
     if lo >= hi:
         raise ValueError(f"For the parameter {id}, the min ({lo!r}) must be strictly less than max ({hi!r})")
 
     step = getattr(param_info, "step", None)
+    if step is None and isinstance(param_info.json_schema_extra, dict):
+        step = param_info.json_schema_extra.get("step")
     if step is None:
         step = (hi - lo) / max_value
         if is_int:

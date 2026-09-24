@@ -13,7 +13,7 @@ class ParametersProps(BaseModel):
     min: Optional[float] = None
     max: Optional[float] = None
     step: Optional[float] = None
-    default: float | int | str | bool | dict[str, Any] | list[Any]
+    default: float | int | str | bool | dict[str, Any] | list[Any] | None
     description: Optional[str] = None
     kind: Optional[Literal["number", "enum", "boolean", "string"]] = "number"
     options: Optional[list[str]] = None

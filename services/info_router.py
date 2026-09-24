@@ -1,5 +1,6 @@
 import inspect
 import logging
+from typing import get_args
 
 import torch
 from fastapi import APIRouter, HTTPException, Request, Depends, Body
@@ -27,11 +28,20 @@ def _str_enum(v) -> str | None:
 
 def _collect_params(atk: str) -> list[ParametersProps]:
     """
-    Collecting all the parameters that are (int, float, str, bool) and returning a list of ParametersProp
+    Collect scalar attack parameters, including optional scalar fields.
     """
     params = []
     seen: set[str] = set()
-    for pid, pinfo in AF.get_config_param(atk, attribute_type=(int, float, str, bool)):
+    scalar_types = (int, float, str, bool)
+    for pid, pinfo in AF.get_config_param(atk):
+        annotation = pinfo.annotation
+        args = get_args(annotation)
+        if annotation not in scalar_types and not (
+            len(args) == 2
+            and type(None) in args
+            and any(arg in scalar_types for arg in args)
+        ):
+            continue
         if pid in seen:
             continue
         seen.add(pid)
