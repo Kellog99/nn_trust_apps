@@ -1,0 +1,41 @@
+models:
+  - source_path: "~/Desktop/StableAI/model_repository/resnet50"
+
+datasets:
+  - name: "imagenet"
+    num_classes: 1000
+    batch_size: 20
+    type_dataset: 1
+    num_workers: 2
+    source_path: "~/Desktop/StableAI/dataset_repository/imagenette2/"
+    transform_config:
+      size: 256
+      crop: 224
+      transform_id: "imagenet_like_crop"
+      mean: [ 0.5074, 0.5308, 0.5306 ]
+      std: [ 0.2639, 0.2518, 0.2521 ]
+
+attacks:
+  - id: "contrastbaseline"
+  - id: "gaussianbaseline"
+  - id: "identitybaseline"
+  - id: "saltnpeppernoisebaseline"
+  - id: "uniformbaseline"
+
+metrics:
+  - id: "confusion_matrix"
+
+options:
+  load_results: false                 # loading any existing results.
+  overwrite: true                     # overwriting the results if a benchmarking is performed
+  max_saved_elements: 10
+  num_workers: 1
+  verbose: true
+  subset: 100
+  save_perturbation: false
+  ray: false
+  gpu: true
+  create_pdf: true
+
+
+

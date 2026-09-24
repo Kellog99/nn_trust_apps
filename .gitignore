@@ -7,7 +7,24 @@
 *.json
 *.png
 *.pdf
+
+
+*.sh
 __pycache__
-mlruns
-lightning_logs
-.venv
+
+# Runtime artifacts
+data/
+output/
+tmp/
+:memory:.ses
+
+# Submodules / build artifacts
+.idea
+
+*/submodules/
+*/benchmark_out/
+*/assets/
+!docs/*.jpg
+*/datasets_repo/
+*/models_repo/
+*/benchmark_out/*

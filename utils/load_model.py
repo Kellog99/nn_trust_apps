@@ -1,0 +1,215 @@
+import json
+from pathlib import Path
+from typing import Callable, Literal, Optional
+
+import torch
+
+from models.info import MODEL_TYPES, ModelInfo
+from nn_trust import CVModelAdapter, Task, Knowledge, NLPModelAdapter
+from nn_trust.attack.nlp.judge import BaseJudge, LLMJudge
+from nn_trust.attack.nlp.judges import (
+    JailJudgeGuard,
+    LlamaGuardJudge,
+    LlamaGuardJudgeWithCategories,
+    Qwen3GuardJudge,
+    Qwen3GuardStreamJudge,
+    WildGuardJudge,
+    WildGuardLogitJudge,
+    GraniteGuardianJudge,
+    GraniteGuardianLogitJudge,
+    RewardAnythingJudge,
+)
+from utils.model._loader_nlp_models import (
+    _load_ollama,
+    _load_huggingface_nlp,
+    _load_gemini,
+    _load_openrouter,
+    _load_llamacpp
+)
+from utils.model._loaders_cvmodels import (
+    _load_plain,
+    _load_api,
+    _load_onnx,
+    _load_timm,
+    _load_huggingface_cv,
+    _load_model_weights,
+    _load_torch_dynamo,
+    _load_torch_script,
+    _load_ultralytics
+)
+
+
+def load_huggingface_model(
+        task: Task,
+        model_path: Optional[Path] = None,
+        model_id: Optional[str] = None,
+        info: Optional[ModelInfo] = None,
+        knowledge: Optional[Knowledge] = None,
+        **kwars,
+) -> CVModelAdapter | NLPModelAdapter:
+    """
+    It has to switch the loading between the CV and the NLP model
+    """
+    match task:
+        case Task.Language:
+            if model_id is None:
+                raise ValueError("model_id is required for getting the Hugging face model.")
+            if knowledge is None:
+                raise ValueError("knowledge is required for getting the Hugging face model.")
+            return _load_huggingface_nlp(
+                model_id=model_id,
+                knowledge=knowledge,
+                task=task,
+                **kwars,
+            )
+        case Task.Classification:
+            if model_path is None:
+                raise ValueError("model_path is required for Classification")
+            if info is None:
+                raise ValueError("info is required for Classification")
+
+            return _load_huggingface_cv(
+                model_path=model_path,
+                info=info,
+                task=task,
+                **kwars,
+            )
+        case _:
+            raise ValueError(f"Unsupported task: {task}")
+
+
+_LOADERS: dict[MODEL_TYPES, Callable[..., CVModelAdapter | NLPModelAdapter]] = {
+    "Ollama": _load_ollama,
+    "Gemini": _load_gemini,
+    "OpenRouter": _load_openrouter,
+    "HuggingFace": load_huggingface_model,
+    "plain": _load_plain,
+    "timm": _load_timm,
+    "model_weights": _load_model_weights,
+    "torch_script": _load_torch_script,
+    "torch_dynamo": _load_torch_dynamo,
+    "onnx": _load_onnx,
+    "api": _load_api,
+    "ultralytics": _load_ultralytics,
+    "Llamacpp": _load_llamacpp
+}
+
+JUDGE_TYPES = Literal[
+    "jailjudge",
+    "llama_guard",
+    "llama_guard_categories",
+    "qwen3_guard",
+    "qwen3_guard_stream",
+    "wildguard",
+    "wildguard_logit",
+    "granite_guardian",
+    "granite_guardian_logit",
+    "reward_anything",
+]
+
+_JUDGE_LOADERS: dict[JUDGE_TYPES, type[BaseJudge]] = {
+    "jailjudge": JailJudgeGuard,
+    "llama_guard": LlamaGuardJudge,
+    "llama_guard_categories": LlamaGuardJudgeWithCategories,
+    "qwen3_guard": Qwen3GuardJudge,
+    "qwen3_guard_stream": Qwen3GuardStreamJudge,
+    "wildguard": WildGuardJudge,
+    "wildguard_logit": WildGuardLogitJudge,
+    "granite_guardian": GraniteGuardianJudge,
+    "granite_guardian_logit": GraniteGuardianLogitJudge,
+    "reward_anything": RewardAnythingJudge,
+}
+
+
+# ---------------------------------------------------------------------
+def load_model(
+        model_type: MODEL_TYPES = "plain",
+        model_id: Optional[str] = None,
+        model_path: Optional[str | Path] = None,
+        api_url: Optional[str] = None,
+        task: Optional[Task] = None,
+        num_classes: Optional[int] = None,
+        device: torch.device = torch.device("cuda" if torch.cuda.is_available() else "cpu"),
+        is_judge: bool = False,
+        judge_type: JUDGE_TYPES = "jailjudge",
+        **kwargs,
+):
+    r"""
+    Load a model from disk and wrap it into the shared `CVModelAdapter`
+    interface, supporting multiple serialization formats. LLM model are
+    wrapped into the `NLPModelAdapter` subclasses `HuggingFaceNLPAdapter`
+    (HuggingFace causal LM) or `OllamaNLPAdapter` (remote Ollama API).
+
+    Args:
+        model_id
+        model_type: type of model to load (e.g. "HuggingFace", "Llamacpp", "Ollama").
+        model_path: Directory containing the eventual model to load.
+        api_url:
+        task
+        num_classes:
+        device: Target device. Defaults to CUDA if available, else CPU.
+        **kwargs: Overrides merged into the fields loaded from
+            `info.json` (e.g. `num_classes=`, `task=`, `is_judge=`, `judge_type=`).
+
+    Returns:
+        CVModelAdapter | NLPModelAdapter | BaseJudge: A unified adapter
+        or judge wrapping the loaded model.
+    """
+
+    if model_path is not None:
+        resolved_path = Path(model_path).expanduser().resolve() if isinstance(model_path, str) else model_path
+        info_file = resolved_path / "info.json"
+        if info_file.exists():
+            try:
+                with open(info_file, "r") as f:
+                    info_data = json.load(f)
+                is_judge = info_data.get("is_judge", is_judge)
+                judge_type = info_data.get("judge_type", judge_type)
+            except Exception:
+                pass
+
+    _task = Task.from_str(task) if isinstance(task, str) else task
+
+    if model_path is None:
+        raise ValueError("model_path is required if not using remote repos.")
+
+    try:
+        loader = _LOADERS[model_type]
+    except KeyError:
+        raise ValueError(
+            f"Unsupported model type: {model_type}. "
+            f"Supported types: {sorted(_LOADERS.keys())}"
+        )
+    if isinstance(model_path, str):
+        model_path: Path = Path(model_path).expanduser().resolve()
+
+    model: CVModelAdapter | NLPModelAdapter = loader(
+        model_id=model_id,
+        model_path=model_path,
+        task=task,
+        api_url=api_url,
+        device=device,
+        knowledge=Knowledge.White if _task == Task.Classification else Knowledge.Black,
+        **(kwargs if model_type == "Llamacpp" else {}),
+    )
+    if _task == Task.Language and not isinstance(model, NLPModelAdapter):
+        raise ValueError(
+            f"Since the task is NLP, then the model must be a NLP model adapter while here is, {type(model)}."
+        )
+    if num_classes is not None and hasattr(model, "num_classes"):
+        model.num_classes = num_classes
+    model = model.to(device)
+
+    # ── Wrap into Judge if is_judge is True ───────────────────────────────
+    if is_judge:
+        judge_kwargs = {
+            k: v for k, v in kwargs.items()
+            if k in {"safe_token", "unsafe_token", "name", "apply_chat_template", "temperature"}
+        }
+        judge_loader: type[BaseJudge] = _JUDGE_LOADERS.get(judge_type, LLMJudge)
+        return judge_loader(
+            adapter=model,
+            **judge_kwargs
+        )
+
+    return model
