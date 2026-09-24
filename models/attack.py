@@ -28,6 +28,20 @@ class SingleAttackProps(BaseModel):
         return torch.device("cpu")
 
 
+class JailbreakAttackProps(BaseModel):
+    input: str
+    attack: RegisteredObject
+    model: ModelInfo
+    attacker: Optional[ModelInfo] = None
+    judge: Optional[ModelInfo] = None
+    max_new_tokens: Optional[int] = 4096
+    n_ctx: Optional[int] = 8192
+
+    model_config = ConfigDict(
+        arbitrary_types_allowed=True,
+    )
+
+
 class SingleAttackOutput(BaseModel):
     """
     This model has the goal to send the information to the frontend regarding one image attack
@@ -56,3 +70,33 @@ class SingleAttackOutput(BaseModel):
         if isinstance(self.adv_perturbation, torch.Tensor):
             self.adv_perturbation = tensor_image_to_b64str(self.adv_perturbation)
         return self
+
+class Bubble(BaseModel):
+    sender: Literal["user", "model"]
+    msg: str
+    score: Optional[float] = None
+
+
+class JailbreakHistoryEntry(BaseModel):
+    """Lightweight metadata for a saved jailbreak attack run, used to populate the history board."""
+    id: str
+    goal: str
+    success: bool
+    best_score: Optional[float] = None
+    n_attempts: int
+    saved_at: str
+
+
+class JailbreakAttackOutput(BaseModel):
+    model_config = ConfigDict(protected_namespaces=(), arbitrary_types_allowed=True)
+    goal: str
+    success: bool
+    best_prompt: str
+    best_response: str
+    best_score: float
+    history: list[dict]
+    conversations: Optional[list[list[dict]]] = None
+    metadata: dict
+    adversarial_prompt: Optional[str] = None
+    model_response: Optional[str] = None
+    advance_metrics: Optional[dict[str, float]] = None
