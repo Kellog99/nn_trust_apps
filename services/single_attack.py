@@ -12,7 +12,7 @@ from nn_trust.attack import (
     list_conversation_states,
     delete_conversation_state,
 )
-from nn_trust.attack.nlp import ConversationState
+from nn_trust.attack.nlp import ConversationState, NLPAttack
 from services.utils.attack import single_attack_performance
 from services.utils.utils import b64str_to_pil
 from utils import load_model
@@ -215,13 +215,18 @@ async def jailbreaking(
     except Exception:
         logger.exception("Failed to save conversation state for attack '%s'", attack_info.get("id"))
 
-    return _conversation_state_to_output(state)
+    # The attack knows how its own runs are shaped (e.g. TreeCrescendo returns
+    # one root-to-leaf path per leaf), so let it extract the conversations.
+    return _conversation_state_to_output(attack.extract_conversations(state), state)
 
 
-def _conversation_state_to_output(state: ConversationState) -> dict:
+def _conversation_state_to_output(
+        conversations: list[list[dict]],
+        state: ConversationState,
+) -> dict:
     """
-    Turn a ConversationState -- coming either from a freshly executed attack
-    or from a replayed saved state -- into the payload the frontend expects.
+    Turn a (conversations, state) pair -- coming either from a freshly executed
+    attack or from a replayed saved state -- into the payload the frontend expects.
     """
     # Build response from ConversationState (now a dataclass, not Pydantic)
     # The ConversationState has: goal, success, best_response, best_score,
@@ -233,28 +238,7 @@ def _conversation_state_to_output(state: ConversationState) -> dict:
     if scored_attempts:
         best_prompt = max(scored_attempts, key=lambda attempt: attempt.score).prompt
 
-    if state.stateful:
-        # Stateful attacks keep one continuous conversation in target_context.
-        conversations = [[
-            {
-                "role": "attacker" if message.role == "user" else "target",
-                "content": message.content,
-                "score": None,
-            }
-            for message in state.target_context
-            if message.role != "system"
-        ]]
-        history = conversations[0]
-    else:
-        # Stateless attacks record independent prompt/response attempts.
-        conversations = [
-            [
-                {"role": "attacker", "content": attempt.prompt, "score": attempt.score},
-                {"role": "target", "content": attempt.response, "score": attempt.score},
-            ]
-            for attempt in state.attempts
-        ]
-        history = [turn for conversation in conversations for turn in conversation]
+    history = [turn for conversation in conversations for turn in conversation]
 
     ret: dict = {
         "goal": state.goal,
@@ -271,6 +255,28 @@ def _conversation_state_to_output(state: ConversationState) -> dict:
 
 
 # --- Jailbreak attack history (saved states board) --- #
+class _StatelessNLPAttack(NLPAttack):
+    """
+    Minimal concrete `NLPAttack` used only to call the (state-only)
+    `extract_conversations` method on a saved state without a live model.
+    """
+
+    def step(self, i, state, **kwargs):
+        raise NotImplementedError
+
+
+def _attack_class_for_replay(attack_id: str) -> type:
+    """Resolve the registered attack class for `attack_id`, falling back to
+    the base extraction logic if it isn't a known NLP attack."""
+    try:
+        cls = AF.get_info(attack_id).class_type
+        if issubclass(cls, NLPAttack):
+            return cls
+    except Exception:
+        pass
+    return _StatelessNLPAttack
+
+
 @router.get("/jailbreaking/history")
 async def jailbreaking_history(
         attack_id: str = Query(..., description="Registered attack id whose saved runs to list."),
@@ -303,7 +309,14 @@ async def jailbreaking_history_replay(
     except FileNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
 
-    return _conversation_state_to_output(state)
+    # `extract_conversations` only relies on `state`, never on the attack's own
+    # configuration (model/attacker/judge) -- so we can call it on an
+    # uninitialized instance of the registered attack class instead of
+    # reloading live models just to replay a saved conversation.
+    attack_cls = _attack_class_for_replay(attack_id)
+    conversations = attack_cls.extract_conversations(object.__new__(attack_cls), state)
+
+    return _conversation_state_to_output(conversations, state)
 
 
 @router.delete("/jailbreaking/history/{attack_id}/{save_id}")
