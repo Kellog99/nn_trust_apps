@@ -4,16 +4,15 @@ from pathlib import Path
 from typing import Optional
 
 from transformers import AutoModelForCausalLM, AutoTokenizer
-from nn_trust.attack.nlp.adapters import (
-    LlamacppModelAdapter,
-)
-from nn_trust import NLPModelAdapter, Knowledge, Task
-from nn_trust.attack.nlp.adapters import HuggingFaceNLPAdapter, OllamaNLPAdapter, OpenAINLPAdapter
 
-try:
-    from llama_cpp import Llama
-except ImportError:  # llama_cpp optional: only needed for model_type="Llamacpp"
-    Llama = None
+from nn_trust import NLPModelAdapter, Knowledge, Task
+from nn_trust.attack.nlp.adapters import (
+    HuggingFaceNLPAdapter,
+    OllamaNLPAdapter,
+    OpenAINLPAdapter,
+    LlamacppModelAdapter
+)
+from llama_cpp import Llama
 
 # ---------------------------------------------------------------------
 #  Shared local-LLM registry
@@ -32,21 +31,6 @@ except ImportError:  # llama_cpp optional: only needed for model_type="Llamacpp"
 _HFLLM_CACHE: weakref.WeakValueDictionary = weakref.WeakValueDictionary()
 _HFLLM_TOKENIZERS: weakref.WeakValueDictionary = weakref.WeakValueDictionary()
 _LLAMACPP_CACHE: weakref.WeakValueDictionary = weakref.WeakValueDictionary()
-
-
-def _resolve_gguf(path: str | Path) -> str:
-    """Resolve a GGUF file path, globbing the first .gguf inside a directory.
-    Mirrors the resolution done inside LlamacppModelAdapter so the cache key
-    always points at the actual file that gets loaded.  Results are
-    symlink-resolved (HF snapshot dirs symlink to blobs/, and the same file
-    must produce the same identity regardless of how it is reached)."""
-    p = Path(path)
-    if p.is_dir():
-        gguf_files = list(p.glob("*.gguf"))
-        if not gguf_files:
-            raise FileNotFoundError(f"No .gguf file found in directory: {path}")
-        return str(gguf_files[0].resolve())
-    return str(p.expanduser().resolve())
 
 
 def clear_model_cache() -> None:
@@ -71,6 +55,7 @@ def _load_llamacpp(
         n_gpu_layers: int = -1,
         logits_all: bool = True,
         verbose: bool = False,
+        **kwargs
 ) -> NLPModelAdapter:
     """Load a local GGUF model, reusing a compatible llama.cpp instance.
 
@@ -96,6 +81,22 @@ def _load_llamacpp(
         An NLP adapter backed by the loaded GGUF model. Instances with the
         same path and llama.cpp settings share the underlying model.
     """
+
+    def _resolve_gguf(path: str | Path) -> str:
+        """Resolve a GGUF file or recursively find a unique GGUF in a directory.
+        The cache key always points at the actual file that gets loaded. Results are
+        symlink-resolved (HF snapshot dirs symlink to blobs/, and the same file
+        must produce the same identity regardless of how it is reached)."""
+        p = Path(path).expanduser()
+        if p.is_dir():
+            gguf_files = sorted({f.resolve() for f in p.rglob("*.gguf") if f.is_file()})
+            if not gguf_files:
+                raise FileNotFoundError(f"No .gguf file found in directory: {path}")
+            if len(gguf_files) > 1:
+                raise ValueError(f"Multiple GGUF files found under {path}; provide the exact model_path.")
+            return str(gguf_files[0])
+        return str(p.resolve())
+
     path_to_load = model_path if model_path is not None else model_id
     if path_to_load is None or not str(path_to_load):
         raise ValueError("model_id or model_path is required for Llamacpp models.")

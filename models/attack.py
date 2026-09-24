@@ -9,7 +9,7 @@ from services.utils.image import tensor_image_to_b64str
 
 
 class SingleAttackProps(BaseModel):
-    input: str
+    input: Optional[str] = None
     device: Literal["cpu", "gpu", "cuda", "mps"] = "gpu"
     attack: RegisteredObject
     model: ModelInfo
@@ -28,10 +28,8 @@ class SingleAttackProps(BaseModel):
         return torch.device("cpu")
 
 
-class JailbreakAttackProps(BaseModel):
-    input: str
-    attack: RegisteredObject
-    model: ModelInfo
+class JailbreakAttackProps(SingleAttackProps):
+    goal: str
     attacker: Optional[ModelInfo] = None
     judge: Optional[ModelInfo] = None
     max_new_tokens: Optional[int] = 4096
@@ -40,6 +38,14 @@ class JailbreakAttackProps(BaseModel):
     model_config = ConfigDict(
         arbitrary_types_allowed=True,
     )
+
+    @model_validator(mode="after")
+    def validate_judge(self) -> Self:
+        if self.attacker is None:
+            self.attacker = self.model
+        if self.judge is None:
+            self.judge = self.model
+        return self
 
 
 class SingleAttackOutput(BaseModel):
@@ -70,6 +76,7 @@ class SingleAttackOutput(BaseModel):
         if isinstance(self.adv_perturbation, torch.Tensor):
             self.adv_perturbation = tensor_image_to_b64str(self.adv_perturbation)
         return self
+
 
 class Bubble(BaseModel):
     sender: Literal["user", "model"]
