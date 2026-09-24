@@ -12,7 +12,7 @@ from benchmarking.executor import BenchmarkExecutor
 from models import BenchmarkOptionConfig, ModelInfo, DatasetInfo, ModelReportProps, RegisteredObject
 from models.info import DATASET_TYPES
 from models.reports import ReportMetricsProps, ReportAttackProps
-from nn_trust import AttackFactory as AF, StatisticComposer, StatisticsFactory as SF, ModelAdapter, Task
+from nn_trust import AttackFactory as AF, StatisticComposer, StatisticsFactory as SF, ModelAdapter, Task, CVModelAdapter
 from utils import load_model, get_dataloader
 from utils.dataset_utils import get_transform_dataset
 
@@ -115,7 +115,7 @@ def run_benchmark(
     list_reports: list[ModelReportProps] = []
     for model_cnf in models:
         task: Task = model_cnf.task if isinstance(model_cnf.task, Task) else Task.from_str(model_cnf.task)
-        model: ModelAdapter = load_model(
+        model = load_model(
             model_id=model_cnf.id or model_cnf.name,
             model_type=model_cnf.model_type,
             model_path=model_cnf.repository,
