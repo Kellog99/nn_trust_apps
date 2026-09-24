@@ -9,7 +9,7 @@ from services.utils.image import tensor_image_to_b64str
 
 
 class SingleAttackProps(BaseModel):
-    input: Optional[str] = None
+    input: str
     device: Literal["cpu", "gpu", "cuda", "mps"] = "gpu"
     attack: RegisteredObject
     model: ModelInfo
@@ -29,7 +29,6 @@ class SingleAttackProps(BaseModel):
 
 
 class JailbreakAttackProps(SingleAttackProps):
-    goal: str
     attacker: Optional[ModelInfo] = None
     judge: Optional[ModelInfo] = None
     max_new_tokens: Optional[int] = 4096
@@ -78,32 +77,13 @@ class SingleAttackOutput(BaseModel):
         return self
 
 
-class Bubble(BaseModel):
-    sender: Literal["user", "model"]
-    msg: str
-    score: Optional[float] = None
-
-
-class JailbreakHistoryEntry(BaseModel):
-    """Lightweight metadata for a saved jailbreak attack run, used to populate the history board."""
-    id: str
-    goal: str
-    success: bool
-    best_score: Optional[float] = None
-    n_attempts: int
-    saved_at: str
-
-
 class JailbreakAttackOutput(BaseModel):
-    model_config = ConfigDict(protected_namespaces=(), arbitrary_types_allowed=True)
     goal: str
     success: bool
     best_prompt: str
     best_response: str
-    best_score: float
+    best_score: float | int
     history: list[dict]
     conversations: Optional[list[list[dict]]] = None
     metadata: dict
-    adversarial_prompt: Optional[str] = None
-    model_response: Optional[str] = None
-    advance_metrics: Optional[dict[str, float]] = None
+

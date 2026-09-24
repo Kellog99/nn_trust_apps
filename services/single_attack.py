@@ -1,10 +1,12 @@
+from pprint import pprint
 from typing import cast
 
 import torch
-from fastapi import APIRouter, Body, Query, HTTPException
+from fastapi import APIRouter, Body, HTTPException
 from pydantic import ValidationError
 
-from models import SingleAttackOutput, SingleAttackProps, ModelInfo, RegisteredObject, JailbreakAttackProps
+from models import SingleAttackOutput, SingleAttackProps, ModelInfo, RegisteredObject, JailbreakAttackProps, \
+    JailbreakAttackOutput
 from nn_trust import Task, EvasionAttack, AttackFactory as AF, NLPModelAdapter, CVModelAdapter
 from services.utils.attack import single_attack_performance
 from services.utils.utils import b64str_to_pil
@@ -115,17 +117,12 @@ async def single_attack(
 @router.post("/jailbreaking")
 async def jailbreaking(
         body: JailbreakAttackProps = Body(...),
-        device: str = Query(
-            default="cuda",
-            description="The device to run the model on."
-        )
-
-) -> dict:
+) -> JailbreakAttackOutput:
     """
     Handle the POST request for executing a jailbreak attack.
     """
-
-    missing: list[str] = [n for n in ("model", "attack", "goal") if getattr(body, n) is None]
+    device: torch.device = body.resolve_device()
+    missing: list[str] = [n for n in ("model", "attack", "input") if getattr(body, n) is None]
     if missing:
         raise HTTPException(
             status_code=422,
@@ -133,7 +130,7 @@ async def jailbreaking(
         )
 
     attack_info: RegisteredObject = body.attack
-    goal = body.goal
+    goal: str = body.input
     max_new_tokens = body.max_new_tokens if body.max_new_tokens is not None else 4096
 
     def _load_model(
@@ -181,6 +178,8 @@ async def jailbreaking(
         },
     )
     kwargs["verbose"] = True
+
+    pprint(kwargs)
     attack = AF.create(
         class_id=attack_info.id,
         model=target_model,
@@ -189,9 +188,11 @@ async def jailbreaking(
         device=device,
         **kwargs
     )
-
+    print(" Attack Created ".center(40, "#"))
     # 3. Execution
+    print(" Generating the prompt ".center(40, "#"))
     state = attack.generate(goal=goal)
+    print(" Prompt generated ".center(40, "#"))
 
     # 4. Build response from ConversationState (now a dataclass, not Pydantic)
     # The ConversationState has: goal, success, best_response, best_score,
@@ -226,15 +227,13 @@ async def jailbreaking(
         ]
         history = [turn for conversation in conversations for turn in conversation]
 
-    ret: dict = {
-        "goal": state.goal,
-        "success": state.success,
-        "best_prompt": best_prompt,
-        "best_response": state.best_response or "",
-        "best_score": state.best_score if state.best_score != float("-inf") else 0.0,
-        "history": history,
-        "conversations": conversations,
-        "metadata": state.metadata,
-    }
-
-    return ret
+    return JailbreakAttackOutput(
+        goal=state.goal,
+        success=state.success,
+        best_prompt=best_prompt,
+        best_response=state.best_response or "",
+        best_score=state.best_score if state.best_score != float("-inf") else 0.0,
+        history=history,
+        conversations=conversations,
+        metadata=state.metadata,
+    )
