@@ -1,9 +1,6 @@
 import json
 from datetime import datetime
 from pathlib import Path
-from types import SimpleNamespace
-from typing import Optional
-from unittest.mock import MagicMock
 
 import pytest
 import torch
@@ -11,77 +8,14 @@ from torch.utils.data import DataLoader
 
 from benchmarking import BenchmarkExecutor
 from benchmarking.utils.evaluation import evaluate_attack
+from models.info import DatasetInfo, ModelInfo
 from models.reports import ReportAttackProps, AttackMetricsProps
-from nn_trust import StatisticComposer, ModelAdapter
+from nn_trust import StatisticComposer, ModelAdapter, Task
 from test.test_single_attack import available_devices
 from test.utils import get_dummy_cv_model, get_dummy_dataloader
-
-
-def _fake_job_result(attack_id: str, error: Optional[str] = None):
-    """
-    Stand-in for the `JobResult` returned by `ray.get(ref)`.
-    error=None => success path; error="..." => failure path.
-    """
-    return SimpleNamespace(
-        id=attack_id,
-        error=error,
-        result={} if error is None else None,
-        parameters=[] if error is None else None,
-    )
-
-
-def make_ray_mock(values_by_ref: Optional[dict] = None) -> MagicMock:
-    """
-    Stand-in for the `ray` module, parameterized by {ref: JobResult_or_Exception}
-    describing what ray.get(ref) should produce for each submitted task.
-
-    Supports BOTH `ray.remote` call conventions so the mock stays valid
-    regardless of how `_iter_ray` invokes it:
-      - direct:     ray.remote(fn)              -> remote_fn
-      - decorator:  ray.remote(**kwargs)(fn)     -> remote_fn
-    """
-    values_by_ref = values_by_ref if values_by_ref is not None else {}
-    ray_mock = MagicMock()
-    counter = {"n": 0}
-
-    def _make_remote_fn():
-        remote_fn = MagicMock()
-
-        def _remote(**_call_kwargs):
-            ref = f"ref-{counter['n']}"
-            counter["n"] += 1
-            return ref
-
-        remote_fn.remote.side_effect = _remote
-        return remote_fn
-
-    def _remote_dispatch(*args, **kwargs):
-        if args and callable(args[0]):
-            # direct form: ray.remote(fn)
-            return _make_remote_fn()
-
-        # decorator form: ray.remote(**kwargs) -> wrapper(fn)
-        def wrapper(fn):
-            return _make_remote_fn()
-
-        return wrapper
-
-    ray_mock.remote.side_effect = _remote_dispatch
-
-    def _wait(refs, num_returns=1):
-        return refs[:num_returns], refs[num_returns:]
-
-    ray_mock.wait.side_effect = _wait
-
-    def _get(ref):
-        outcome = values_by_ref[ref]
-        if isinstance(outcome, Exception):
-            raise outcome
-        return outcome
-
-    ray_mock.get.side_effect = _get
-    ray_mock.is_initialized.return_value = True
-    return ray_mock
+from utils.load_dataset import get_dataloader
+from utils.load_model import load_model
+from utils.model.download_yolo import DATASET_DIR, MODEL_DIR
 
 
 @pytest.fixture
@@ -95,11 +29,6 @@ def dataloader() -> DataLoader:
 
 
 @pytest.fixture
-def tmp_path() -> Path:
-    return Path("./tmp")
-
-
-@pytest.fixture
 def attacks() -> list[dict]:
     return [
         {"id": "identitybaseline"},
@@ -109,13 +38,23 @@ def attacks() -> list[dict]:
 
 
 @pytest.fixture
-def statistics() -> list[dict]:
-    return [
-        {"id": "accuracy"},
-        {"id": "f1score"},
-        {"id": "misclassification"},
-        {"id": "precision"},
-    ]
+def statistics() -> dict[str, dict]:
+    return {
+        "accuracy": {},
+        "f1score": {},
+        "misclassification": {},
+        "precision": {},
+    }
+
+
+def test_statistic_composer_accepts_api_metric_metadata():
+    """Display metadata returned by ``/info/metrics`` is not constructor input."""
+    composer = StatisticComposer(statistics={
+        "accuracy": {"device": torch.device("cpu")}
+    }
+    )
+
+    assert set(composer._performance_stats) == {"accuracy"}
 
 
 # ---------------------------------------------------------------------------
@@ -132,16 +71,17 @@ def test_evaluate_attack(
         max_saved_elements: int,
 ):
     mse: int = max_saved_elements or 1
-    tmp_path: Path = tmp_path / mse
+    tmp_path: Path = tmp_path / str(mse)
     tmp_path.mkdir(exist_ok=True, parents=True)
     checkpoint_path = tmp_path / "identitybaseline" / "log.pth"
+    job_results_path = tmp_path / "identitybaseline" / "job_results.json"
 
     model.to(device)
     statistics = StatisticComposer()
     result = evaluate_attack(
         dataloader=dataloader,
         model=model,
-        attack={"id": "identitybaseline"},
+        attack_id="identitybaseline",
         statistics=statistics,
         device=device,
         output_path=tmp_path,
@@ -150,6 +90,7 @@ def test_evaluate_attack(
 
     assert result.id == "identitybaseline", "no identity"
 
+    assert job_results_path.exists(), f"the file does not exist in {job_results_path}"
     assert checkpoint_path.exists(), f"the file does not exists in {checkpoint_path}"
     data = torch.load(str(checkpoint_path), weights_only=False)
     assert "original_input" in data, "No original input in data"
@@ -166,36 +107,20 @@ def test_evaluate_attack(
 # ---------------------------------------------------------------------------
 
 @pytest.mark.parametrize("device", available_devices())
-@pytest.mark.parametrize("use_ray", [False, True])
 def test_execution(
         model: ModelAdapter,
         dataloader: DataLoader,
         attacks: list[dict],
         device: torch.device,
-        use_ray: bool,
         tmp_path: Path,
-        statistics: list[dict],
-        monkeypatch: Optional[pytest.MonkeyPatch],
+        statistics: dict[str, dict],
 ):
     """
     Given N attacks that all succeed, execute_jobs must return exactly N
     ReportAttackProps, keyed by attack id, each with usable metrics.
     """
-    if use_ray:
-        values_by_ref = {
-            f"ref-{i}": _fake_job_result(attack["id"])
-            for i, attack in enumerate(attacks)
-        }
-        if monkeypatch is None:
-            raise ValueError("It has to be defined.")
-        monkeypatch.setattr(
-            "benchmarking.utils.execution.ray",
-            make_ray_mock(values_by_ref),
-        )
-
     executor = BenchmarkExecutor(
         device=device,
-        use_ray=use_ray,
         verbose=False,
         output_path=tmp_path
     )
@@ -227,8 +152,56 @@ def test_execution(
     for attack in attacks:
         id = attack["id"]
         metric = results[id].metrics.model_dump()
-        for stat in statistics:
-            assert metric[stat["id"]] is not None, f"Stat {stat['id']} is None"
+        for statistic_id in statistics:
+            assert metric[statistic_id] is not None, f"Stat {statistic_id} is None"
+
+
+def test_execution_yolo_detection(tmp_path: Path):
+    """Execute a detection benchmark with the downloaded YOLO and COCO assets."""
+    model_info_path = MODEL_DIR / "info.json"
+    dataset_info_path = DATASET_DIR / "info.json"
+    if not all(path.is_file() for path in (
+        MODEL_DIR / "model.pt", model_info_path, dataset_info_path,
+        DATASET_DIR / "annotations" / "instances_val2017.json",
+    )):
+        pytest.skip("YOLO/COCO assets missing; run python -m utils.model.download_yolo")
+
+    model_info = ModelInfo.model_validate_json(model_info_path.read_text(encoding="utf-8"))
+    dataset_info = DatasetInfo.model_validate_json(dataset_info_path.read_text(encoding="utf-8"))
+    assert model_info.task == "detection"
+    assert dataset_info.task == "detection"
+
+    device = torch.device("cpu")
+    model = load_model(
+        model_type=model_info.model_type,
+        model_id=model_info.id,
+        model_path=MODEL_DIR,
+        task=Task.Detection,
+        device=device,
+    )
+    dataloader = get_dataloader(
+        dataset_path=DATASET_DIR,
+        batch=1,
+        dataset_info=dataset_info,
+        dataset_type=dataset_info.dataset_type,
+        task=Task.Detection,
+        subset=1,
+        num_workers=0,
+    )
+    attacks = [{"id": "identitybaseline"}, {"id": "gaussianbaseline"}]
+    statistics = {"map": {"device": device}}
+    results = BenchmarkExecutor(device=device, output_path=tmp_path).execute_jobs(
+        model=model,
+        dataloader=dataloader,
+        attacks=attacks,
+        statistics=StatisticComposer(statistics=statistics),
+    )
+
+    assert list(results) == [attack["id"] for attack in attacks]
+    for attack in attacks:
+        attack_id = attack["id"]
+        assert results[attack_id].metrics.map is not None
+        assert (tmp_path / attack_id / "job_results.json").is_file()
 
 
 if __name__ == "__main__":
@@ -241,13 +214,11 @@ if __name__ == "__main__":
             {"id": "gaussianbaseline"},
         ],
         device=torch.device("cpu"),
-        use_ray=False,
-        monkeypatch=None,
         tmp_path=Path(f"./tmp/{datetime.now().strftime('%Y%m%d%H%M%S')}"),
-        statistics=[
-            {"id": "accuracy"},
-            {"id": "f1score"},
-            {"id": "misclassification"},
-            {"id": "precision"},
-        ]
+        statistics={
+            "accuracy": {},
+            "f1score": {},
+            "misclassification": {},
+            "precision": {},
+        }
     )

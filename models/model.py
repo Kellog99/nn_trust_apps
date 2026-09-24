@@ -13,9 +13,9 @@ class ParametersProps(BaseModel):
     min: Optional[float] = None
     max: Optional[float] = None
     step: Optional[float] = None
-    default: float | int | str | bool | dict[str, Any] | list[Any]
+    default: float | int | str | bool | dict[str, Any] | list[Any] | None
     description: Optional[str] = None
-    kind: Optional[Literal["number", "enum", "boolean"]] = "number"
+    kind: Optional[Literal["number", "enum", "boolean", "string"]] = "number"
     options: Optional[list[str]] = None
 
 
@@ -24,7 +24,7 @@ class RegisteredObject(BaseModel):
     name: str
     description: Optional[str] = None
     parameters: list[ParametersProps]
-    task: str
+    task: list[str] | str
     knowledge: Optional[str] = None
     objective: Optional[str] = None
     privacy_type: Optional[str] = None

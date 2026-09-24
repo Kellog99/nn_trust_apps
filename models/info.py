@@ -1,7 +1,7 @@
-from typing import Optional, List, Literal, Any, Annotated
+from typing import Optional, List, Literal, Any
 
 import timm
-from pydantic import BaseModel, Field, model_validator, field_validator
+from pydantic import AliasChoices, BaseModel, Field, model_validator
 
 from nn_trust import Task
 
@@ -68,8 +68,50 @@ class Info(BaseModel):
     )
 
 
+DATASET_TYPES = Literal[
+    "coco",
+    "image_folder",
+    "flat",
+    "parquet",
+]
+
+
+class ParquetInfo(BaseModel):
+    image_column: str = Field(
+        default="image",
+        description="It represents the column of the dataframe where the image is stored."
+    )
+    image_key: Optional[str] = Field(
+        default="bytes",
+        validation_alias=AliasChoices("image_key", "label"),
+        serialization_alias="image_key",
+        description="It represents the key containing encoded image bytes."
+    )
+    label_column: Optional[str] = Field(
+        default="label",
+        description="The Parquet column containing the classification target."
+    )
+
+    @property
+    def label(self) -> Optional[str]:
+        """Backward-compatible name for ``image_key`` used by older info files."""
+        return self.image_key
+
+
 class DatasetInfo(Info):
-    type: Literal["dataset"] = "dataset"
+    dataset_type: DATASET_TYPES = Field(
+        default="image_folder",
+        title="Dataset Format",
+        description=(
+            "How the repository is loaded: class folders (ImageFolder), a flat "
+            "image directory, or automatic detection."
+        ),
+    )
+    folder_data: Optional[str] = Field(
+        default=None,
+        title="data",
+        description="The folder in the dataset folder where the data are stored. Default 'data'",
+    )
 
     num_samples: Optional[int] = Field(
         default=None,
@@ -91,6 +133,25 @@ class DatasetInfo(Info):
         title="Label Dictionary",
         description="It represent the Label dictionary for extracting the name of the index that the model predicts."
     )
+    parquet_info: Optional[ParquetInfo] = Field(
+        default=None,
+        title="Parquet Information",
+        description="It contains all the additional information that are needed for handling the Parquet format dataset."
+    )
+
+    @model_validator(mode="after")
+    def validate_parquet(self):
+        # Older dataset info files identify parquet data solely through this
+        # section.  Preserve that format while still allowing an explicit
+        # dataset_type to take precedence.
+        if "dataset_type" not in self.model_fields_set and self.parquet_info is not None:
+            self.dataset_type = "parquet"
+        if self.dataset_type == "parquet" and self.parquet_info is None:
+            raise ValueError(
+                "parquet_info is required when dataset_type is 'parquet'."
+            )
+        return self
+
     images_dir: Optional[str] = Field(
         default=None,
         title="images directory",
@@ -113,9 +174,10 @@ class Transformation(BaseModel):
 MODEL_TYPES = Literal[
     "model_weights",
     "Ollama",
-    "HuggingFace",
     "Gemini",
     "OpenRouter",
+    "Llamacpp",
+    "HuggingFace",
     "plain",
     "timm",
     "torch_script",
@@ -127,23 +189,47 @@ MODEL_TYPES = Literal[
 
 
 class ModelInfo(Info):
-
     dataset: Optional[str] = Field(
         default=None,
         title="Dataset",
         description="Dataset where the model had been optimized on"
+    )
+    dataset_format: Optional[str] = Field(
+        default=None,
+        title="Training Dataset Format",
+        description=(
+            "Format of the data used to train the model, for example ImageFolder, "
+            "flat images, COCO, or a custom dataset."
+        ),
     )
     parameters: Optional[int] = Field(
         default=None,
         title="Parameters",
         description="Number of the model's parameters"
     )
+    is_judge: bool = Field(
+        default=False,
+        title="Is Judge",
+        description="Whether this model acts as a judge."
+    )
+    device: Optional[Literal["cpu", "cuda"]] = Field(
+        default=None,
+        title="Device",
+        description="Per-model device override (e.g. force a judge onto CPU when the "
+                     "GPU is full while other models stay on GPU). Falls back to the "
+                     "request-level device when unset."
+    )
+    judge_type: Optional[str] = Field(
+        default=None,
+        title="Judge Type",
+        description="Type of judge to wrap this model in (e.g. 'llama_guard', 'granite_guardian', 'jailjudge', 'llm_judge')."
+    )
     transformation: Transformation = Field(
         default=Transformation(
-            mean=[0.0, 0.0, 0.0],
-            std=[1.0, 1.0, 1.0],
+            mean=[0.485, 0.456, 0.406],
+            std=[0.229, 0.224, 0.225],
             crop=None,
-            size=None,
+            size=224,
         ),
         description="It represent the transformation to apply to the input.",
         title="Transformation",
@@ -163,6 +249,13 @@ class ModelInfo(Info):
     ######################################################################################
 
     @model_validator(mode="after")
+    def set_transformation_size_from_input_dimensionality(self):
+        """Keep image resizing aligned with the model's declared input shape."""
+        if self.input_dimensionality:
+            self.transformation.size = self.input_dimensionality[-1]
+        return self
+
+    @model_validator(mode="after")
     def validate_library_model(self):
         """
         Validates the existence of timm model.
@@ -174,11 +267,11 @@ class ModelInfo(Info):
                 )
         elif self.model_type == "HuggingFace" and "/" not in self.id:
             raise ValueError(
-                "HuggingFace models should have an id like 'owner/model'"
+                "HuggingFace model should have an id like 'owner/model'"
             )
         elif self.model_type == "Ollama" and "/" in self.id:
             raise ValueError(
-                "Ollama models should have an id without '/', e.g. 'llama3:8b-instruct'"
+                "Ollama model should have an id without '/', e.g. 'llama3:8b-instruct'"
             )
 
         return self

@@ -5,25 +5,46 @@ import torch
 import torchvision
 from PIL.Image import Image
 
-from models import SingleAttackOutput
-from nn_trust import CVModelAdapter, AttackConfig
-from nn_trust.attack import AttackFactory as AF, EvasionAttack
+from models import SingleAttackOutput, SingleAttackProps
+from models.info import Transformation
+from nn_trust import CVModelAdapter, AttackConfig, EvasionAttack, AttackObjective, Task
+from nn_trust.attack.attack_factory import AttackFactory as AF
 from services.utils.attack import single_attack_performance
 from services.utils.utils import tensor_image_to_b64str
 from test.utils import get_dummy_cv_model, available_devices, get_dog_image
 
-"""@pytest.mark.parametrize(
+
+@pytest.mark.parametrize(
+    ("requested_device", "cuda_available", "mps_available", "expected_device"),
+    [
+        ("cpu", True, True, "cpu"),
+        ("gpu", True, True, "cuda"),
+        ("gpu", False, True, "mps"),
+        ("gpu", False, False, "cpu"),
+        ("cuda", False, False, "cpu"),
+        ("mps", False, False, "cpu"),
+    ],
+)
+def test_single_attack_device_resolution(
+        monkeypatch: pytest.MonkeyPatch,
+        requested_device: str,
+        cuda_available: bool,
+        mps_available: bool,
+        expected_device: str,
+):
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: cuda_available)
+    monkeypatch.setattr(torch.backends.mps, "is_available", lambda: mps_available)
+    body = SingleAttackProps.model_construct(device=requested_device)
+
+    assert body.resolve_device() == torch.device(expected_device)
+
+
+@pytest.mark.parametrize(
     "attack_id",
     AF.get_list_classes(
         task={Task.Classification},
         objective=[AttackObjective.EVASION],
     )[:2],
-)"""
-
-
-@pytest.mark.parametrize(
-    "attack_id",
-    ["fom"],
 )
 @pytest.mark.parametrize("model", [get_dummy_cv_model()])
 @pytest.mark.parametrize("pil_image", [get_dog_image()])
@@ -62,6 +83,8 @@ def test_attack(
         model=model.to(device),
         attack=atk,
         pil_image=pil_image,
+        task=Task.Classification,
+        transformation=Transformation(mean=[0, 0, 0], std=[1, 1, 1], size=224),
         device=device
     )
     for k in out.confidence.keys():

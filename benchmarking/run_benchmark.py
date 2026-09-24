@@ -1,34 +1,87 @@
+import inspect
 import json
 from datetime import datetime
 from logging import Logger
 from pathlib import Path
-from typing import List, Optional
-from report import AdversarialReportGenerator
+from typing import List, Optional, Any, cast
 
 import torch
 from torch.utils.data import DataLoader
 
 from benchmarking.executor import BenchmarkExecutor
-from models import BenchmarkOptionConfig, ModelInfo, DatasetInfo, ModelReportProps
+from models import BenchmarkOptionConfig, ModelInfo, DatasetInfo, ModelReportProps, RegisteredObject
+from models.info import DATASET_TYPES
 from models.reports import ReportMetricsProps, ReportAttackProps
-from nn_trust import AttackFactory as AF, StatisticComposer, StatisticsFactory as SF, ModelAdapter, Task
+from nn_trust import AttackFactory as AF, StatisticComposer, StatisticsFactory as SF, ModelAdapter, Task, CVModelAdapter
 from utils import load_model, get_dataloader
+from utils.dataset_utils import get_transform_dataset
+
+
+def create_benchmark_id() -> str:
+    """Create the identifier shared by a benchmark's tasks and output files."""
+    return datetime.now().strftime("%Y%m%dT%H%M%S_%f")
+
+
+_REGISTERED_OBJECT_METADATA = {
+    "name",
+    "description",
+    "task",
+    "knowledge",
+    "objective",
+    "privacy_type",
+}
+
+
+def _normalize_specs(
+        items: Optional[list[RegisteredObject] | list[dict]],
+) -> dict[str, dict[str, Any]]:
+    """Convert API metadata or compact execution dictionaries to factory specs."""
+    specs: dict[str, dict[str, Any]] = {}
+
+    for item in items or []:
+        if isinstance(item, RegisteredObject):
+            specs[item.id] = {
+                parameter.id: parameter.default
+                for parameter in item.parameters
+            }
+            continue
+
+        data = dict(item)
+        object_id = str(data.pop("id"))
+        parameters = data.pop("parameters", None)
+        if parameters is not None:
+            if isinstance(parameters, dict):
+                specs[object_id] = dict(parameters)
+            else:
+                specs[object_id] = {
+                    str(parameter["id"]): parameter.get("default")
+                    for parameter in parameters
+                }
+        else:
+            specs[object_id] = {
+                key: value
+                for key, value in data.items()
+                if key not in _REGISTERED_OBJECT_METADATA
+            }
+
+    return specs
 
 
 def run_benchmark(
         options: BenchmarkOptionConfig,
         models: List[ModelInfo],
         datasets: List[DatasetInfo],
-        attacks: Optional[List[dict]] = None,
-        metrics: Optional[List[dict]] = None,
+        attacks: Optional[list[RegisteredObject] | list[dict]] = None,
+        metrics: Optional[list[RegisteredObject] | list[dict]] = None,
         log: Optional[Logger] = None,
+        benchmark_id: Optional[str] = None,
 ) -> list[ModelReportProps]:
     """
-    This function take as input a full benchmark configuration and execute the benchmark.
-    If the metrics and the attacks are not selected, then, by default, all the available attacks and metrics will be used.
+    This function takes as input a full benchmark configuration and executes the benchmark.
+    If no attacks are given, only the identity baseline is run.
     """
-    #################################### 1. Valid Items ####################################
-    ##### 1.1 Datasets
+    #################################### 1. Validate Items ####################################
+    ##### 1.1 Datasets & models existence
     for dataset in datasets:
         if dataset.repository is None:
             raise ValueError("The path to the dataset repository is required.")
@@ -40,144 +93,138 @@ def run_benchmark(
         if not Path(model.repository).expanduser().exists():
             raise FileNotFoundError(f"Model path {model.repository} does not exist.")
 
-    ##### 1.2 Models
-    # Filtering the attacks
-    attacks: list[dict] = attacks or []
-    attacks: list[dict] = [
-        {
-            **attack,
-            "targeted": attack.get("targeted", options.targeted), # passing option targeted to attacks
-        }
-        for attack in attacks
-        if attack.get("id", None) in AF.get_list_classes()
-    ]
-    if not any(attack.get("id") == "identitybaseline" for attack in attacks):
-        attacks.append({"id": "identitybaseline"})
-    #######################################################
+    ##### 1.2 Attacks: normalize and always include the identity baseline
+    available_attacks = set(AF.get_list_classes())
+    attack_specs = {
+        attack_id: parameters
+        for attack_id, parameters in _normalize_specs(attacks).items()
+        if attack_id in available_attacks
+    }
+    attack_specs.setdefault("identitybaseline", {})
+
+    ##### 1.3 Metrics: normalize to RegisteredObject
+    metric_specs = _normalize_specs(metrics)
+    if not metric_specs:
+        raise ValueError("At least one benchmark metric must be selected.")
 
     #################################### 2. Prepare Execution ####################################
-    # 2.1 - Generate a unique id under which run all benchmark operations
-    benchmark_id: str = datetime.now().strftime("%Y%m%dT%H%M%S")
-    # 2.2 - create a single dict element with all necessary information to execute operation and merge end result.
-
-    # Define an execution strategy for the benchmark at hand i.e. create an executor instance
+    benchmark_id = benchmark_id or create_benchmark_id()
     device: torch.device = torch.device("cuda" if torch.cuda.is_available() and options.gpu else "cpu")
-    benchmark_output_path: Path = Path(options.output_path).expanduser().resolve() / benchmark_id
+    base_output_path: str = options.output_path + f"/{benchmark_id}"
 
     list_reports: list[ModelReportProps] = []
     for model_cnf in models:
-        task_model: Task = model_cnf.task if isinstance(model_cnf.task, Task) else Task.from_str(model_cnf.task)
-        model: ModelAdapter = load_model(
+        task: Task = model_cnf.task if isinstance(model_cnf.task, Task) else Task.from_str(model_cnf.task)
+        model = load_model(
             model_id=model_cnf.id or model_cnf.name,
             model_type=model_cnf.model_type,
             model_path=model_cnf.repository,
             api_url=model_cnf.api,
-            task=task_model,
-            device=device
+            task=task,
+            device=device,
         )
+        transform = get_transform_dataset(transformation=model_cnf.transformation)
 
         for dataset_cnf in datasets:
-            task_dataset: Task = dataset_cnf.task if isinstance(dataset_cnf.task, Task) else Task.from_str(dataset_cnf.task)
-            if task_model != task_dataset:
-                raise ValueError(f"Task mismatch between model {model_cnf.id} ({task_model}) and dataset {dataset_cnf.id} ({task_dataset}).")
             if dataset_cnf.repository is None:
                 raise ValueError("No dataset to load.")
+            print(model_cnf.transformation)
+            print(transform)
             dataloader: DataLoader = get_dataloader(
+                dataset_type=cast(DATASET_TYPES, dataset_cnf.dataset_type),
                 dataset_path=dataset_cnf.repository,
+                dataset_info=dataset_cnf,
                 batch=dataset_cnf.batch_size,
                 subset=options.subset,
-                model_transformation=model_cnf.transformation,
+                transform=transform,
                 num_workers=dataset_cnf.num_workers,
-                name=dataset_cnf.name,
-                model_type = model_cnf.model_type,
-                task=task_dataset,
-                images_dir=dataset_cnf.images_dir,
-                annotations_file=dataset_cnf.annotations_file,
+                folder_data=dataset_cnf.folder_data,
+                image_dir=dataset_cnf.images_dir,
+                **(
+                    {
+                        "image_column": dataset_cnf.parquet_info.image_column,
+                        "image_key": dataset_cnf.parquet_info.image_key,
+                        "label_column": dataset_cnf.parquet_info.label_column,
+                    }
+                    if dataset_cnf.parquet_info is not None
+                    else {}
+                ),
             )
+
             #################### Defining the Statistic Composer ####################
             num_classes = model_cnf.num_classes
             if num_classes is None:
                 batch, _ = next(iter(dataloader))
-                out = model(batch.to(device))
-                num_classes = out.shape[-1]
+                with torch.no_grad():
+                    num_classes = model(batch.to(device)).shape[-1]
 
-            if metrics is None or len(metrics) == 0:
-                metrics = [
-                    {"id": metric}
-                    for metric in SF.get_list_classes(task={task_dataset})
-                ]
-            metrics: list[dict] = [
-                {
-                    **metric,
-                    "targeted": metric.get("targeted", options.targeted), # passing option targeted to metrics
-                    "model": model,
-                    "device": options.gpu,
+            available_metrics = set(SF.get_list_classes(task={task}))
+            selected_metrics: dict[str, dict] = {}
+            for metric_id, parameters in metric_specs.items():
+                if metric_id not in available_metrics:
+                    continue
+
+                metric_parameters = {
+                    **parameters,
                     "num_classes": num_classes,
                 }
-                for metric in metrics if metric.get("id") in SF.get_list_classes(task={task_dataset})
-            ]
-            statistics_composer = StatisticComposer(
-                statistics=metrics,
-                device=device
-            )
-            # 3.1 Start execution
-            output_path: Path = benchmark_output_path / f"{model_cnf.id}/{dataset_cnf.id}"
-            output_path.mkdir(parents=True, exist_ok=True)
+                metric_class = SF.get_info(metric_id).class_type
+                if "model" in inspect.signature(metric_class).parameters:
+                    metric_parameters["model"] = model
+                selected_metrics[metric_id] = metric_parameters
 
+            statistics_composer = StatisticComposer(
+                statistics=selected_metrics,
+                device=device,
+            )
+
+            ######### 3.1 Start execution #########
+            # The report path is benchmark_id / model_id / dataset_id
+            report_path: Path = (
+                    Path(base_output_path).expanduser().resolve()
+                    / model_cnf.id
+                    / dataset_cnf.id
+            )
             executor = BenchmarkExecutor(
                 verbose=options.verbose,
                 benchmark_id=benchmark_id,
-                use_ray=options.use_ray,
-                output_path=output_path,
+                output_path=report_path,
             )
             results: dict[str, ReportAttackProps] = executor.execute_jobs(
                 model=model,
                 dataloader=dataloader,
-                attacks=attacks,
+                attacks=attack_specs,
                 statistics=statistics_composer,
                 device=device,
+                log=log,
                 max_saved_elements=options.max_saved_elements or 1,
             )
             global_metrics: dict = statistics_composer.compute_aggregator()
-            # Global metrics
+
+            # Global metrics: the identity baseline carries the requested performance
+            # metrics; aggregator values (if any) override their identity-baseline
+            # counterparts.
             identity: ReportAttackProps = results.pop("identitybaseline")
-            # removing the metrics that I do not want because they refer to the attack's performance
-            metrics: dict = identity.metrics.model_dump(
-                exclude={
-                    "misclassification",
-                    "num_queries",
-                    "robustness",
-                    "risk",
-                    "power"
-                })
-            metrics["num_samples"]: int = len(dataloader.dataset)
-            global_metrics.update(metrics)
-            # Here, for sure, the results dictionary does not have the "identity baseline" key
+            report_metrics: dict = identity.metrics.model_dump(exclude_none=True)
+            report_metrics["num_samples"] = len(dataloader.dataset)
+            report_metrics.update(global_metrics)
+
             model_report = ModelReportProps(
                 info=model_cnf,
-                metrics=ReportMetricsProps.model_validate(global_metrics),
+                metrics=ReportMetricsProps.model_validate(report_metrics),
                 attacks=results,
             )
             list_reports.append(model_report)
 
-            ############### Saving the report in JSON format ###############
-            with open(output_path / "report.json", "w") as f:
-                json.dump(model_report.model_dump(), f)
-
-            #################################### PDF generation ####################################
-            # Optionally, after the benchmark, it could be created the PDF report of the vulnerabilities
-            if options.create_pdf:
-                report = AdversarialReportGenerator()
-                report.generate(
-                    data=model_report,
-                    output_path=output_path / "report.pdf",
-                    header_logo_path=None,
-                )
+            print(report_path / "report.json")
             ######### saving the results #########
+            with open(report_path / "report.json", "w") as f:
+                json.dump(model_report.model_dump(), f)
+            print("report saved")
             if log:
                 log.info(
-                    "Prepared %d job(s): %d model(s) x %d dataset(s) x %d attack(s).",
-                    len(attacks), len(models), len(datasets), len(attacks),
+                    "Prepared job(s): %d model(s) x %d dataset(s) x %d attack(s).",
+                    len(models), len(datasets), len(attack_specs),
                 )
 
     return list_reports

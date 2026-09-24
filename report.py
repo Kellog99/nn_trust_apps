@@ -45,9 +45,10 @@ if __name__ == "__main__":
     output_path: Path = Path(getattr(data, "output_path", args.output_path)).expanduser() / file_name
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    report = AdversarialReportGenerator()
+    report = AdversarialReportGenerator(include_attack_details=True)
     report.generate(
         data=data,
         output_path=output_path,
         header_logo_path=None,
+        examples_root=benchmark_path.parent,
     )

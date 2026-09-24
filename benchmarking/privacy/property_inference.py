@@ -60,7 +60,7 @@ def _resolve_property_name(job: PrivacyJobConfig) -> str:
 
 
 def _resolve_property_inference_task_attr(job: PrivacyJobConfig) -> str | None:
-    """Resolve the task attribute used by the target and shadow models."""
+    """Resolve the task attribute used by the target and shadow model."""
     configured_task_attr = job.attack.attack_params.get("task_attr")
     dataset_task_attr = job.dataset.task_attr
 

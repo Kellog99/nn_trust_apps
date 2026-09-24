@@ -1,13 +1,29 @@
-from typing import Any, Optional
+import json
+from pathlib import Path
+from typing import Optional, TypedDict, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from models.info import ModelInfo, DatasetInfo
 from models.model import RegisteredObject
 from models.reports import ParameterLog
 
 
+class TaskStatus(TypedDict):
+    """Dictionary representation of an attack's benchmark task."""
+
+    benchmark_id: str
+    attack_id: str
+    name: str
+    status: str
+    progress: int
+    error: str | None
+
+
 class BenchmarkOptionConfig(BaseModel):
+    """
+    This class contains all the global variables for the benchmark
+    """
     overwrite: bool = True
     save_perturbation: bool = True
     variables_to_save: list[str] = Field(default_factory=lambda: ["original_input", "res"])
@@ -23,120 +39,59 @@ class BenchmarkOptionConfig(BaseModel):
     targeted: bool = False
 
 
-# This class is for handling the type of the benchmark's service input
 class BenchmarkExecutionConfig(BaseModel):
+    """
+    This class is for handling the type of the benchmark's service input
+    """
     attacks: list[RegisteredObject]
     metrics: list[RegisteredObject]
-    # The web client sends the selected model and dataset IDs.  The router
-    # resolves those IDs to their repository metadata before starting a job.
-    model: ModelInfo | str
-    dataset: DatasetInfo | str
+    model: ModelInfo
+    dataset: DatasetInfo
     options: BenchmarkOptionConfig = Field(default_factory=BenchmarkOptionConfig)
-
-    # exemplary model_config 
-    model_config = ConfigDict(
-        json_schema_extra={
-            "example": {
-                "model": {
-                    "id": "resnet20",
-                    "name": "resnet20",
-                    "task": "classification",
-                    "domain": "computer_vision",
-                    "num_classes": 10,
-                    "input_dimensionality": [3, 32, 32],
-                    "model_type": "plain",
-                    "repository": "benchmark_assets/models/cifar10_resnet20",
-                    "transformation": {
-                        "mean": [0.4914, 0.4822, 0.4465],
-                        "std": [0.247, 0.2435, 0.2616]
-                    }
-                },
-                "dataset": {
-                    "id": "cifar10_test",
-                    "name": "cifar10_test",
-                    "task": "classification",
-                    "domain": "computer_vision",
-                    "num_classes": 10,
-                    "input_dimensionality": [3, 32, 32],
-                    "repository": "benchmark_assets/datasets/cifar10_test",
-                    "num_samples": 100,
-                    "batch_size": 32,
-                    "num_workers": 0
-                },
-                "attacks": [
-                    {
-                        "id": "deepfool",
-                        "name": "deepfool",
-                        "parameters": [
-                            {
-                                "id": "max_iters",
-                                "name": "max_iters",
-                                "default": 3
-                            },
-                            {
-                                "id": "max_iters",
-                                "name": "max_iters",
-                                "default": 3
-                            }
-                        ],
-                        "task": "classification"
-                    },
-                    {
-                        "id": "fuap",
-                        "name": "fuap",
-                        "parameters": [
-                            {
-                                "id": "max_iters",
-                                "name": "max_iters",
-                                "default": 3
-                            }
-                        ],
-                        "task": "classification"
-                    }
-                ],
-                "metrics": [
-                    {
-                        "id": "accuracy",
-                        "name": "accuracy",
-                        "parameters": [],
-                        "task": "classification"
-                    },
-                    {
-                        "id": "misclassification",
-                        "name": "misclassification",
-                        "parameters": [],
-                        "task": "classification"
-                    },
-                    {
-                        "id": "robustness",
-                        "name": "robustness",
-                        "parameters": [],
-                        "task": "classification"
-                    }
-                ],
-                "options": {
-                    "overwrite": True,
-                    "num_images_to_save": 10,
-                    "save_perturbation": True,
-                    "gpu": True,
-                    "output_path": "benchmark_out",
-                    "use_ray": False,
-                    "num_workers": 1,
-                    "num_gpus_per_worker": 1.0,
-                    "create_pdf": False,
-                    "targeted": False
-                }
-            }
-        }
-    )
+    benchmark_id: Optional[str] = None
 
 
 class JobResult(BaseModel):
     """
-    Since this has to handle the errors to, only the id is required.
+    Since this has to handle the errors too, only the id is required.
     """
-    model_config = ConfigDict(arbitrary_types_allowed=True)
     id: str
     parameters: Optional[list[ParameterLog]] = None
     result: Optional[dict] = None
+    total: Optional[int] = None
+    progress: Optional[int] = None
+    iteration_time: Optional[float] = None
+    execution_time: Optional[float] = None
+    estimated_execution_time: Optional[float] = None
+    status: Literal["pending", "in progress", "finished", "error"] = "pending"
     error: Optional[str] = None
+
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    @model_validator(mode="after")
+    def validate_status(self) -> "JobResult":
+        if self.status == "finished":
+            if self.result is None:
+                raise ValueError("If the job is finished then there must be a result.")
+            if self.total != self.progress:
+                raise ValueError("The total number of elements must be the same as the one that have been seen.")
+        if self.status == "error" and self.error is None:
+            raise ValueError("If the job is in error state then `error` must be set.")
+        return self
+
+    def save(self, path: Path | str) -> "JobResult":
+        """
+        Persist this result as JSON at the given path and return self.
+        """
+        path = Path(path)
+
+        if path.is_dir():
+            raise IsADirectoryError(f"Expected a file path, got a directory: {path}")
+        if not path.parent.exists():
+            path.mkdir(parents=True, exist_ok=True)
+        if path.suffix.lower() != ".json":
+            raise ValueError(f"Expected a .json file, got: {path}")
+
+        with open(path, "w") as f:
+            json.dump(self.model_dump(), f)
+        return self

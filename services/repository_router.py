@@ -1,11 +1,9 @@
 import json
-import os
 from pathlib import Path
-from pprint import pprint
 from typing import Literal, Union, Annotated
 
 from fastapi import APIRouter, Query, Depends, Request, Body, HTTPException
-from pydantic import BaseModel, Field, TypeAdapter
+from pydantic import BaseModel, Field
 
 from models import config_field, ModelReportProps, DatasetReportProps, ModelInfo, DatasetInfo
 
@@ -58,7 +56,7 @@ def get_info(
         ),
 ) -> list[ModelInfo] | list[DatasetInfo] | list[ModelReportProps] | list[DatasetReportProps]:
     """
-    Get all models/datasets/reports under `repo_path` matching `tasks`.
+    Get all model/datasets/reports under `repo_path` matching `tasks`.
     """
     if isinstance(repo_path, str):
         repo_path: Path = Path(repo_path).expanduser()
@@ -73,57 +71,24 @@ def get_info(
     model_cls = _MODEL_MAP[model_type]
 
     out = []
-    for root, _, files in os.walk(repo_path):
-        for file in files:
-            # The goal is to extract only those files that are a json file
-            if file != "info.json":
-                continue
-            full_path: Path = Path(root) / file
-            with open(full_path, "r", encoding="utf-8") as f:
-                raw = json.load(f)
+    file_name: str = "report.json" if model_type == "report_model" else "info.json"
+    for full_path in repo_path.glob(f"**/{file_name}"):
+        root = full_path.parent
+        with full_path.open("r", encoding="utf-8") as f:
+            raw = json.load(f)
 
-            raw["repository"] = root
-            if model_type in ("model", "dataset") and not raw.get("id"):
-                raw["id"] = Path(root).name
-            try:
-                item = model_cls.model_validate(raw)
-
-                task = _extract_task(model_type, item)
-                if task_filter is None or task in task_filter:
-                    out.append(item)
-            except:
-                print(f"Cannot load info.json from {root}")
-                continue
-    return out
-
-
-@router.post("/upload")
-def upload(
-        file: dict = Body(...),
-        repo_path: str | Path | None = Depends(get_path),
-):
-    """
-    Upload a .zip file and organize it.
-
-    Args:
-        file: zip file
-        repo_path: repository folder where the file has to be uploaded
-
-    """
-    if repo_path:
-        if isinstance(repo_path, (str, Path)):
-            if isinstance(repo_path, str):
-                repo_path: Path = Path(repo_path).expanduser()
-        else:
-            raise ValueError("The type of the path is not supported.")
-    else:
-        repo_path = Path("~/Desktop/StableAI").expanduser()
-    repo_path.mkdir(parents=True, exist_ok=True)
-    base_model: BaseModel | None = None
-    for model in [DatasetInfo, ModelInfo, ModelReportProps, DatasetReportProps]:
+        raw["repository"] = str(root)
+        raw["id"] = root.name
+        if model_type == "report_model":
+            raw["id"] = str(Path(*root.parts[-3:]))
+            print(raw["id"])
         try:
-            base_model = model.model_validate(file)
-            break
+            item = model_cls.model_validate(raw)
+
+            task = _extract_task(model_type, item)
+            if task_filter is None or task in task_filter:
+                out.append(item)
         except:
-            print(f"Exclusion of the model {model}")
-    return {}
+            print(f"Cannot load info.json from {root}")
+            continue
+    return out

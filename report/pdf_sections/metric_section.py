@@ -15,7 +15,7 @@ class MetricsSection(PDFSection):
     """
     This section has the role to shows 2 things:
         1) The metrics that have been computed during the benchmark
-        2) The absolute position of that metrics compared with other models on the same metric
+        2) The absolute position of that metrics compared with other model on the same metric
     """
 
     def __init__(
@@ -90,7 +90,7 @@ class MetricsSection(PDFSection):
                 value = self._format_value(value)
                 pos = "1/1"
                 if self.benchmark:
-                    # counting the models that are better than the targeted model
+                    # counting the model that are better than the targeted model
                     better_models: int = sum([value < bench for bench in self.benchmark[metric]])
                     # the " + 1 " is because the benchmark does not include this model
                     pos = f"{better_models + 1}/{len(self.benchmark) + 1}"

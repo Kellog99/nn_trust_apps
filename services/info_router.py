@@ -1,5 +1,6 @@
 import inspect
 import logging
+from typing import get_args
 
 import torch
 from fastapi import APIRouter, HTTPException, Request, Depends, Body
@@ -27,11 +28,20 @@ def _str_enum(v) -> str | None:
 
 def _collect_params(atk: str) -> list[ParametersProps]:
     """
-    Collecting all the parameters that are (int, float, str, bool) and returning a list of ParametersProp
+    Collect scalar attack parameters, including optional scalar fields.
     """
     params = []
     seen: set[str] = set()
-    for pid, pinfo in AF.get_config_param(atk, attribute_type=(int, float, str, bool)):
+    scalar_types = (int, float, str, bool)
+    for pid, pinfo in AF.get_config_param(atk):
+        annotation = pinfo.annotation
+        args = get_args(annotation)
+        if annotation not in scalar_types and not (
+            len(args) == 2
+            and type(None) in args
+            and any(arg in scalar_types for arg in args)
+        ):
+            continue
         if pid in seen:
             continue
         seen.add(pid)
@@ -50,17 +60,18 @@ def get_attacks_info(
     for atk in AF.get_list_classes(task={Task.Classification, Task.Language}):
         if atk in excluded_attacks:
             continue
-        info = AttackInfo.model_validate(AF.get_information(id=atk, exclude=set()))
+        info: AttackInfo = AttackInfo.model_validate(AF.get_information(id=atk, exclude=set()))
         out[atk] = RegisteredObject(
             id=info.id,
             name=info.name,
-            task=Task.Classification.name,
+            task=[task.name for task in info.task],
             knowledge=info.knowledge.name if info.knowledge else None,
             description=info.description,
             parameters=_collect_params(atk),
             objective=_str_enum(getattr(info, "objective", None)),
             privacy_type=_str_enum(getattr(info, "privacy_type", None)),
         )
+
     return out
 
 
@@ -75,7 +86,7 @@ def get_statistics_info(
 
         out: dict[str, RegisteredObject] = {}
 
-        for stat in SF.get_list_classes(task={Task.Classification}):
+        for stat in SF.get_list_classes():
             if stat in excluded_statistics:
                 continue
             metric_info: InfoStatistic = InfoStatistic.model_validate(SF.get_information(id=stat, exclude=set()))
@@ -92,7 +103,7 @@ def get_statistics_info(
             out[stat] = RegisteredObject(
                 id=metric_info.id,
                 name=metric_info.name,
-                task=Task.Classification.name,
+                task=[task.name for task in metric_info.task],
                 description=metric_info.description,
                 parameters=parameters
             )
@@ -131,7 +142,7 @@ def get_privacy_datasets() -> list[dict]:
     return [spec.info() for spec in get_privacy_dataset_factory().list_specs()]
 
 
-@router.get("/privacy/models")
+@router.get("/privacy/model")
 def get_privacy_models() -> list[dict]:
     factory = get_default_model_factory()
     if isinstance(factory, AppPrivacyModelFactory):

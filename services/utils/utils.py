@@ -1,56 +1,14 @@
-import base64
-import io
 from typing import Literal, get_args, get_origin, Any
 
 import torch
-from PIL import Image
 from annotated_types import Gt, Ge, Le, Lt
 from pydantic.fields import FieldInfo
 from pydantic_core import PydanticUndefined
-from torchvision.transforms import v2 as T
 
 from models.model import ParametersProps
+from services.utils.image import b64str_to_pil, tensor_image_to_b64str
 from torchvision.utils import draw_bounding_boxes
 from nn_trust.attack.utils.detection import xywh2xyxy
-
-
-def b64str_to_pil(b64_image_str: str) -> Image.Image:
-    image_bytes = base64.b64decode(b64_image_str)
-    return Image.open(io.BytesIO(image_bytes)).convert("RGB")
-
-
-def tensor_image_to_b64str(image: torch.Tensor) -> str:
-    """
-    Convert an image tensor to a PNG encoded as a Base64 string.
-
-    Expected shape:
-        - (C, H, W), or
-        - (1, C, H, W)
-    """
-    if image.ndim == 4:
-        if image.shape[0] != 1:
-            raise ValueError(
-                f"Expected a batch of size 1, got shape {tuple(image.shape)}"
-            )
-        image = image[0]
-
-    if image.ndim != 3:
-        raise ValueError(
-            f"Expected shape (C, H, W), got {tuple(image.shape)}"
-        )
-
-    # ToPILImage converts floating-point values to uint8 internally.  Attack
-    # outputs can temporarily contain NaN/Inf or values outside the image
-    # range, which otherwise produces RuntimeWarnings during that cast.
-    image = torch.nan_to_num(image.detach().cpu(), nan=0.0, posinf=1.0, neginf=0.0)
-    image = image.clamp(0.0, 1.0)
-
-    pil_img = T.ToPILImage()(image)
-
-    buffered = io.BytesIO()
-    pil_img.save(buffered, format="PNG")
-
-    return base64.b64encode(buffered.getvalue()).decode("utf-8")
 
 
 _DEFAULT_LO, _DEFAULT_HI = 0.0, 200.0
@@ -86,6 +44,9 @@ def get_parameter_prop(
     """Characterizes an attack's parameter as a ParametersProps object."""
     name = _param_name(id, param_info)
     ann = param_info.annotation
+    args = get_args(ann)
+    if len(args) == 2 and type(None) in args:
+        ann = next(arg for arg in args if arg is not type(None))
 
     if get_origin(ann) is Literal:
         options = [str(o) for o in get_args(ann)]
@@ -96,11 +57,16 @@ def get_parameter_prop(
         )
 
     if ann is str:
-        default = str(_get_value(param_info.default, ""))
-        return ParametersProps(id=id, name=name, default=default, description=param_info.description)
+        default = _get_value(param_info.default, "")
+        default = None if default is None else str(default)
+        return ParametersProps(
+            id=id, name=name, default=default,
+            description=param_info.description, kind="string",
+        )
 
     if ann is bool:
-        default = bool(_get_value(param_info.default, False))
+        default = _get_value(param_info.default, False)
+        default = None if default is None else bool(default)
         return ParametersProps(
             id=id, name=name, default=default,
             description=param_info.description, kind="boolean",
@@ -111,18 +77,24 @@ def get_parameter_prop(
     lo = max(lo, 0.0)
     hi = min(hi, float(max_value))
 
-    raw_default = _get_value(param_info.default, None)
+    raw_default = param_info.default
     # Zero is a valid and meaningful default for several optimizer
     # parameters (for example FOM's momentum and dampening).  Do not use
     # truthiness here, otherwise an explicit default of 0 is replaced by the
     # midpoint of the allowed range.
-    default = (lo + (hi - lo) / 2) if raw_default is None else raw_default
-    default = _clamp(default, lo, hi)
+    if raw_default is PydanticUndefined:
+        default = (lo + hi) / 2
+    elif raw_default is None:
+        default = None
+    else:
+        default = _clamp(raw_default, lo, hi)
 
     if lo >= hi:
         raise ValueError(f"For the parameter {id}, the min ({lo!r}) must be strictly less than max ({hi!r})")
 
     step = getattr(param_info, "step", None)
+    if step is None and isinstance(param_info.json_schema_extra, dict):
+        step = param_info.json_schema_extra.get("step")
     if step is None:
         step = (hi - lo) / max_value
         if is_int:
@@ -139,9 +111,9 @@ def get_parameter_prop(
     )
 
 def filter_predictions(pred, display_top_k):
-    '''
+    """
     Filter predictions based on top_k
-    '''
+    """
     boxes = pred["boxes"].detach().cpu()
     labels = pred["labels"].detach().cpu()
     scores = pred["scores"].detach().cpu() 
@@ -160,9 +132,9 @@ def filter_predictions(pred, display_top_k):
 
 
 def draw_predictions(image, pred, display_top_k, class_names=None):
-    '''
+    """
     Draw predictions on the image
-    '''
+    """
 
     # filter predictions based on top_k
     pred = filter_predictions(pred, display_top_k)

@@ -47,10 +47,10 @@ if __name__ == "__main__":
     if not config:
         raise ValueError(f"Configuration file {config_path} is empty or could not be parsed.")
 
-    ####################### 1) Getting the models #######################
-    models = [load_info(entry, ModelInfo) for entry in config.get("models", [])]
+    ####################### 1) Getting the model #######################
+    models = [load_info(entry, ModelInfo) for entry in config.get("model", [])]
     if not models:
-        raise ValueError("The configuration must define at least one entry under 'models'.")
+        raise ValueError("The configuration must define at least one entry under 'model'.")
     #####################################################################
 
     ####################### 2) Getting the datasets #######################

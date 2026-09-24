@@ -1,254 +1,240 @@
 # NN Trust Applications
 
-A collection of applications built on top of **`nn_trust`** for adversarial machine learning, robustness evaluation, benchmarking, and report generation.
+Backend and command-line tools for running adversarial-robustness benchmarks with the bundled [
+`nn_trust`](submodules/nn_trust) library. A run evaluates one or more models against a dataset, saves per-attack
+results, and can generate a PDF report.
 
-The repository provides both command-line utilities and backend services for evaluating machine learning models against adversarial attacks and producing reproducible benchmark reports.
+## Table of contents
 
----
+- [Setup](#setup)
+- [Run a benchmark](#run-a-benchmark)
+- [Supported datasets](#supported-datasets)
+- [Supported models](#supported-models)
+- [Security report PDF](#security-report-pdf)
+- [API](#api)
+- [Testing](#testing)
+    - [Test files](#test-files)
+    - [Test helpers](#test-helpers)
 
-# Features
+## Setup
 
-- FastAPI backend for attack execution
-- Benchmark orchestration
-- Adversarial attack evaluation
-- PDF report generation
-- Repository management for models, datasets, and reports
-- Integration with Ray for distributed execution
-
----
-
-# Repository Layout
-
-```text
-.
-├── attack_server/      # FastAPI backend and job manager
-├── benchmarking/       # Benchmark runner and utilities
-├── report/             # PDF report generation
-├── submodules/
-│   ├── nn_trust/
-│   └── data_quality/
-└── ...
-```
-
-Main components:
-
-| Directory | Description |
-|-----------|-------------|
-| `attack_server/` | FastAPI backend, Ray integration and job management |
-| `benchmarking/` | Benchmark execution and evaluation utilities |
-| `report/` | Generates PDF reports from benchmark outputs |
-| `submodules/nn_trust` | Core adversarial attack library |
-
----
-
-# Requirements
-
-- Python **3.11**
-- [`uv`](https://docs.astral.sh/uv/)
-- Git with submodule support
-
----
-
-# Installation
-
-## 1. Create the environment
+Requires Python 3.11, [uv](https://docs.astral.sh/uv/), and Git.
 
 ```bash
+git submodule update --init --recursive
 uv sync --python 3.11
 ```
 
-## 2. Clone the submodules
-
-If the submodules are not already available:
-
-```bash
-git submodule add https://github.com/Kellog99/nn_trust.git submodules/nn_trust
-git submodule add https://github.com/Kellog99/data_quality.git submodules/data_quality
-```
-
-Initialize them:
-
-```bash
-git submodule init
-git submodule update --recursive
-```
-
-## 3. Install `nn_trust`
-
-```bash
-uv pip install -e submodules/nn_trust/
-```
-
----
-
-# Quick Start
-
-## Launch the backend
-
-```bash
-python app.py --reload --host 0.0.0.0 --port 8000
-```
-
----
-
 ## Run a benchmark
 
-```bash
-python benchmark.py \
-    --model_path path/to/model/info.json \
-    --dataset_path path/to/dataset/info.json
+Models and datasets are local directories with an `info.json` file. Point the CLI configuration at those directories:
+
+```yaml
+model:
+  - source_path: /path/to/model
+datasets:
+  - source_path: /path/to/dataset
+attacks:
+  - id: fgsm
+metrics:
+  - id: accuracy
+options:
+  output_path: ./benchmark_out
+  subset: 100
+  gpu: false
 ```
 
----
-
-## Generate a report
-
-```bash
-python report_class.py \
-    --OUTPUTDIR path/to/output_folder
-```
-
-The output directory must contain the benchmark results produced by the benchmark runner.
-
----
-
-# Benchmark CLI
-
-Display the complete list of available options:
+Run it with:
 
 ```bash
-python benchmark.py --help
+uv run python benchmark.py --config_path path/to/config.yaml
 ```
 
-### Main arguments
-
-| Argument | Description |
-|----------|-------------|
-| `--model_path` | Path to the model `info.json` |
-| `--dataset_path` | Path to the dataset `info.json` |
-| `--attacks` | List of attacks to execute |
-| `--metrics` | Metrics to compute |
-| `--output_path` | Directory where benchmark results are stored |
-| `--use_ray` | Enable distributed execution with Ray |
-
----
-
-# Repository Organization
-
-The framework relies on three repositories.
-
-## Model Repository
+The identity baseline is always included. Results are written to:
 
 ```text
-model_repository/
-├── model_1/
-│   ├── model.pth
-│   └── info.json
-└── model_2/
+<output_path>/<benchmark_id>/<model_id>/<dataset_id>/
+├── report.json
+└── <attack_id>/job_results.json
 ```
 
----
-
-## Dataset Repository
-
-The dataset repository follows the same organization.
-
-```text
-dataset_repository/
-├── dataset_1/
-│   ├── data/
-│   └── info.json
-└── dataset_2/
-```
-
----
-
-## Report Repository
-
-```text
-report_repository/
-└── run_id/
-    ├── dataset_1/
-    │   ├── model_1/
-    │   │   ├── report.json
-    │   │   └── examples/
-    │   └── model_2/
-    └── dataset_2/
-```
-
----
-
-# Metadata (`info.json`)
-
-Every model and dataset is described by an `info.json` metadata file.
-
-Typical information includes:
-
-- Identifier
-- Name
-- Task
-- Domain
-- Input dimensionality
-- Description
-- Repository information
-- Number of classes
-- Dataset- or model-specific fields
-
-These metadata files are mandatory and are used by the framework to correctly load resources.
-
----
-
-# Benchmark Output
-
-Each benchmark execution produces a JSON report containing:
-
-- Model information
-- Performance metrics
-- Robustness metrics
-- Attack statistics
-- Confusion matrices
-- Attack-specific measurements
-
-The generated JSON file is used as input for the report generator.
-
----
-
-# Development
-
-Relevant modules:
-
-```text
-attack_server/
-    app.py
-    routers/
-    lib/
-
-benchmarking/
-    main.py
-    benchmark_utils/
-
-report/
-```
-
-The actual adversarial attack implementations are located inside the `submodules/nn_trust` repository.
-
----
-
-# Working with Git Submodules
-
-To safely remove a submodule:
+Create a PDF from a completed report:
 
 ```bash
-git submodule deinit -f path/to/submodule
-git rm -f path/to/submodule
-rm -rf .git/modules/path/to/submodule
+uv run python report.py --benchmark_path path/to/report.json --output_path ./reports
 ```
 
----
+## Supported datasets
 
-# Notes
+These are the supported datasets type:
 
-- Dependencies are managed with **uv**.
-- Every model and dataset must provide an `info.json` file.
-- Ray is optional and can be enabled with the `--use_ray` flag.
-- The report generator expects the output of a completed benchmark execution.
+| Type           | Description                                                                                                         | Status    |
+|----------------|---------------------------------------------------------------------------------------------------------------------|-----------
+| `image_folder` | Classification images organized in one folder per class.                                                            | Supported |
+| `flat`         | Images in a single folder, with optional labels in `labels.csv` or `labels.json`.                                   | Supported |
+| `parquet`      | Classification images and labels stored in Parquet files, with configurable column names.                           | Supported |
+| `coco`         | Object-detection images with annotations in COCO JSON format.                                                       | Supported |
+| `prompt_jsonl` | Text/prompt datasets for LLM attacks, stored as JSON/JSONL with a prompt field and optional target/category fields. | Planned   |
+
+## Supported models
+
+These are the supported model type:
+
+| Type            | Description                                                                            |
+|-----------------|----------------------------------------------------------------------------------------|
+| `plain`         | A complete PyTorch model saved as `model.pth`.                                         |
+| `model_weights` | PyTorch weights in `model_state_dict.pth`, with a `Model` class defined in `model.py`. |
+| `timm`          | Pretrained image models from the timm library, selected by model ID.                   |
+| `torch_script`  | A TorchScript model saved as `model.pt`.                                               |
+| `torch_dynamo`  | A model exported with `torch.export`, saved as `model.pt2`.                            |
+| `onnx`          | An ONNX model saved as `model.onnx`.                                                   |
+| `api`           | A computer-vision model accessed through an API URL.                                   |
+| `ultralytics`   | Ultralytics detection models loaded from `model.pt` or a model ID.                     |
+| `HuggingFace`   | Hugging Face image-classification or causal language models, selected by task.         |
+| `Ollama`        | Language models served by an Ollama instance.                                          |
+| `Gemini`        | Gemini language models accessed through an API, requiring an API key.                  |
+| `OpenRouter`    | Language models accessed through OpenRouter, requiring an API key.                     |
+
+## Security report PDF
+
+The default report follows the frontend dashboard on white A4 pages: model information,
+preprocessing, metric cards, benchmarking, and risk-based vulnerability assessment.
+The generator accepts `ModelReportProps` or a report dictionary. Dictionaries preserve
+frontend field order and additional fields such as attack `category`.
+
+Every page displays `report/images/Logo_Leonardo.png` in the top-left header,
+within a 140 × 28 pt box preserving its proportions. A minimum 68 pt top margin
+keeps content clear of the logo. Pass `header_logo_path` to `generate()` to use
+a different logo; the bundled image is used by default, including CLI/API calls.
+
+```python
+from report import AdversarialReportGenerator
+
+generator = AdversarialReportGenerator(
+    benchmark=[
+        {"name": "Reference model", "param": 25_000_000,
+         "metrics": {"accuracy": 0.91}},
+    ],
+    include_attack_details=True,
+)
+generator.generate(report_data, output_path="out/security-report.pdf")
+```
+
+`benchmark` accepts the objects returned by `/report/benchmarks`, a mapping of model
+names to those objects, or the legacy metric-to-score-list format. Legacy scores
+have no parameter counts, so they appear in the leaderboard only. Accuracy is the
+preferred comparison metric; otherwise the first finite scalar metric is selected.
+Without supplied benchmarks, the PDF explicitly displays an empty state. The PDF
+generator does not fetch benchmarks; existing callers must pass them to enable the
+comparison chart.
+
+Individual attack metrics and parameters are included by default, including through
+`report.py`. Set `include_attack_details=False` only for a summary-only report.
+Metrics whose names start with `Class` (case-insensitive, including `classrobustness`)
+are rendered as bar charts in both global metrics and attack details. Lists use
+zero-based class IDs on the X axis; dictionaries use their keys as class labels.
+Each metric has a single chart containing all classes, even above 24 classes; X-axis
+tick labels are hidden. Missing or non-finite values are marked `N/A`, not plotted
+as zero.
+
+Confusion matrices are shown as heatmaps using the original values, both globally
+and for individual attacks. Each attack starts on a new page; parameters use compact
+cards, preserving their values without metric rounding. Long metric arrays use
+splittable rows so they can continue across pages. Input data is never modified.
+
+Use `AdversarialReportStyle(pagesize=landscape(A4))` for landscape output. Both
+orientations stack the chart and leaderboard to allow long rankings to paginate.
+
+Examples are loaded from `<report repository>/<attack ID>/log.pth` (tensor-only
+loading) or legacy `<sample>_original.png`, `_pert.png`, `_adv.png` images (JPEG is
+also supported). The top-level `repository` provided by `repository_router.py` is
+used automatically. For other callers, pass `examples_root` to `generate()`; the
+CLI uses the directory containing `report.json`. Tensor images are denormalized
+with the report's preprocessing mean/std when compatible; perturbations are shown
+as absolute differences scaled for visibility. Missing examples are indicated in
+the report. Original artifacts and metrics are never changed.
+
+Run the focused PDF tests with:
+
+```bash
+uv run pytest test/test_report_pdf.py -q
+```
+
+## API
+
+Start the FastAPI server:
+
+```bash
+uv run python app.py --host 127.0.0.1 --port 8000
+```
+
+Open `http://127.0.0.1:8000/docs` for the interactive API. The main benchmark endpoints are `POST /job/start_benchmark`,
+`GET /job/getJobs`, and `GET /job/getReport`. Server paths and other settings can be supplied as CLI options or in a
+JSON file passed with `--configuration_file`.
+
+For a complete API request example and CIFAR-10 helper commands, see [benchmarking/README.md](benchmarking/README.md).
+
+## Testing
+
+Application tests are in [`test/`](test). Run the full suite from the project root:
+
+```bash
+uv run python -m pytest test -ra
+```
+
+Device-parametrized tests run on CPU and also CUDA when available. Execution and single-attack tests use pretrained
+ResNet-18 weights and cached dog images, downloading them when missing. Dataset and router tests create small temporary
+datasets; router tests also create a temporary model and do not need an external benchmark request JSON file.
+The bundled library has its own tests in [`submodules/nn_trust/tests/`](submodules/nn_trust/tests), which are not
+included
+in the command above.
+
+To save full failure tracebacks and preserve pytest's exit status in Bash:
+
+```bash
+set -o pipefail
+uv run python -m pytest test -ra --tb=long 2>&1 | tee test_results.txt
+```
+
+The verified run on September 22, 2026 completed with **87 passed, 0 failures, and 2 deprecation warnings** in 23.32
+seconds,
+including CPU and CUDA cases. The warnings concern Pydantic class-based configuration and Starlette TestClient's use of
+httpx. See the [error and fix summary](test_error_summary.txt), [original tracebacks](test_errors_initial.txt),
+[intermediate verification logs](test_errors_recheck.txt), and [final results](test_results_final.txt).
+The suite uses the current serial executor interface; obsolete Ray variants were removed and a regression test for
+ground-truth attack targets was added.
+
+Run the dataset loading and transformation tests with:
+
+```bash
+uv run pytest test/test_dataset_loader.py -q
+```
+
+These tests create small temporary datasets and require no downloads or local dataset repository. The COCO test is
+skipped when `pycocotools` is unavailable. Each test includes a short description of the behavior it checks.
+
+### Test files
+
+| File                                                        | Description                                                                                                                     |
+|-------------------------------------------------------------|---------------------------------------------------------------------------------------------------------------------------------|
+| [test_dataset_loader.py](test/test_dataset_loader.py)       | Image-folder, flat, Parquet, and COCO loading; format validation, subsets, preprocessing, inverse transforms, and crop padding. |
+| [test_evaluation.py](test/test_evaluation.py)               | Classification, detection, and AdvYOLO evaluation; ground-truth targets, artifacts, progress, errors, and logger cleanup.       |
+| [test_execution.py](test/test_execution.py)                 | Local attack execution, saved artifacts, and benchmark metrics on available devices.                                            |
+| [test_job_router.py](test/test_job_router.py)               | Benchmark API creation, scheduling, job listing, reports, and errors, using temporary model and dataset repositories.           |
+| [test_job_tracking.py](test/test_job_tracking.py)           | Baseline attack status and intermediate batch progress.                                                                         |
+| [test_logger.py](test/test_logger.py)                       | Checkpoint artifact logging and per-tag limits.                                                                                 |
+| [test_model_info.py](test/test_model_info.py)               | Preprocessing size inferred from input dimensions, including precedence over an explicit transformation size.                   |
+| [test_parameter_utils.py](test/test_parameter_utils.py)     | Preservation of zero defaults in parameter metadata.                                                                            |
+| [test_parquet_streaming.py](test/test_parquet_streaming.py) | Restartable, bounded Parquet streaming and worker partitioning.                                                                 |
+| [test_report_pdf.py](test/test_report_pdf.py)               | PDF formatting, pagination, charts, benchmarks, and saved examples.                                                             |
+| [test_report_router.py](test/test_report_router.py)         | Scalar metric filtering in benchmark API responses.                                                                             |
+| [test_single_attack.py](test/test_single_attack.py)         | Single-image classification attacks, confidence for each iteration, and sanitization of image output.                           |
+
+### Test helpers
+
+| File                                        | Description                                               |
+|---------------------------------------------|-----------------------------------------------------------|
+| [utils/devices.py](test/utils/devices.py)   | Lists available CPU and CUDA test devices.                |
+| [utils/utils.py](test/utils/utils.py)       | Provides cached sample images, a model, and a dataloader. |
+| [utils/__init__.py](test/utils/__init__.py) | Exports shared test helpers.                              |
+| [__init__.py](test/__init__.py)             | Marks the test directory as a Python package.             |

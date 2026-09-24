@@ -13,7 +13,7 @@ from fastapi import UploadFile, HTTPException
 from fastapi.responses import JSONResponse
 
 
-router = APIRouter(prefix="/model", tags=["datasets and models"])
+router = APIRouter(prefix="/model", tags=["datasets and model"])
 
 
 # --- Model Upload (Check Phase) ---

@@ -6,6 +6,7 @@ This router handles:
 """
 import json
 from pathlib import Path
+from typing import cast
 
 from fastapi import APIRouter, Query, Body, Depends
 from fastapi.responses import StreamingResponse
@@ -16,7 +17,7 @@ from models.reports import ModelReportProps
 from report import AdversarialReportGenerator
 from services.repository_router import get_info
 
-router = APIRouter(prefix="/report", tags=["datasets and models"])
+router = APIRouter(prefix="/report", tags=["datasets and model"])
 
 
 @router.get("/benchmarks", response_model=list[BenchmarkModelProps])
@@ -43,24 +44,24 @@ def get_benchmarks(
     """
     if isinstance(repo_path, str):
         repo_path: Path = Path(repo_path).expanduser()
-    list_reports: list[ModelReportProps] = get_info(
-        tasks=tasks,
-        repo_path=repo_path,
-        model_type="report_model"
-    )
-    print("num of reports ", len(list_reports))
 
     if isinstance(tasks, str):
         tasks = [tasks]
     if isinstance(datasets, str):
         datasets = [datasets]
 
+    list_reports = cast(list[ModelReportProps], get_info(
+        tasks=tasks,
+        repo_path=repo_path,
+        model_type="report_model"
+    ))
+
     out: list[BenchmarkModelProps] = []
     for report in list_reports:
         # There are three level of filtering
         # 1) the id: the id of the selected model must not be inside the benchmark list
-        # 2) the task: the models inside the benchmark must satisfy the filter for the task
-        # 3) the dataset: the models inside the benchmark must satisfy the filter for the dataset
+        # 2) the task: the model inside the benchmark must satisfy the filter for the task
+        # 3) the dataset: the model inside the benchmark must satisfy the filter for the dataset
         report_dataset = getattr(report.info, "dataset", None)
         if ((id is None or report.info.id != id)
                 and (tasks is None or report.info.task in tasks)
@@ -71,38 +72,21 @@ def get_benchmarks(
                     param=report.info.parameters,
                     task=report.info.task,
                     benchmark_id=report.info.id,
-                    metrics=report.metrics.model_dump(exclude={"confusion_matrix"})
+                    # Rankings require scalar numbers. Registered metrics may
+                    # also return vectors, matrices or structured payloads;
+                    # preserve those in the full report only.
+                    metrics={
+                        key: value
+                        for key, value in report.metrics.model_dump(
+                            exclude_none=True,
+                        ).items()
+                        if isinstance(value, (int, float))
+                        and not isinstance(value, bool)
+                    }
                 )
             )
     print("list of benchmarks ", out)
-
     return out
-
-
-@router.post("/upload/model", response_model=ModelReportProps)
-def upload_report(
-        report: dict = Body(...),
-        report_path: str = Query(
-            default=...,
-            description="Path to the repository's folder"
-        )
-) -> ModelReportProps:
-    """
-    This function handles the uploading of the report.
-    At this moment, it handles only the Models' report repository.
-    """
-    report: ModelReportProps = ModelReportProps.model_validate(report)
-
-    new_report_path = Path(report_path) / report.info.id
-    # create a folder for the new report
-    new_report_path.mkdir(parents=True, exist_ok=True)
-    # Create the file path (not just folder)
-    file_path = new_report_path / "report.json"  # or whatever filename you want
-    # Convert Pydantic model to dict before saving
-    with open(file_path, "w") as f:
-        json.dump(report.model_dump(), f, indent=2)  # or report.dict() for older Pydantic
-
-    return report
 
 
 @router.post("/generate_pdf")

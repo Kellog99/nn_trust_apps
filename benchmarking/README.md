@@ -53,7 +53,7 @@ The default configuration file, which can be edited directly in the request body
     "num_classes": 10,
     "input_dimensionality": [3, 32, 32],
     "model_type": "plain",
-    "repository": "benchmark_assets/models/cifar10_resnet20",
+    "repository": "benchmark_assets/model/cifar10_resnet20",
     "transformation": {
       "mean": [0.4914, 0.4822, 0.4465],
       "std": [0.247, 0.2435, 0.2616]
@@ -131,3 +131,26 @@ The default configuration file, which can be edited directly in the request body
   }
 }
 ```
+
+### Output structure
+
+Each benchmark stores the report and its attack artifacts under the corresponding
+model and dataset directory:
+
+```text
+<output_path>/
+└── <benchmark_id>/
+    └── <model_id>/
+        └── <dataset_id>/
+            ├── report.json
+            ├── identitybaseline/
+            │   ├── job_results.json
+            │   └── log.pth
+            └── <attack_id>/
+                ├── job_results.json
+                └── log.pth
+```
+
+`report.json` contains the combined model and attack report. Each
+`job_results.json` contains the execution state and result for its individual
+attack; other generated attack artifacts are stored in the same attack directory.

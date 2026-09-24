@@ -16,6 +16,7 @@ __pycache__
 data/
 output/
 tmp/
+:memory:.ses
 
 # Submodules / build artifacts
 .idea

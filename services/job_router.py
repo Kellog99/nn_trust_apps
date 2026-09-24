@@ -1,201 +1,187 @@
-import base64
 import json
-import logging
-import os
 from pathlib import Path
+from typing import Annotated
 
-import ray
-import requests
-from fastapi import APIRouter, Response, Body, Query, Request, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Body, HTTPException, Query, Request
 
-from benchmarking import run_benchmark, executor
-from models import BenchmarkExecutionConfig, DatasetInfo, ModelInfo
+from benchmarking import create_benchmark_id, run_benchmark
+from models import BenchmarkExecutionConfig, JobResult, ModelReportProps, ServerConfig
 
 router = APIRouter(prefix="/job", tags=["jobs management", "jobs utils"])
 
 
-def _load_resource_info(resource_id: str, repository: str, *, dataset: bool):
-    """Resolve the ID-only representation used by the web client."""
-    repository_root = Path(repository).expanduser().resolve()
-    root = (repository_root / resource_id).resolve()
+def _run_benchmark_background(
+        benchmark: BenchmarkExecutionConfig,
+        benchmark_id: str,
+        benchmark_folder: Path,
+) -> None:
+    """
+    Run a benchmark without leaking background-task failures into ASGI.
+    """
     try:
-        root.relative_to(repository_root)
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid resource ID")
-    info_path = root / "info.json"
-    if not info_path.is_file():
-        raise HTTPException(status_code=404, detail=f"{'Dataset' if dataset else 'Model'} '{resource_id}' not found")
+        run_benchmark(
+            models=[benchmark.model],
+            datasets=[benchmark.dataset],
+            attacks=benchmark.attacks,
+            metrics=benchmark.metrics,
+            options=benchmark.options,
+            benchmark_id=benchmark_id,
+        )
+    except Exception as exc:
+        # In case the background application fails due to various reason,
+        # the output is saved as an error
+        error = f"{type(exc).__name__}: {exc}"
 
-    with info_path.open("r", encoding="utf-8") as info_file:
-        info = json.load(info_file)
-    info["id"] = info.get("id", resource_id)
-    info["name"] = info.get("name", resource_id)
-    info["repository"] = str(root / "data" if dataset and (root / "data").is_dir() else root)
-    if not dataset:
-        # Older generated metadata calls this field `api`, while ModelInfo
-        # uses `model_type`.
-        info.setdefault("model_type", info.get("api", "plain"))
-    return DatasetInfo.model_validate(info) if dataset else ModelInfo.model_validate(info)
+        for attack_id in {attack.id for attack in benchmark.attacks} | {"identitybaseline"}:
+            result_file = benchmark_folder / attack_id / "job_results.json"
+            try:
+                job = JobResult(id=attack_id)
+                if result_file.exists():
+                    job = JobResult.model_validate_json(result_file.read_text(encoding="utf-8"))
+                if job.status not in {"finished", "error"}:
+                    job.status, job.error = "error", error
+                    job.save(result_file)
+            except (OSError, ValueError):
+                print("Could not persist failed job '%s'", attack_id)
 
 
 @router.post("/start_benchmark")
-async def start_benchmark_job(body: BenchmarkExecutionConfig = Body(...), request: Request = None) -> list[dict]:
+async def start_benchmark_job(
+        request: Request,
+        background_tasks: BackgroundTasks,
+        body: BenchmarkExecutionConfig = Body(...)
+) -> str:
     """
-    Start a new TITANN benchmark job.
+    Start a new benchmark.
     """
 
-    config = request.app.state.config if request is not None else None
-    dataset: DatasetInfo = body.dataset
-    model: ModelInfo = body.model
-    if isinstance(dataset, str):
-        dataset = _load_resource_info(dataset, config.path_ds_repo, dataset=True)
-    if isinstance(model, str):
-        model = _load_resource_info(model, config.path_model_repo, dataset=False)
+    config: ServerConfig = request.app.state.config
+    benchmark_id: str = create_benchmark_id()
+    benchmark = body.model_copy(update={
+        "attacks": [
+            attack
+            for attack in body.attacks
+            if attack.id not in config.excluded_attacks
+        ],
+        "options": body.options.model_copy(
+            update={"output_path": config.path_model_report_repo}
+        ),
+    })
+    benchmark_folder: Path = (
+            Path(benchmark.options.output_path).expanduser().resolve()
+            / benchmark_id
+            / benchmark.model.id
+            / benchmark.dataset.id
+    )
+    # The identity baseline runs even when omitted from the request.
+    for attack_id in {attack.id for attack in benchmark.attacks} | {"identitybaseline"}:
+        (benchmark_folder / attack_id).mkdir(parents=True, exist_ok=True)
 
-    # run_benchmark consumes serializable mappings, not the API metadata
-    # models returned by /info/attacks and /info/metrics.
-    attacks = [attack.model_dump(exclude_none=True) for attack in body.attacks]
-    metrics = [metric.model_dump(exclude_none=True) for metric in body.metrics]
-    options = body.options
-
-    result = run_benchmark(
-        models=[model],
-        datasets=[dataset],
-        attacks=attacks,
-        metrics=metrics,
-        options=options
+    print(benchmark.dataset)
+    background_tasks.add_task(
+        _run_benchmark_background,
+        benchmark=benchmark,
+        benchmark_folder=benchmark_folder,
+        benchmark_id=benchmark_id,
     )
 
-    return [report.model_dump(mode="json") for report in result]
+    return benchmark_id
 
 
 # --- Progress --- #
 @router.get("/getJobs")
-def get_jobs(id: str = Query(None)):
+def get_jobs(
+        request: Request,
+        benchmark_id: Annotated[str | None, Query()] = None,
+        model_id: Annotated[str | None, Query()] = None,
+        dataset_id: Annotated[str | None, Query()] = None,
+        attacks_id: Annotated[list[str] | None, Query()] = None
+) -> list[JobResult]:
     """
-    Get all running benchmark jobs in the TITANN backend.
+    Get the status of all benchmark attacks, optionally for one benchmark.
     """
-    try:
-        tasks = ray.get(executor.tracker.list_tasks.remote())
-        if id:
-            id = id.replace(" ", "")
-            output = []
-            if tasks:
-                for k, v in tasks.items():
-                    output_dict = {}
-                    if v["benchmark_id"] == id:
-                        atk_id = k.split(f"_{v['benchmark_id']}")[0]
-                        output_dict["id"] = atk_id
-                        output_dict["name"] = router.state.attacks[
-                            atk_id].name if atk_id != "reference" else "Reference (Identity Attack)"
-                        output_dict["status"] = v["status"]
-                        output_dict["progress"] = v["progress"]
-                        if output_dict:
-                            output.append(output_dict)
-            return output
-        else:
-            return tasks
+    if benchmark_id is None:
+        raise HTTPException(status_code=422, detail="benchmark_id is required")
 
-    except Exception as e:
-        logging.error(f"Unexpected error during get jobs: {str(e)}")
-        return Response(
-            status_code=500,
-            content=f"Unexpected error during get jobs"
-        )
+    # Some clients JSON-encode this query parameter, producing %22id%22.
+    # Accept that representation as well as the regular unquoted value.
+    benchmark_id = benchmark_id.strip().strip("\"'").strip()
+    if not benchmark_id:
+        raise HTTPException(status_code=422, detail="benchmark_id cannot be empty")
+
+    config: ServerConfig = request.app.state.config
+    output_folder: Path = Path(config.path_model_report_repo).expanduser().resolve()
+
+    if (model_id is None) != (dataset_id is None):
+        raise HTTPException(status_code=422, detail="model_id and dataset_id must be provided together")
+    repository = output_folder
+    output_folder = output_folder / benchmark_id
+    if model_id is not None:
+        output_folder = output_folder / model_id / dataset_id
+    output_folder = output_folder.resolve()
+    if repository not in output_folder.parents:
+        raise HTTPException(status_code=400, detail="Invalid benchmark path")
+
+    # FastAPI builds a list from repeated query parameters, but some clients
+    # send all attack IDs in a single comma-separated value. Support both:
+    #   ?attacks_id=a&attacks_id=b
+    #   ?attacks_id=a,b
+    attacks_id = [
+        attack_id.strip().strip("\"'").strip()
+        for value in (attacks_id or [])
+        for attack_id in value.split(",")
+        if attack_id.strip().strip("\"'").strip()
+    ]
+
+    jobs: list[JobResult] = []
+
+    if not attacks_id:
+        return [
+            JobResult.model_validate_json(path.read_text(encoding="utf-8"))
+            for path in sorted(output_folder.rglob("job_results.json"))
+        ]
+
+    for atk in attacks_id:
+        json_file: Path = output_folder / atk / "job_results.json"
+        job = JobResult(id=atk)
+        if json_file.exists():
+            with open(json_file, encoding="utf-8") as file:
+                job = JobResult.model_validate(json.load(file))
+        jobs.append(job)
+    return jobs
 
 
-# --- Results --- #
-@router.get("/report/getResult")
-def get_jobs_results(
-        id: str = Query(
-            default=None,
-            description="report id"
-        ),
-        dataset: str = Query(
-            default=None,
-            description="Dataset of the results"
-        ),
-        model: str = Query(
-            default=None,
-            description="Model that has to filter for the results"
-        ),
-        pdf_report: bool = Query(
-            default=False,
-            description="This flag tells whether a pdf report has to be done."
-        )):
+@router.get("/getReport")
+def getReport(
+        request: Request,
+        benchmark_id: str = Query(...),
+        model_id: str = Query(...),
+        dataset_id: str = Query(...),
+) -> ModelReportProps:
     """
-    Get a TITANN benchmark report job result.
+    Load a benchmark report for a model and dataset.
     """
-    try:
+    config: ServerConfig = request.app.state.config
+    repository = Path(config.path_model_report_repo).expanduser().resolve()
 
-        model_dir, task_dir = "s", "aa"  # find_model_and_task_dir(os.environ.get("BENCHMARK_OUTPUT_DIR"), dataset, model, id)
-        benchmark_id = task_dir.split(os.sep)[-1]
-        tasks = {k: v for k, v in ray.get(executor.tracker.list_tasks.remote()).items() if
-                 v["benchmark_id"] == benchmark_id}
+    ids = {
+        "benchmark_id": benchmark_id,
+        "model_id": model_id,
+        "dataset_id": dataset_id,
+    }
+    normalized_ids = {
+        name: value.strip().strip("\"'").strip()
+        for name, value in ids.items()
+    }
+    for name, value in normalized_ids.items():
+        if not value:
+            raise HTTPException(status_code=422, detail=f"{name} cannot be empty")
 
-        if not tasks:
-            logging.error(f"Benchmark {benchmark_id} not found")
-            return Response(
-                status_code=404,
-                content=f"Benchmark {benchmark_id} not found"
-            )
-        benchmarking.postprocess_benchmark_run_results(task_dir)
-        with open(os.path.join(model_dir, 'info.json'), "r", encoding="utf-8") as f:
-            info = json.load(f)
-        info["dataset"] = str(model_dir).split(os.sep)[-2]
-        info["id"] = benchmark_id
-        info["task"] = "Classification"
+    report_file = repository.joinpath(*normalized_ids.values(), "report.json").resolve()
+    if repository not in report_file.parents:
+        raise HTTPException(status_code=400, detail="Invalid report path")
+    if not report_file.is_file():
+        raise HTTPException(status_code=404, detail="Report not found")
 
-        # ----# thumbnail
-        prototype = json.loads(requests.get(
-            f"http://{os.getenv('DQ_HOST')}:{os.getenv('DQ_PORT')}/getDataset?dataset=animals").text)[
-            "prototype"]["datas"][0]
-        # ----#
-
-        with open(os.path.join(model_dir, 'aggregate_statistics.json'), "r", encoding="utf-8") as f:
-            aggregate = json.load(f)
-            aggregate["params"] = info["parameters"]
-
-        statistics = {}
-        for entry in os.listdir(model_dir):
-            entry_path = os.path.join(model_dir, entry)
-            if os.path.isdir(entry_path):
-                stat_file = os.path.join(entry_path, "statistics.json")
-                if os.path.exists(stat_file) and os.path.isfile(stat_file):
-                    try:
-                        with open(stat_file, "r", encoding="utf-8") as sf:
-                            sf_data = json.load(sf)
-                            sf_data["name"] = router.state.attacks[
-                                entry.lower()].name if entry in router.state.attacks else entry
-                            statistics[entry.upper()] = sf_data
-                    except Exception as e:
-                        logging.warning(f"Could not load statistics.json in '{entry_path}': {e}")
-
-        report_data = {
-            "info": info,
-            "metrics": aggregate,
-            "attacks": statistics
-        }
-        if prototype:
-            report_data["prototype"] = prototype
-
-        with open(os.path.join(task_dir, "report.json"), "w", encoding="utf-8") as f:
-            json.dump(report_data, f)
-
-        if pdf_report:
-            generator = benchmarking.AdversarialReportGenerator(logo_path='./resources/logo_leonardo.png')
-            report_file = './resources/adversarial_report.pdf'
-            generator.generate(report_data, report_file)
-            with open(report_file, 'rb') as pdf_file:
-                pdf_bytes = pdf_file.read()
-                return base64.b64encode(pdf_bytes).decode('utf-8')
-        else:
-            return report_data
-
-
-    except Exception as e:
-        logging.error(f"Unexpected error during get result: {str(e)}")
-        return Response(
-            status_code=500,
-            content=f"Unexpected error during get result"
-        )
+    with report_file.open(encoding="utf-8") as file:
+        return ModelReportProps.model_validate(json.load(file))
