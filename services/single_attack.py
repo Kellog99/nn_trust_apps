@@ -1,12 +1,23 @@
+import logging
+
 import torch
 from fastapi import APIRouter, Body, Query, HTTPException
 from pydantic import ValidationError
 
-from models import SingleAttackOutput, SingleAttackProps, ModelInfo, RegisteredObject
+from models import SingleAttackOutput, SingleAttackProps, ModelInfo, RegisteredObject, JailbreakHistoryEntry
 from nn_trust import Task, EvasionAttack, AttackFactory as AF, NLPModelAdapter, CVModelAdapter
+from nn_trust.attack import (
+    save_conversation_state,
+    load_conversation_state,
+    list_conversation_states,
+    delete_conversation_state,
+)
+from nn_trust.attack.nlp import ConversationState
 from services.utils.attack import single_attack_performance
 from services.utils.utils import b64str_to_pil
 from utils import load_model
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/test", tags=["jobs management", "jobs utils"])
 
@@ -197,7 +208,22 @@ async def jailbreaking(
     # 3. Execution
     state = attack.generate(goal=goal)
 
-    # 4. Build response from ConversationState (now a dataclass, not Pydantic)
+    # 4. Persist the run so it can be replayed later from the "past attacks" board.
+    # Saving must never break a successful attack response.
+    try:
+        save_conversation_state(state, attack_id=attack_info.get("id"))
+    except Exception:
+        logger.exception("Failed to save conversation state for attack '%s'", attack_info.get("id"))
+
+    return _conversation_state_to_output(state)
+
+
+def _conversation_state_to_output(state: ConversationState) -> dict:
+    """
+    Turn a ConversationState -- coming either from a freshly executed attack
+    or from a replayed saved state -- into the payload the frontend expects.
+    """
+    # Build response from ConversationState (now a dataclass, not Pydantic)
     # The ConversationState has: goal, success, best_response, best_score,
     # attempts (list[AttackAttempt]), metadata, stateful flag, etc.
 
@@ -242,3 +268,58 @@ async def jailbreaking(
     }
 
     return ret
+
+
+# --- Jailbreak attack history (saved states board) --- #
+@router.get("/jailbreaking/history")
+async def jailbreaking_history(
+        attack_id: str = Query(..., description="Registered attack id whose saved runs to list."),
+) -> list[JailbreakHistoryEntry]:
+    """
+    List the saved runs available for `attack_id`, most recent first, so the
+    frontend can offer them as a "past attacks" board.
+    """
+    try:
+        entries = list_conversation_states(attack_id)
+    except Exception:
+        logger.exception("Failed to list saved states for attack '%s'", attack_id)
+        raise HTTPException(status_code=500, detail="Failed to list saved attack states.")
+
+    return [JailbreakHistoryEntry(**entry) for entry in entries]
+
+
+@router.get("/jailbreaking/history/{attack_id}/{save_id}")
+async def jailbreaking_history_replay(
+        attack_id: str,
+        save_id: str,
+) -> dict:
+    """
+    Load a previously saved run for `attack_id` and return it in the same
+    shape as `/jailbreaking`, so the frontend can display it as if the attack
+    had just been executed.
+    """
+    try:
+        state = load_conversation_state(attack_id=attack_id, save_id=save_id)
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+    return _conversation_state_to_output(state)
+
+
+@router.delete("/jailbreaking/history/{attack_id}/{save_id}")
+async def jailbreaking_history_delete(
+        attack_id: str,
+        save_id: str,
+) -> dict:
+    """
+    Delete one saved run of `attack_id` from the "past attacks" board.
+    """
+    try:
+        delete_conversation_state(attack_id=attack_id, save_id=save_id)
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception:
+        logger.exception("Failed to delete saved state '%s/%s'", attack_id, save_id)
+        raise HTTPException(status_code=500, detail="Failed to delete the saved attack state.")
+
+    return {"deleted": save_id}
