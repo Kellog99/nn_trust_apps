@@ -8,10 +8,14 @@ from torch.utils.data import DataLoader
 
 from benchmarking import BenchmarkExecutor
 from benchmarking.utils.evaluation import evaluate_attack
+from models.info import DatasetInfo, ModelInfo
 from models.reports import ReportAttackProps, AttackMetricsProps
-from nn_trust import StatisticComposer, ModelAdapter
+from nn_trust import StatisticComposer, ModelAdapter, Task
 from test.test_single_attack import available_devices
 from test.utils import get_dummy_cv_model, get_dummy_dataloader
+from utils.load_dataset import get_dataloader
+from utils.load_model import load_model
+from utils.model.download_yolo import DATASET_DIR, MODEL_DIR
 
 
 @pytest.fixture
@@ -150,6 +154,54 @@ def test_execution(
         metric = results[id].metrics.model_dump()
         for statistic_id in statistics:
             assert metric[statistic_id] is not None, f"Stat {statistic_id} is None"
+
+
+def test_execution_yolo_detection(tmp_path: Path):
+    """Execute a detection benchmark with the downloaded YOLO and COCO assets."""
+    model_info_path = MODEL_DIR / "info.json"
+    dataset_info_path = DATASET_DIR / "info.json"
+    if not all(path.is_file() for path in (
+        MODEL_DIR / "model.pt", model_info_path, dataset_info_path,
+        DATASET_DIR / "annotations" / "instances_val2017.json",
+    )):
+        pytest.skip("YOLO/COCO assets missing; run python -m utils.model.download_yolo")
+
+    model_info = ModelInfo.model_validate_json(model_info_path.read_text(encoding="utf-8"))
+    dataset_info = DatasetInfo.model_validate_json(dataset_info_path.read_text(encoding="utf-8"))
+    assert model_info.task == "detection"
+    assert dataset_info.task == "detection"
+
+    device = torch.device("cpu")
+    model = load_model(
+        model_type=model_info.model_type,
+        model_id=model_info.id,
+        model_path=MODEL_DIR,
+        task=Task.Detection,
+        device=device,
+    )
+    dataloader = get_dataloader(
+        dataset_path=DATASET_DIR,
+        batch=1,
+        dataset_info=dataset_info,
+        dataset_type=dataset_info.dataset_type,
+        task=Task.Detection,
+        subset=1,
+        num_workers=0,
+    )
+    attacks = [{"id": "identitybaseline"}, {"id": "gaussianbaseline"}]
+    statistics = {"map": {"device": device}}
+    results = BenchmarkExecutor(device=device, output_path=tmp_path).execute_jobs(
+        model=model,
+        dataloader=dataloader,
+        attacks=attacks,
+        statistics=StatisticComposer(statistics=statistics),
+    )
+
+    assert list(results) == [attack["id"] for attack in attacks]
+    for attack in attacks:
+        attack_id = attack["id"]
+        assert results[attack_id].metrics.map is not None
+        assert (tmp_path / attack_id / "job_results.json").is_file()
 
 
 if __name__ == "__main__":

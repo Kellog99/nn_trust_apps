@@ -77,6 +77,7 @@ async def start_benchmark_job(
     for attack_id in {attack.id for attack in benchmark.attacks} | {"identitybaseline"}:
         (benchmark_folder / attack_id).mkdir(parents=True, exist_ok=True)
 
+    print(benchmark.dataset)
     background_tasks.add_task(
         _run_benchmark_background,
         benchmark=benchmark,

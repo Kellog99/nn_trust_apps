@@ -136,6 +136,44 @@ def test_coco_custom_paths_and_ragged_batches(tmp_path: Path):
     assert all(image.shape[-2:] == (32, 32) for image in images)
 
 
+def test_legacy_coco_metadata_selects_loader_and_paths(tmp_path: Path):
+    """Older COCO info.json files still work through the benchmark loader path."""
+    image_dir = tmp_path / "pictures"
+    image_dir.mkdir()
+    Image.new("RGB", (16, 16)).save(image_dir / "1.png")
+    annotations_dir = tmp_path / "annotations"
+    annotations_dir.mkdir()
+    (annotations_dir / "labels.json").write_text(json.dumps({
+        "images": [{"id": 1, "file_name": "1.png", "height": 16, "width": 16}],
+        "categories": [{"id": 7, "name": "object"}],
+        "annotations": [],
+    }))
+    info = DatasetInfo(
+        id="legacy-coco", name="Legacy COCO", task="detection",
+        input_dimensionality=[3, 16, 16], repository=str(tmp_path),
+        images_dir="pictures", annotations_file="annotations/labels.json",
+    )
+
+    assert info.dataset_type == "coco"
+    loader = get_dataloader(
+        dataset_path=info.repository, batch=1, dataset_info=info,
+        dataset_type=info.dataset_type, num_workers=0,
+    )
+    assert isinstance(loader.dataset.dataset, CocoDetectionDataset)
+    images, targets = next(iter(loader))
+    assert len(images) == len(targets) == 1
+    assert targets[0]["boxes"].numel() == 0
+
+
+def test_explicit_dataset_type_overrides_coco_inference():
+    info = DatasetInfo(
+        id="explicit", name="Explicit", task="detection",
+        input_dimensionality=[3, 16, 16], dataset_type="image_folder",
+        images_dir="pictures", annotations_file="annotations/labels.json",
+    )
+    assert info.dataset_type == "image_folder"
+
+
 def test_unknown_dataset_type_is_rejected(tmp_path):
     """Reject formats that have no registered dataset loader."""
     with pytest.raises(ValueError, match="Unsupported dataset type"):

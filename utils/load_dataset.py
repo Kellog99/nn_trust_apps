@@ -1,5 +1,6 @@
 import random
 from pathlib import Path
+from pprint import pprint
 from typing import Callable, Optional
 
 import numpy
@@ -9,13 +10,13 @@ from torchvision import transforms as T
 
 from models.info import DATASET_TYPES, DatasetInfo, ParquetInfo
 from nn_trust import Task
-from utils.dataset_utils import get_transform_dataset
-from utils.dataset._load_od_dataset import _load_coco
 from utils.dataset._load_classification_dataset import (
     _load_image_folder,
     _load_flat,
     _load_parquet
 )
+from utils.dataset._load_od_dataset import _load_coco
+from utils.dataset_utils import get_transform_dataset
 
 _LOADERS: dict[DATASET_TYPES, Callable[..., Dataset]] = {
     "coco": _load_coco,
@@ -84,33 +85,39 @@ def get_dataloader(
         if task != expected_task:
             raise ValueError(f"Dataset type {dataset_type!r} does not support task {task}.")
 
-    # Format-specific settings are optional for direct ``get_dataloader``
-    # callers.  Do not pass them to every loader: apart from making a missing
-    # ``parquet_info`` crash, doing so also duplicated explicit keyword
-    # arguments supplied by existing callers.
-    if parquet_info is None and dataset_info is not None:
-        parquet_info = dataset_info.parquet_info
-    if dataset_type == "parquet" and parquet_info is not None:
-        kwargs.setdefault("image_column", parquet_info.image_column)
-        kwargs.setdefault("label_column", parquet_info.label_column)
-        kwargs.setdefault("image_key", parquet_info.image_key)
+    match dataset_type:
+        case "parquet":
+            if parquet_info is None and dataset_info is not None:
+                parquet_info = dataset_info.parquet_info
+            if parquet_info is not None:
+                kwargs.setdefault("image_column", parquet_info.image_column)
+                kwargs.setdefault("label_column", parquet_info.label_column)
+                kwargs.setdefault("image_key", parquet_info.image_key)
+            # Arrow decodes only a consumer-sized chunk at once. The limit is
+            # applied inside the stream, without allocating a list of row indexes.
+            kwargs.setdefault("read_batch_size", max(1, batch))
+            kwargs.setdefault("limit", subset)
 
-    if dataset_type == "parquet":
-        # Arrow decodes only a consumer-sized chunk at once. The limit is
-        # applied inside the stream, without allocating a list of row indexes.
-        kwargs.setdefault("read_batch_size", max(1, batch))
-        kwargs.setdefault("limit", subset)
+        case "coco":
+            if dataset_info is not None:
+                if images_dir is None:
+                    images_dir = dataset_info.images_dir
+                if annotations_file is None:
+                    annotations_file = dataset_info.annotations_file
+            kwargs.update(
+                images_dir=images_dir,
+                annotations_file=annotations_file
+            )
 
-    if dataset_type == "coco":
-        kwargs.update(images_dir=images_dir, annotations_file=annotations_file)
-
+    print("DATASET TO LOAD")
+    pprint(kwargs)
     dataset: Dataset = loader(
         root=root,
         transform=transform if transform is not None else get_transform_dataset(),
         split=folder_data,
         **kwargs,
     )
-
+    print("DATASET LOAD")
     if isinstance(dataset, IterableDataset):
         subdataset = dataset
     else:

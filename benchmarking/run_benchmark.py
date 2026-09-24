@@ -139,6 +139,7 @@ def run_benchmark(
                 transform=transform,
                 num_workers=dataset_cnf.num_workers,
                 folder_data=dataset_cnf.folder_data,
+                image_dir=dataset_cnf.images_dir,
                 **(
                     {
                         "image_column": dataset_cnf.parquet_info.image_column,

@@ -93,7 +93,7 @@ def get_statistics_info(
             out[stat] = RegisteredObject(
                 id=metric_info.id,
                 name=metric_info.name,
-                task=Task.Classification.name,
+                task=[task.name for task in metric_info.task],
                 description=metric_info.description,
                 parameters=parameters
             )
