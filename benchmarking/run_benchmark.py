@@ -110,6 +110,7 @@ def run_benchmark(
     #################################### 2. Prepare Execution ####################################
     benchmark_id = benchmark_id or create_benchmark_id()
     device: torch.device = torch.device("cuda" if torch.cuda.is_available() and options.gpu else "cpu")
+    print(f"device = {device}")
     base_output_path: str = options.output_path + f"/{benchmark_id}"
 
     list_reports: list[ModelReportProps] = []
