@@ -1,5 +1,9 @@
 # Version History
 
+## v1.0.0
+
+Release from main, including the removal of the obsolete session file.
+
 ## v0.1.0
 tags: NTP304, StableAI
 
