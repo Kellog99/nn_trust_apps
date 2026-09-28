@@ -1,59 +1,109 @@
-models:
+model:
   - source_path: "/home/antonio-liguori/Documents/Projects/StableAI/nn_trust_personal/benchmark_assets/models/yolov8"
 
 datasets:
   - source_path: "/home/antonio-liguori/Documents/Projects/StableAI/nn_trust_personal/benchmark_assets/datasets/coco_val2017"
+    dataset_type: "coco"
     batch_size: 1
     num_workers: 1
 
 attacks:
  - id: zoo
-   seed: 1
-   max_iters: 50
-   targeted: false
-   early_stopping: true
-   c: 10000.0
-   gradient_estimator_args:
-     num_samples: 200
-     epsilon: 0.01
-   optimizer_args:
-     lr: 0.1
-     momentum: 0.9
-# - id: autozoom
-# - id: _uap
-# - id: daguap
-# - id: fuap
-# - id: fgsmuap
-# - id: boundary
-# - id: sphereprojection
-# - id: advyoloevasion
-# - id: banditpriorevasion
-# - id: contrastbaselineevasion
-# - id: gaussianbaselineevasion
-# - id: saltnpeppernoisebaseline
-# - id: uniformbaselineevasion
-# - id: binaryevasion
-# - id: blackboxtransfer
-# - id: dag
-#   max_iters: 10
-#   epsilon: 150.0
-#   top_k: 5
-#   label_target: 0
-# - id: deepfool
-# - id: duevasion
-# - id: fom
-# - id: ofuapevasion
-# - id: gduapevasion
-# - id: geodaevasion
-# - id: hopskipjump
-# - id: jsm
-# - id: localsearchevasion
-# - id: parsimonious
-# - id: pgdkde
-# - id: priorgd
-# - id: signoptevasion
-# - id: simbaevasion
-# - id: simpleblackboxevasion
+   max_iters: 3
+   targeted: true
+ - id: autozoom
+   max_iters: 3
+   targeted: true
+ - id: _uap
+   max_iters: 3
+   targeted: true
+ - id: daguap
+   max_iters: 3
+   targeted: true
+ - id: fuap
+   max_iters: 3
+   targeted: true
+ - id: fgsmuap
+   max_iters: 3
+   targeted: true
+ - id: boundary
+   max_iters: 3
+   targeted: true
+ - id: sphereprojection
+   max_iters: 3
+   targeted: true
+ - id: advyoloevasion
+   max_iters: 3
+   targeted: true
+ - id: banditpriorevasion
+   max_iters: 3
+   targeted: true
+ - id: contrastbaselineevasion
+   max_iters: 3
+   targeted: true
+ - id: gaussianbaselineevasion
+   max_iters: 3
+   targeted: true
+ - id: saltnpeppernoisebaseline
+   max_iters: 3
+   targeted: true
+ - id: uniformbaselineevasion
+   max_iters: 3
+   targeted: true
+ - id: binaryevasion
+   max_iters: 3
+   targeted: true
+ - id: blackboxtransfer
+   max_iters: 3
+   targeted: true
+ - id: dag
+   max_iters: 3
+   targeted: true
+ - id: deepfool
+   max_iters: 3
+   targeted: true
+ - id: duevasion
+   max_iters: 3
+   targeted: true
+ - id: fom
+   max_iters: 3
+   targeted: true
+ - id: ofuapevasion
+   max_iters: 3
+   targeted: true
+ - id: gduapevasion
+   max_iters: 3
+   targeted: true
+ - id: geodaevasion
+   max_iters: 3
+   targeted: true
+ - id: hopskipjump
+   max_iters: 3
+   targeted: true
+ - id: jsm
+   max_iters: 3
+   targeted: true
+ - id: localsearchevasion
+   max_iters: 3
+   targeted: true
+ - id: parsimonious
+   max_iters: 3
+   targeted: true
+ - id: pgdkde
+   max_iters: 3
+   targeted: true
+ - id: priorgd
+   max_iters: 3
+   targeted: true
+ - id: signoptevasion
+   max_iters: 3
+   targeted: true
+ - id: simbaevasion
+   max_iters: 3
+   targeted: true
+ - id: simpleblackboxevasion
+   max_iters: 3
+   targeted: true
 
 
 metrics:
