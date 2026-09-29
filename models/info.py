@@ -216,8 +216,8 @@ class ModelInfo(Info):
         default=None,
         title="Device",
         description="Per-model device override (e.g. force a judge onto CPU when the "
-                     "GPU is full while other models stay on GPU). Falls back to the "
-                     "request-level device when unset."
+                    "GPU is full while other models stay on GPU). Falls back to the "
+                    "request-level device when unset."
     )
     judge_type: Optional[str] = Field(
         default=None,
@@ -238,6 +238,11 @@ class ModelInfo(Info):
     api: Optional[str] = Field(
         default=None,
         title="API",
+        description="If the model type is an API then this provide the information to use it."
+    )
+    api_key: Optional[str] = Field(
+        default=None,
+        title="API Key",
         description="If the model type is an API then this provide the information to use it."
     )
     model_type: MODEL_TYPES = Field(
