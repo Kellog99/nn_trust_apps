@@ -1,105 +1,23 @@
 import logging
-import time
-import torch
-from fastapi import APIRouter, Body, Query, HTTPException
-from pydantic import ValidationError, BaseModel
-
 from typing import Optional
 
-from models import SingleAttackOutput, SingleAttackProps, JailbreakAttackProps, JailbreakAttackOutput, JailbreakHistoryEntry, Bubble, ModelInfo, RegisteredObject
-from nn_trust import Task
-from nn_trust.attack import (
-    EvasionAttack,
-    AttackFactory as AF,
-    save_conversation_state,
-    load_conversation_state,
-    list_conversation_states,
-    delete_conversation_state,
-)
-from nn_trust.attack.nlp import ConversationState, NLPAttack
-from services.utils.attack import single_attack_performance
-from services.utils.utils import b64str_to_pil
-from utils import load_model
+import torch
+from fastapi import APIRouter, Body, Query, HTTPException, Depends
+from pydantic import BaseModel
 
-from pprint import pprint
+from models import JailbreakAttackProps, JailbreakAttackOutput, \
+    JailbreakHistoryEntry, Bubble, ModelInfo, config_field
+from nn_trust import Task, AttackFactory as AF
+from nn_trust.attack._nlp import delete_conversation_state, load_conversation_state
+
+delete_conversation_state,
+
+from nn_trust.attack.nlp import ConversationState, NLPAttack
+from utils import load_model
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/test", tags=["jobs management", "jobs utils"])
-
-
-# --- Single attack --- #
-@router.post("/single_attack")
-async def single_attack(
-        body: SingleAttackProps = Body(...),
-        device: str = Query(
-            default="cpu",
-            description="The device to run the model on."
-        )
-) -> SingleAttackOutput:
-    """
-    This function handle the POST request for executing a single image attack given:
-        1. an image: str
-        2. an attack: RegisteredObject
-        3. a model: ModelInfo
-    Args:
-        body: Body of the request
-        device: device where the computations are done.
-
-    Returns:
-        SingleAttackOutput: a collection of all the results concerning a single attack.
-    """
-
-    if device in ["cpu", "cuda"]:
-        device = torch.device(device)
-    else:
-        device = torch.device("cpu")
-
-    ################## MODEL ##################
-    try:
-        # Your existing code...
-        model_info: ModelInfo = body.model
-    except ValidationError as e:
-        print("=== VALIDATION ERROR ===")
-        print(e.json())
-        raise HTTPException(status_code=422, detail=e.errors())
-    except Exception as e:
-        print(f"=== UNEXPECTED ERROR ===")
-        print(f"Error type: {type(e)}")
-        print(f"Error message: {str(e)}")
-        raise
-
-    task = Task.from_str(model_info.task),
-
-    model = load_model(
-        model_type=model_info.type,
-        model_path=model_info.repository,
-        task=task,
-        model_api=model_info.api,
-        model_id=model_info.id,
-    )
-    model = model.to(device)
-    model.eval()
-    print(" Model loaded ".center(40, "#"))
-
-    ################## ATTACK ##################
-    atk: RegisteredObject = body.attack
-    attack: EvasionAttack = AF.create(
-        model=model.to(device),
-        class_id=atk.id,
-        task=task,
-        **{param.id: param.default for param in attack.parameters}
-    )
-    print(" Attack Created ".center(40, "#"))
-    ############################################
-
-    return single_attack_performance(
-        model=model,
-        attack=attack,
-        pil_image=b64str_to_pil(body.input),
-        input_dimensionality=model_info.input_dimensionality,
-        device=device
-    )
 
 
 @router.post("/jailbreaking")
@@ -193,7 +111,8 @@ async def jailbreaking(
             m.eval()
         return m
 
-    def _load_if_provided(info: Optional[ModelInfo | dict], fallback_model, fallback_info: ModelInfo | dict, max_tokens: int = 256):
+    def _load_if_provided(info: Optional[ModelInfo | dict], fallback_model, fallback_info: ModelInfo | dict,
+                          max_tokens: int = 256):
         fallback_id = fallback_info.id if isinstance(fallback_info, BaseModel) else fallback_info.get("id")
         info_id = info.id if isinstance(info, BaseModel) else info.get("id") if info else None
         if info is None or info_id == fallback_id:
@@ -205,7 +124,7 @@ async def jailbreaking(
 
     # Attacker and judge — fall back to target when not provided or same ID
     attacker_model = _load_if_provided(attacker_info, target_model, model_info, max_tokens=max_new_tokens)
-    judge_model    = _load_if_provided(judge_info, target_model, model_info, max_tokens=16)
+    judge_model = _load_if_provided(judge_info, target_model, model_info, max_tokens=16)
 
     # ── 2. Instantiate the attack ───────────────────────────────────────────
     params = attack_info.parameters if hasattr(attack_info, "parameters") else attack_info.get("parameters", [])
@@ -250,6 +169,7 @@ def _conversation_state_to_output(
     attack or from a replayed saved state -- into the payload the frontend expects.
     """
     # Derive best_prompt, best_response, and best_score from valid conversation paths
+
     best_prompt = ""
     best_response = state.best_response or ""
     best_score = state.best_score if state.best_score != float("-inf") else 0.0
@@ -326,10 +246,19 @@ def _attack_class_for_replay(attack_id: str) -> type:
     return _StatelessNLPAttack
 
 
-@router.get("/jailbreaking/history/{attack_id}/{save_id}")
+@router.get("/jailbreaking/history")
 async def jailbreaking_history_replay(
-        attack_id: str,
-        save_id: str,
+        attack_id: str = Query(
+            default=None,
+            description="Attack's id for retrieving the history."
+        ),
+        save_id: str = Query(
+            default=None,
+            description="""
+            Load the save with this id (a filename stem, as returned by `list_conversation_states`) instead of the latest one.
+            """
+        ),
+        path_conversation_state: str = Depends(config_field(attr_name="path_conversation_state"))
 ) -> JailbreakAttackOutput:
     """
     Load a previously saved run for `attack_id` and return it in the same
@@ -337,7 +266,10 @@ async def jailbreaking_history_replay(
     had just been executed.
     """
     try:
-        state = load_conversation_state(attack_id=attack_id, save_id=save_id)
+        state: ConversationState = load_conversation_state(
+            attack_id=attack_id,
+            save_id=save_id
+        )
     except FileNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
 

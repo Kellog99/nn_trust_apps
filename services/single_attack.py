@@ -135,7 +135,8 @@ async def jailbreaking(
 
     def _load_model(
             info: ModelInfo,
-            max_tokens: int = 256
+            max_tokens: int = 256,
+            device: torch.device = torch.device("cpu")
     ) -> NLPModelAdapter:
 
         m = load_model(
@@ -155,18 +156,27 @@ async def jailbreaking(
     # Target model (always uses the route model from the store)
     target_model = _load_model(
         info=body.model,
-        max_tokens=max_new_tokens
+        max_tokens=max_new_tokens,
+        device=device
+        if body.model.model_type is not None and body.model.model_type == "Llamacpp"
+        else torch.device("cpu")
     )
 
     # Attacker and judge — fall back to target when not provided or same ID
     attacker_model = _load_model(
         info=cast(ModelInfo, body.attacker),
-        max_tokens=max_new_tokens
+        max_tokens=max_new_tokens,
+        device=device
+        if body.attacker.model_type is not None and body.attacker.model_type == "Llamacpp"
+        else torch.device("cpu")
     )
 
     judge_model = _load_model(
         info=cast(ModelInfo, body.judge),
-        max_tokens=16
+        max_tokens=16,
+        device=device
+        if body.judge.model_type is not None and body.judge.model_type == "Llamacpp"
+        else torch.device("cpu")
     )
 
     # ── 2. Instantiate the attack ───────────────────────────────────────────

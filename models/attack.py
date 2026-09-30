@@ -32,7 +32,11 @@ class JailbreakAttackProps(SingleAttackProps):
     attacker: Optional[ModelInfo] = None
     judge: Optional[ModelInfo] = None
     max_new_tokens: Optional[int] = 4096
-    n_ctx: Optional[int] = 8192
+    n_ctx: Optional[int] = Field(
+        default=8192,
+        description="Number of tokens for the context to use in the llama_cpp code.",
+        gt=0
+    )
 
     model_config = ConfigDict(
         arbitrary_types_allowed=True,
@@ -86,4 +90,3 @@ class JailbreakAttackOutput(BaseModel):
     history: list[dict]
     conversations: Optional[list[list[dict]]] = None
     metadata: dict
-

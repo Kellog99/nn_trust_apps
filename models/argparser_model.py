@@ -1,9 +1,10 @@
 import argparse
 from argparse import Namespace
+from pathlib import Path
 from typing import Optional, Callable, Any, get_origin, get_args, Union, Literal, List
 
 from fastapi import Request
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 # These are the variables that can be seen by the user, i.e. they are sent to the front end
@@ -38,6 +39,10 @@ class SharableVariables(BaseModel):
         default="~/Desktop/StableAI/benchmark_repository",
         description="Path to the storage folder for benchmarks and reports."
     )
+    path_conversation_state: str = Field(
+        default="~/Desktop/StableAI/conversation_state",
+        description="Path to the storage folder of the conversation state of the attacks."
+    )
     ##########################################################
 
     workers: int = Field(
@@ -58,7 +63,14 @@ class SharableVariables(BaseModel):
         default="cpu",
         description="Device to run the model on"
     )
+
     #########################################################
+
+    @model_validator(mode="after")
+    def validate_paths(self):
+        for path in ["path_ds_repo", "path_model_repo", "path_model_report_repo", "path_conversation_state"]:
+            atr: Path = Path(getattr(self, path, f"~/tmp/{path}")).expanduser().resolve()
+            atr.mkdir(exist_ok=True, parents=True)
 
 
 class ServerConfig(SharableVariables):
