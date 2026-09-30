@@ -3,7 +3,8 @@ from models.attack import (
     SingleAttackOutput,
     SingleAttackProps,
     JailbreakAttackProps,
-    JailbreakAttackOutput
+    JailbreakAttackOutput,
+    JailbreakHistoryEntry
 )
 from models.benchmark import (
     BenchmarkExecutionConfig,
