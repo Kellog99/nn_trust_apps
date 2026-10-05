@@ -24,7 +24,7 @@ def make_config(**overrides) -> dict:
         }],
         "query_budget": 20,
         "benchmark_judges": [{"id": "jailjudge"}, {"id": "llama_guard"}],
-        "metrics": [{"id": "asr"}, {"id": "refusal_benign"}, {"id": "judge_agreement"}],
+        "metrics": [{"id": "asr"}, {"id": "asr_by_category"}, {"id": "judge_agreement"}],
     }
     config.update(overrides)
     return config
@@ -73,10 +73,10 @@ def test_valid_config_defaults() -> None:
 
 def test_metric_parameters_override_defaults() -> None:
     config = LLMBenchmarkConfig.model_validate(make_config(
-        metrics=[{"id": "asr_at_budget", "parameters": {"k": 5}}],
+        metrics=[{"id": "asr", "parameters": {"ci_level": 0.9}}],
     ))
 
-    assert config.metric_parameters("asr_at_budget") == {"k": 5, "ci_level": 0.95}
+    assert config.metric_parameters("asr") == {"ci_level": 0.9}
 
 
 @pytest.mark.parametrize("overrides, message", [
@@ -90,7 +90,13 @@ def test_metric_parameters_override_defaults() -> None:
     ({"query_budget": None}, "query_budget"),
     ({"query_budget": 0}, "greater than 0"),
     ({"metrics": [{"id": "asr", "parameters": {"alpha": 1}}]}, "Unknown parameters"),
-    ({"dataset": {"include_benign": False}}, "needs the benign behaviors"),
+    ({"metrics": [{"id": "refusal_benign"}]}, "over-refusal is a future development"),
+    ({"metrics": [{"id": "asr_at_budget"}]}, "not implemented yet"),
+    ({"attacks": [{"attack": {"id": "autodan", "name": "AutoDAN", "task": "language", "parameters": [],
+                              "objective": "jailbreak"}}], "query_budget": 10}, "sends 16 prompts in its first batch"),
+    ({"attacks": [{"attack": {"id": "tree", "name": "TAP", "task": "language", "objective": "jailbreak",
+                              "parameters": [{"id": "branching_factor", "name": "b", "default": 30}]}}]},
+     "sends 30 prompts in its first batch"),
     ({"benchmark_judges": [{"id": "jailjudge"}]}, "at least 2 benchmark judges"),
     ({"attacks": [], "metrics": [{"id": "resilience_gap"}]}, "needs at least one attack"),
     ({"attacks": [{"attack": {"id": "fgsm", "name": "FGSM", "task": "classification",
@@ -115,6 +121,14 @@ def test_protocol_warnings() -> None:
     assert any("not goal-conditioned" in warning for warning in warnings)
     assert any("overrides the run budget (5 vs 20)" in warning for warning in warnings)
     assert config.budget_for("pair") == 5
+
+
+def test_first_batch_within_budget_is_accepted() -> None:
+    config = LLMBenchmarkConfig.model_validate(make_config(attacks=[{"attack": {
+        "id": "autodan", "name": "AutoDAN", "task": "language", "objective": "jailbreak",
+        "parameters": [{"id": "population_size", "name": "Population", "default": 8}]}}]))
+
+    assert config.attack_parameters("autodan") == {"population_size": 8}
 
 
 def test_no_warnings_for_a_complete_protocol() -> None:

@@ -70,11 +70,6 @@ class LLMBenchmarkOptions(BaseModel):
     output_path: str = "~/Desktop/StableAI/benchmark_repository"
     gpu: bool = True
     resume: bool = True
-    store_responses: bool = True
-    split_phases: bool = Field(
-        default=True,
-        description="Generate every response first, then load the benchmark judges one at a time."
-    )
     on_error: Literal["skip", "abort"] = "skip"
     verbose: bool = True
     create_pdf: bool = False
@@ -160,6 +155,8 @@ class LLMBenchmarkConfig(BaseModel):
             raise ValueError(f"Metrics selected more than once: {metric_ids}")
         for selection in self.metrics:
             spec = metrics.get(selection.id)
+            if spec.unavailable is not None:
+                raise ValueError(f"Metric '{spec.metric_id}' cannot be selected: {spec.unavailable}")
             unknown = set(selection.parameters) - set(spec.parameter_defaults())
             if unknown:
                 raise ValueError(f"Unknown parameters for metric '{spec.metric_id}': {sorted(unknown)}")
@@ -173,6 +170,29 @@ class LLMBenchmarkConfig(BaseModel):
             if spec.requires.attacks and not self.attacks:
                 raise ValueError(f"Metric '{spec.metric_id}' needs at least one attack.")
         return self
+
+    @model_validator(mode="after")
+    def validate_first_batch(self) -> Self:
+        # Hard limit: an attack whose first batch exceeds the budget would never
+        # query the target and would silently score 0%.
+        from benchmarking.llm.budget import first_batch_size
+
+        for selection in self.attacks:
+            first = first_batch_size(selection.attack.id, self.attack_parameters(selection.attack.id))
+            budget = self.budget_for(selection.attack.id)
+            if first > budget:
+                raise ValueError(
+                    f"Attack '{selection.attack.id}' sends {first} prompts in its first batch, "
+                    f"but its query budget is {budget}: raise the budget or reduce the batch."
+                )
+        return self
+
+    def attack_parameters(self, attack_id: str) -> dict[str, Any]:
+        """
+        Parameter values selected for an attack, as {parameter id: value}.
+        """
+        selection = next(attack for attack in self.attacks if attack.attack.id == attack_id)
+        return {param.id: param.default for param in selection.attack.parameters}
 
     def metric_parameters(self, metric_id: str) -> dict[str, Any]:
         """

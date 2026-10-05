@@ -30,6 +30,8 @@ class LLMMetricSpec:
     output: MetricOutput
     requires: MetricRequirements = field(default_factory=MetricRequirements)
     parameters: list[ParametersProps] = field(default_factory=list)
+    # Reason why the metric cannot be selected yet; None = available.
+    unavailable: str | None = None
 
     def parameter_defaults(self) -> dict[str, Any]:
         return {param.id: param.default for param in self.parameters}
@@ -41,6 +43,7 @@ class LLMMetricSpec:
             "description": self.description,
             "output": self.output,
             "requires": vars(self.requires),
+            "unavailable": self.unavailable,
             "parameters": [param.model_dump() for param in self.parameters],
         }
 
@@ -108,6 +111,7 @@ def build_app_llm_metric_registry() -> AppLLMMetricRegistry:
         description="ASR counting only successes reached within k queries to the target.",
         output="per_budget",
         requires=MetricRequirements(attacks=True),
+        unavailable="not implemented yet: it needs the per-query trace of the attacks.",
         parameters=[
             ParametersProps(
                 id="k",
@@ -128,6 +132,8 @@ def build_app_llm_metric_registry() -> AppLLMMetricRegistry:
         output="scalar",
         requires=MetricRequirements(benign=True),
         parameters=[_CI_LEVEL],
+        unavailable="over-refusal is a future development (roadmap, Phase 4): benign responses are generated "
+                    "and saved, but the metric is not computed yet.",
     ))
     registry.register(LLMMetricSpec(
         metric_id="resilience_gap",
@@ -149,6 +155,7 @@ def build_app_llm_metric_registry() -> AppLLMMetricRegistry:
         description="Mean number of queries to the target before the first success.",
         output="scalar",
         requires=MetricRequirements(attacks=True),
+        unavailable="not implemented yet: it needs the per-query trace of the attacks.",
     ))
     return registry
 
