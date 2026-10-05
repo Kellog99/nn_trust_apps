@@ -12,6 +12,15 @@ from models.benchmark import (
     JobResult,
     TaskStatus
 )
+from models.llm_benchmark import (
+    LLMAttackSelection,
+    LLMBehaviorSelection,
+    LLMBenchmarkConfig,
+    LLMBenchmarkOptions,
+    LLMJudgeSelection,
+    LLMMetricSelection,
+    LLMTargetSpec
+)
 
 from models.info import ModelInfo, DatasetInfo
 from models.model import RegisteredObject, ParametersProps
