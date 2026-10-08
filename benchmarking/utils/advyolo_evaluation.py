@@ -64,6 +64,8 @@ def evaluate_frozen_advyolo(
 
     # Evaluate the final frozen patch
     for batch, label in dataloader:
+        if not isinstance(batch, torch.Tensor):
+            batch = torch.stack(batch)
         batch = batch.to(device)
         label = to_device(label, device)
 

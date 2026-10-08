@@ -129,8 +129,6 @@ def run_benchmark(
         for dataset_cnf in datasets:
             if dataset_cnf.repository is None:
                 raise ValueError("No dataset to load.")
-            print(model_cnf.transformation)
-            print(transform)
             dataloader: DataLoader = get_dataloader(
                 dataset_type=cast(DATASET_TYPES, dataset_cnf.dataset_type),
                 dataset_path=dataset_cnf.repository,

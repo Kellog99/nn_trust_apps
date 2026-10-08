@@ -94,11 +94,12 @@ def evaluate_attack(
 
                 with torch.no_grad():
                     out = model(batch)
-                target = (
-                    torch.nn.functional.one_hot(label.long(), num_classes=out.shape[-1]).to(out)
-                    if task == Task.Classification else out
-                )
-                x_adv = attack.generate(x=batch, y=target).detach()
+                #target = (
+                #    torch.nn.functional.one_hot(label.long(), num_classes=out.shape[-1]).to(out)
+                #    if task == Task.Classification else out
+                #)
+                #x_adv = attack.generate(x=batch, y=target).detach()
+                x_adv = attack.generate(x=batch, y=out).detach()
                 with torch.no_grad():
                     out_adv = model(x_adv)
 
