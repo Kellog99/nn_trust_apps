@@ -1,0 +1,51 @@
+model:
+  - source_path: "/home/antonio-liguori/Documents/Projects/StableAI/nn_trust_personal/benchmark_assets/models/yolov8"
+
+datasets:
+  - source_path: "/home/antonio-liguori/Documents/Projects/StableAI/nn_trust_personal/benchmark_assets/datasets/coco_val2017"
+    dataset_type: "coco"
+    batch_size: 1
+    num_workers: 0
+    shuffle: true
+
+attacks:
+  - id: dag
+    max_iters: 10
+    upper_bound: 1.0
+    lower_bound: 0.0
+    seed: 1
+    iou_threshold_evaluation: 0.7
+    score_threshold_evaluation: 0.001
+    label_target: 0
+    targeted: false
+    early_stopping: false
+    iou_threshold_optimization: 0.5565682930997611
+    score_threshold_optimization: 0.08238344116717967
+    p: 3.9058679021447604
+    epsilon: 82.67046297929923
+    toll: 0.008780459054809654
+    radius_lp: 288.5235790500652
+    p_lp: 3.555921473142871
+    lr_opt: 0.003932254307158878
+    weight_decay_opt: 0.08927861227615672
+
+metrics:
+  - id: map
+  - id: ap
+  - id: iou
+  - id: iou_target
+  - id: misdetection
+  - id: ssim
+
+options:
+  load_results: false                 # loading any existing results.
+  overwrite: true                     # overwriting the results if a benchmarking is performed
+  max_saved_elements: 10
+  num_workers: 1
+  verbose: true
+  save_perturbation: false
+  use_ray: false
+  gpu: true
+  create_pdf: true
+  output_path: "/home/antonio-liguori/Documents/Projects/StableAI/nn_trust_personal/benchmark_output"
+  subset: 1000

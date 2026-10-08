@@ -1,0 +1,29 @@
+model:
+  - source_path: "/home/antonio-liguori/Documents/Projects/StableAI/nn_trust_personal/benchmark_assets/models/yolov8"
+
+datasets:
+  - source_path: "/home/antonio-liguori/Documents/Projects/StableAI/nn_trust_personal/benchmark_assets/datasets/coco_val2017"
+    dataset_type: "coco"
+    batch_size: 1
+    num_workers: 0
+
+attacks:
+ - id: _uap
+   max_iters: 10
+   upper_bound: 1.0
+   lower_bound: 0.0
+   seed: 1
+   iou_threshold_evaluation: 0.7
+   score_threshold_evaluation: 0.001
+   label_target: 0
+   targeted: false
+   early_stopping: false
+
+options:
+  load_results: false                 # loading any existing results.
+  overwrite: true                     # overwriting the results if a benchmarking is performed
+  num_workers: 1
+  use_ray: false
+  gpu: true
+  output_path: "/home/antonio-liguori/Documents/Projects/StableAI/nn_trust_personal/benchmark_output"
+  subset: 100

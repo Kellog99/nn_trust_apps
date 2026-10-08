@@ -5,7 +5,7 @@ datasets:
   - source_path: "/home/antonio-liguori/Documents/Projects/StableAI/nn_trust_personal/benchmark_assets/datasets/coco_val2017"
     dataset_type: "coco"
     batch_size: 1
-    num_workers: 1
+    num_workers: 0
 
 attacks:
  - id: zoo
