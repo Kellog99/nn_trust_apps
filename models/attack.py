@@ -76,6 +76,14 @@ class SingleAttackOutput(BaseModel):
             self.adv_perturbation = tensor_image_to_b64str(self.adv_perturbation)
         return self
 
+class JailbreakHistoryEntry(BaseModel):
+    """Lightweight metadata for a saved jailbreak attack run, used to populate the history board."""
+    id: str
+    goal: str
+    success: bool
+    best_score: Optional[float] = None
+    n_attempts: int
+    saved_at: str
 
 class JailbreakAttackOutput(BaseModel):
     goal: str
