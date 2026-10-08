@@ -7,7 +7,7 @@ import torch
 from torch.utils.data import DataLoader
 from tqdm.auto import tqdm
 
-from benchmarking.utils.advyolo_evaluation import evaluate_frozen_advyolo, detection_predictions
+from benchmarking.utils.evaluation_pipeline import run_evaluation_pipeline
 from models import JobResult
 from models.reports import ParameterLog
 from nn_trust import AttackFactory, ModelAdapter, StatisticComposer, Task, EvasionAttack
@@ -61,6 +61,13 @@ def evaluate_attack(
             task=task,
             **(parameters or {}),
         )
+
+        for metric_id, metric in statistics._performance_stats.items():
+            if metric_id in {"misclassification", "misdetection"}:
+                metric.targeted = attack.config.targeted
+
+            if task == Task.Detection and hasattr(metric, "label_target"):
+                metric.label_target = attack.config.label_target
         logger = PyTorchCheckpointLogger(
             path=output_path,
             max_artifact={
@@ -69,92 +76,22 @@ def evaluate_attack(
             },
         )
         execution_start = time.perf_counter()
-        if attack_id == "advyoloevasion":
-            attack.generate(gen_train=dataloader)
-            statistics = evaluate_frozen_advyolo(
-                dataloader=dataloader,
-                model=model,
-                attack=attack,
-                statistics=statistics,
-                logger=logger,
-                device=device,
-                output_path=output_path,
+        def on_batch(completed_iterations, batch_size, iteration_time):
+            job_result.progress += batch_size
+            job_result.iteration_time = iteration_time
+            job_result.execution_time = time.perf_counter() - execution_start
+            job_result.estimated_execution_time = (
+                job_result.execution_time / completed_iterations * len(dataloader)
             )
+            job_result.save(res_path)
+
+        run_evaluation_pipeline(
+            model=model, attack=attack, attack_id=attack_id,
+            dataloader=dataloader, statistics=statistics, device=device,
+            logger=logger, output_path=output_path, on_batch=on_batch, verbose=verbose,
+        )
+        if attack_id == "advyoloevasion":
             job_result.progress = job_result.total
-        else:
-            total_iterations = len(dataloader)
-            pbar = enumerate(tqdm(dataloader, desc=f"Attack {attack!r}") if verbose else dataloader, start=1)
-            for completed_iterations, (batch, label) in pbar:
-                iteration_start = time.perf_counter()
-
-                if not isinstance(batch, torch.Tensor):
-                    batch = torch.stack(batch)
-                batch = batch.to(device)
-                label = to_device(label, device)
-
-                with torch.no_grad():
-                    out = model(batch)
-                #target = (
-                #    torch.nn.functional.one_hot(label.long(), num_classes=out.shape[-1]).to(out)
-                #    if task == Task.Classification else out
-                #)
-                #x_adv = attack.generate(x=batch, y=target).detach()
-                x_adv = attack.generate(x=batch, y=out).detach()
-                with torch.no_grad():
-                    out_adv = model(x_adv)
-
-                if task == Task.Classification:
-                    # The identity baseline measures accuracy against ground truth.
-                    y_pred = label if attack_id == "identitybaseline" else out.argmax(dim=-1)
-                    y_pred_adv = out_adv.argmax(dim=-1)
-                    y_target = label
-                else:
-                    y_pred = detection_predictions(
-                        output=out,
-                        iou_threshold=attack.config.iou_threshold_evaluation,
-                        score_threshold=attack.config.score_threshold_evaluation
-                    )
-                    y_pred_adv = detection_predictions(
-                        output=out_adv,
-                        iou_threshold=attack.config.iou_threshold_evaluation,
-                        score_threshold=attack.config.score_threshold_evaluation
-                    )
-                    y_target = y_pred
-                    if attack.config.targeted:
-                        label_target = attack.config.label_target
-                        target_class = (label_target + 1) % out[1].shape[-1]
-                        y_target = [
-                            {
-                                "boxes": pred["boxes"],
-                                "labels": torch.where(
-                                    pred["labels"] == label_target,
-                                    target_class, pred["labels"],
-                                ),
-                            }
-                            for pred in y_pred
-                        ]
-
-                for original, adversarial in zip(batch, x_adv):
-                    logger.log(tag="original_input", data=original)
-                    logger.log(tag="adversarial_input", data=adversarial)
-                statistics.update(
-                    x=batch.detach(),
-                    x_adv=x_adv,
-                    y=label,
-                    y_target=y_target,
-                    y_pred=y_pred,
-                    y_pred_adv=y_pred_adv,
-                    out=out,
-                    out_adv=out_adv,
-                )
-
-                job_result.progress += len(batch)
-                job_result.iteration_time = time.perf_counter() - iteration_start
-                job_result.execution_time = time.perf_counter() - execution_start
-                job_result.estimated_execution_time = (
-                        job_result.execution_time / completed_iterations * total_iterations
-                )
-                job_result.save(res_path)
 
         result = statistics.compute()
         # AdvYOLO's evaluator already updates the aggregate statistics.
