@@ -1,8 +1,8 @@
 model:
-  - source_path: "/home/antonio-liguori/Documents/Projects/StableAI/nn_trust_personal/benchmark_assets/models/yolov8"
+  - source_path: "/home/antonio955/benchmark_assets/models/yolov8"  
 
 datasets:
-  - source_path: "/home/antonio-liguori/Documents/Projects/StableAI/nn_trust_personal/benchmark_assets/datasets/coco_val2017"
+  - source_path: "/home/antonio955/benchmark_assets/datasets/coco_val2017"
     dataset_type: "coco"
     batch_size: 1
     num_workers: 0
@@ -25,5 +25,5 @@ options:
   num_workers: 1
   use_ray: false
   gpu: true
-  output_path: "/home/antonio-liguori/Documents/Projects/StableAI/nn_trust_personal/benchmark_output"
+  output_path: "/home/antonio955/benchmark_output"
   subset: 100

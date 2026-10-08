@@ -1,0 +1,47 @@
+model:
+  - source_path: "/home/antonio955/benchmark_assets/models/yolov8"
+
+datasets:
+  - source_path: "/home/antonio955/benchmark_assets/datasets/coco_val2017"
+    dataset_type: "coco"
+    batch_size: 1
+    num_workers: 0
+    shuffle: true
+
+attacks:
+  - id: deepfool
+    max_iters: 10
+    upper_bound: 1.0
+    lower_bound: 0.0
+    seed: 1
+    iou_threshold_evaluation: 0.7
+    score_threshold_evaluation: 0.001
+    label_target: 0
+    targeted: false
+    early_stopping: false
+    iou_threshold_optimization: 0.0923385947687978
+    score_threshold_optimization: 0.1862602113776709
+    p: 2.382242908172191
+    epsilon: 396.76747423066996
+    toll: 0.005388167340033569
+
+metrics:
+  - id: map
+  - id: ap
+  - id: iou
+  - id: iou_target
+  - id: misdetection
+  - id: ssim
+
+options:
+  load_results: false                 # loading any existing results.
+  overwrite: true                     # overwriting the results if a benchmarking is performed
+  max_saved_elements: 10
+  num_workers: 1
+  verbose: true
+  save_perturbation: false
+  use_ray: false
+  gpu: true
+  create_pdf: true
+  output_path: "/home/antonio955/benchmark_output"
+  subset: 5000
