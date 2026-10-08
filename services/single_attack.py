@@ -323,7 +323,6 @@ async def jailbreaking(
         model=target_model,
         attacker=attacker_model,
         judge=judge_model,
-        verbose=True,
         device=device,
         **kwargs
     )
